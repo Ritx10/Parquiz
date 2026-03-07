@@ -16,12 +16,14 @@ const gameStateSnapshot: ReadonlyGameState = {
   blockedSquares: [],
   safeSquares: [12, 17, 29, 34, 46, 51, 63, 68],
   rules: {
+    answerTimeLimitSecs: 20,
     exitHomeRule: 'FIVE',
     allowSplitDice: true,
+    shopEnabledOnSafeSquares: true,
     allowTwoStepSameToken: true,
     allowSumDice: true,
     requiresExactHome: true,
-    timePerTurn: 50,
+    timePerTurn: 45,
   },
   players: [
     {
@@ -62,13 +64,24 @@ const gameStateSnapshot: ReadonlyGameState = {
 }
 
 export function useReadonlyGameState() {
+  const answerTimeLimitSecs = useAppSettingsStore((state) => state.answerTimeLimitSecs)
+  const exitHomeRule = useAppSettingsStore((state) => state.exitHomeRule)
   const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
   const selectedTokenSkinId = useAppSettingsStore((state) => state.selectedTokenSkinId)
+  const shopEnabledOnSafeSquares = useAppSettingsStore((state) => state.shopEnabledOnSafeSquares)
+  const turnTimeLimitSecs = useAppSettingsStore((state) => state.turnTimeLimitSecs)
   const selectedSkinSrc = getPlayerSkinSrc(selectedSkinId)
 
   return useMemo(() => {
     return {
       ...gameStateSnapshot,
+      rules: {
+        ...gameStateSnapshot.rules,
+        answerTimeLimitSecs,
+        exitHomeRule,
+        shopEnabledOnSafeSquares,
+        timePerTurn: turnTimeLimitSecs,
+      },
       players: gameStateSnapshot.players.map((player) =>
         player.id === 'p-green'
           ? {
@@ -82,5 +95,5 @@ export function useReadonlyGameState() {
             },
       ),
     }
-  }, [selectedSkinSrc, selectedTokenSkinId])
+  }, [answerTimeLimitSecs, exitHomeRule, selectedSkinSrc, selectedTokenSkinId, shopEnabledOnSafeSquares, turnTimeLimitSecs])
 }

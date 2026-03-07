@@ -285,6 +285,7 @@ export function HomeView() {
   const [activeShopTab, setActiveShopTab] = useState<ShopTab>('avatars')
   const aiDifficulty = useAppSettingsStore((state) => state.aiDifficulty)
   const setAiDifficulty = useAppSettingsStore((state) => state.setAiDifficulty)
+  const setQuestionDifficulty = useAppSettingsStore((state) => state.setQuestionDifficulty)
   const language = useAppSettingsStore((state) => state.language)
   const ownedTokenSkinIds = useAppSettingsStore((state) => state.ownedTokenSkinIds)
   const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
@@ -302,7 +303,7 @@ export function HomeView() {
   const levelLabel = `${ui.levelLabel} ${playerProfile.level}`
   const prestigeLabel = `${ui.prestigeLabel} ${playerProfile.prestige}`
   const shopItems = shopItemsByTab[activeShopTab]
-  const coinBalance = 125000
+  const coinBalance = playerProfile.coins
   const coinLabel = coinBalance.toLocaleString('en-US')
 
   const onOnlinePlay = () => {
@@ -416,11 +417,22 @@ export function HomeView() {
             </div>
 
             <button
-              className="rounded-[20px] border border-[#7f4a25] bg-gradient-to-b from-[#ffea95] via-[#f4c049] to-[#cb8621] px-5 py-2 font-display text-2xl uppercase text-[#5d320f] shadow-[inset_0_2px_0_rgba(255,244,181,0.85),0_8px_16px_rgba(83,45,12,0.35)]"
+              aria-label={ui.shop}
+              className="inline-flex min-w-[132px] items-center justify-center rounded-[20px] border border-[#7f4a25] bg-gradient-to-b from-[#ffea95] via-[#f4c049] to-[#cb8621] px-5 py-2 text-[#5d320f] shadow-[inset_0_2px_0_rgba(255,244,181,0.85),0_8px_16px_rgba(83,45,12,0.35)]"
               onClick={openShopPanel}
+              title={ui.shop}
               type="button"
             >
-              {ui.shop}
+              <span className="sr-only">{ui.shop}</span>
+              <svg aria-hidden="true" className="h-10 w-10 drop-shadow-[0_2px_0_rgba(93,50,15,0.35)]" fill="none" viewBox="0 0 48 48">
+                <path d="M10 17.5h28l-3.6-7.5H13.6L10 17.5Z" fill="#FFF3B5" stroke="#734216" strokeLinejoin="round" strokeWidth="2.6" />
+                <path d="M13 17h22v19a2 2 0 0 1-2 2H15a2 2 0 0 1-2-2V17Z" fill="#8B4F26" stroke="#734216" strokeLinejoin="round" strokeWidth="2.6" />
+                <path d="M19 22h10v16H19z" fill="#FFE1A0" stroke="#734216" strokeLinejoin="round" strokeWidth="2.6" />
+                <path d="M11 17h26" stroke="#734216" strokeLinecap="round" strokeWidth="2.6" />
+                <path d="M15 10h4l1.8 7.5h-4L15 10Zm12 0h4l-1.8 7.5h-4L27 10Z" fill="#FF7E5F" stroke="#734216" strokeLinejoin="round" strokeWidth="2.6" />
+                <circle cx="33.5" cy="32.5" r="5.5" fill="#FFD34D" stroke="#734216" strokeWidth="2.6" />
+                <path d="M33.5 29.8v5.4M30.8 32.5h5.4" stroke="#734216" strokeLinecap="round" strokeWidth="2.2" />
+              </svg>
             </button>
 
             <div className="flex flex-col items-center gap-1">
@@ -597,7 +609,10 @@ export function HomeView() {
                               : 'border-[#d6b88c] bg-[#f7e9d3] text-[#8a6038] hover:brightness-95'
                           }`}
                           key={option.id}
-                          onClick={() => setAiDifficulty(option.id)}
+                          onClick={() => {
+                            setAiDifficulty(option.id)
+                            setQuestionDifficulty(option.id)
+                          }}
                           type="button"
                         >
                           {ui[option.labelKey]}

@@ -8,12 +8,17 @@ import { normalizePlayerSkinId } from '../lib/player-skins'
 
 export type AppLanguage = 'es' | 'en'
 export type AiDifficulty = 'easy' | 'medium' | 'hard'
+export type ExitHomeRule = 'FIVE' | 'EVEN' | 'SIX'
 
 type AppSettingsState = {
   language: AppLanguage
   soundEnabled: boolean
   aiDifficulty: AiDifficulty
   questionDifficulty: AiDifficulty
+  answerTimeLimitSecs: number
+  turnTimeLimitSecs: number
+  exitHomeRule: ExitHomeRule
+  shopEnabledOnSafeSquares: boolean
   selectedConfigId: string
   selectedSkinId: null | string
   selectedTokenSkinId: TokenSkinId
@@ -22,6 +27,10 @@ type AppSettingsState = {
   setSoundEnabled: (enabled: boolean) => void
   setAiDifficulty: (difficulty: AiDifficulty) => void
   setQuestionDifficulty: (difficulty: AiDifficulty) => void
+  setAnswerTimeLimitSecs: (seconds: number) => void
+  setTurnTimeLimitSecs: (seconds: number) => void
+  setExitHomeRule: (rule: ExitHomeRule) => void
+  setShopEnabledOnSafeSquares: (enabled: boolean) => void
   setSelectedConfigId: (configId: string) => void
   setSelectedSkinId: (skinId: null | string) => void
   setSelectedTokenSkinId: (skinId: TokenSkinId) => void
@@ -34,6 +43,10 @@ type StoredSettings = {
   soundEnabled?: boolean
   aiDifficulty?: AiDifficulty
   questionDifficulty?: AiDifficulty
+  answerTimeLimitSecs?: number
+  turnTimeLimitSecs?: number
+  exitHomeRule?: ExitHomeRule
+  shopEnabledOnSafeSquares?: boolean
   selectedConfigId?: string
   selectedSkinId?: null | string
   selectedTokenColor?: TokenSkinId
@@ -44,26 +57,34 @@ type StoredSettings = {
 type PersistedSettings = Pick<
   AppSettingsState,
   | 'aiDifficulty'
+  | 'answerTimeLimitSecs'
+  | 'exitHomeRule'
   | 'language'
   | 'ownedTokenSkinIds'
   | 'questionDifficulty'
   | 'selectedConfigId'
   | 'selectedSkinId'
   | 'selectedTokenSkinId'
+  | 'shopEnabledOnSafeSquares'
   | 'soundEnabled'
+  | 'turnTimeLimitSecs'
 >
 
 const STORAGE_KEY = 'parquiz.settings.v1'
 
 const defaultSettings: PersistedSettings = {
   aiDifficulty: 'medium',
+  answerTimeLimitSecs: 20,
+  exitHomeRule: 'FIVE',
   language: 'es',
   ownedTokenSkinIds: normalizeOwnedTokenSkinIds(undefined, 'blue'),
   questionDifficulty: 'medium',
   selectedSkinId: null,
   selectedTokenSkinId: 'blue',
+  shopEnabledOnSafeSquares: true,
   soundEnabled: true,
   selectedConfigId: '1',
+  turnTimeLimitSecs: 45,
 }
 
 const normalizeLanguage = (value: unknown): AppLanguage => (value === 'en' ? 'en' : 'es')
@@ -74,6 +95,22 @@ const normalizeAiDifficulty = (value: unknown): AiDifficulty => {
   }
 
   return 'medium'
+}
+
+const normalizeExitHomeRule = (value: unknown): ExitHomeRule => {
+  if (value === 'EVEN' || value === 'SIX') {
+    return value
+  }
+
+  return 'FIVE'
+}
+
+const normalizeSeconds = (value: unknown, fallback: number, minimum: number) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return fallback
+  }
+
+  return Math.max(minimum, Math.floor(value))
 }
 
 const readStoredSettings = (): PersistedSettings => {
@@ -93,13 +130,17 @@ const readStoredSettings = (): PersistedSettings => {
 
     return {
       aiDifficulty: normalizeAiDifficulty(parsed.aiDifficulty),
+      answerTimeLimitSecs: normalizeSeconds(parsed.answerTimeLimitSecs, defaultSettings.answerTimeLimitSecs, 5),
+      exitHomeRule: normalizeExitHomeRule(parsed.exitHomeRule),
       language: normalizeLanguage(parsed.language),
       ownedTokenSkinIds: normalizeOwnedTokenSkinIds(parsed.ownedTokenSkinIds, selectedTokenSkinId),
       questionDifficulty: normalizeAiDifficulty(parsed.questionDifficulty),
       selectedSkinId: normalizePlayerSkinId(parsed.selectedSkinId ?? null),
       selectedTokenSkinId,
+      shopEnabledOnSafeSquares: parsed.shopEnabledOnSafeSquares ?? true,
       soundEnabled: parsed.soundEnabled ?? true,
       selectedConfigId: parsed.selectedConfigId || '1',
+      turnTimeLimitSecs: normalizeSeconds(parsed.turnTimeLimitSecs, defaultSettings.turnTimeLimitSecs, 10),
     }
   } catch {
     return defaultSettings
@@ -108,13 +149,17 @@ const readStoredSettings = (): PersistedSettings => {
 
 const toPersistedSettings = (state: AppSettingsState): PersistedSettings => ({
   aiDifficulty: state.aiDifficulty,
+  answerTimeLimitSecs: state.answerTimeLimitSecs,
+  exitHomeRule: state.exitHomeRule,
   language: state.language,
   ownedTokenSkinIds: state.ownedTokenSkinIds,
   questionDifficulty: state.questionDifficulty,
   selectedConfigId: state.selectedConfigId,
   selectedSkinId: state.selectedSkinId,
   selectedTokenSkinId: state.selectedTokenSkinId,
+  shopEnabledOnSafeSquares: state.shopEnabledOnSafeSquares,
   soundEnabled: state.soundEnabled,
+  turnTimeLimitSecs: state.turnTimeLimitSecs,
 })
 
 const persistSettings = (settings: PersistedSettings) => {
@@ -136,13 +181,17 @@ persistSettings(initialSettings)
 
 export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
   aiDifficulty: initialSettings.aiDifficulty,
+  answerTimeLimitSecs: initialSettings.answerTimeLimitSecs,
+  exitHomeRule: initialSettings.exitHomeRule,
   language: initialSettings.language,
   ownedTokenSkinIds: initialSettings.ownedTokenSkinIds,
   questionDifficulty: initialSettings.questionDifficulty,
   selectedSkinId: initialSettings.selectedSkinId,
   selectedTokenSkinId: initialSettings.selectedTokenSkinId,
+  shopEnabledOnSafeSquares: initialSettings.shopEnabledOnSafeSquares,
   soundEnabled: initialSettings.soundEnabled,
   selectedConfigId: initialSettings.selectedConfigId,
+  turnTimeLimitSecs: initialSettings.turnTimeLimitSecs,
   setLanguage: (language) => {
     set({ language })
     persistSettings(toPersistedSettings(get()))
@@ -157,6 +206,22 @@ export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
   },
   setQuestionDifficulty: (questionDifficulty) => {
     set({ questionDifficulty })
+    persistSettings(toPersistedSettings(get()))
+  },
+  setAnswerTimeLimitSecs: (answerTimeLimitSecs) => {
+    set({ answerTimeLimitSecs: normalizeSeconds(answerTimeLimitSecs, get().answerTimeLimitSecs, 5) })
+    persistSettings(toPersistedSettings(get()))
+  },
+  setTurnTimeLimitSecs: (turnTimeLimitSecs) => {
+    set({ turnTimeLimitSecs: normalizeSeconds(turnTimeLimitSecs, get().turnTimeLimitSecs, 10) })
+    persistSettings(toPersistedSettings(get()))
+  },
+  setExitHomeRule: (exitHomeRule) => {
+    set({ exitHomeRule: normalizeExitHomeRule(exitHomeRule) })
+    persistSettings(toPersistedSettings(get()))
+  },
+  setShopEnabledOnSafeSquares: (shopEnabledOnSafeSquares) => {
+    set({ shopEnabledOnSafeSquares })
     persistSettings(toPersistedSettings(get()))
   },
   setSelectedConfigId: (selectedConfigId) => {

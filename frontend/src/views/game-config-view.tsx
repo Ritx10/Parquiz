@@ -2,17 +2,18 @@ import { useAccount } from '@starknet-react/core'
 import { useEffect, useMemo, useState } from 'react'
 import { createGameConfig, lockGameConfig, readLatestGameConfigByCreator } from '../api'
 import { shortenAddress, useControllerWallet } from '../lib/starknet/use-controller-wallet'
-import { useAppSettingsStore } from '../store/app-settings-store'
+import { type AppLanguage, type ExitHomeRule, useAppSettingsStore } from '../store/app-settings-store'
 
 type DifficultyPreset = 'easy' | 'medium' | 'hard'
-type ExitHomeRule = 'FIVE' | 'EVEN' | 'SIX'
 
 type ConfigDraft = {
   answerTimeLimitSecs: number
   turnTimeLimitSecs: number
   difficultyLevel: DifficultyPreset
   exitHomeRule: ExitHomeRule
+  language: AppLanguage
   shopEnabledOnSafeSquares: boolean
+  soundEnabled: boolean
 }
 
 const defaultDraft: ConfigDraft = {
@@ -20,7 +21,9 @@ const defaultDraft: ConfigDraft = {
   turnTimeLimitSecs: 45,
   difficultyLevel: 'medium',
   exitHomeRule: 'FIVE',
+  language: 'es',
   shopEnabledOnSafeSquares: true,
+  soundEnabled: true,
 }
 
 const difficultyToValue: Record<DifficultyPreset, 0 | 1 | 2> = {
@@ -36,6 +39,13 @@ const exitRuleToValue: Record<ExitHomeRule, 0 | 1 | 2> = {
 }
 
 const difficultyButtonOrder: DifficultyPreset[] = ['easy', 'medium', 'hard']
+
+const clampAnswerTime = (value: number) => Math.max(5, Math.floor(value || defaultDraft.answerTimeLimitSecs))
+const clampTurnTime = (value: number) => Math.max(10, Math.floor(value || defaultDraft.turnTimeLimitSecs))
+const isInternalConfigSyncError = (message: string) => {
+  const normalized = message.toLowerCase()
+  return normalized.includes('missing config system address in env') || normalized.includes('config system')
+}
 
 const copy = {
   es: {
@@ -71,10 +81,14 @@ const copy = {
     exitFive: 'SACAR 5',
     exitEven: 'PAR',
     exitSix: 'SACAR 6',
-    saved: 'Configuracion guardada y bloqueada',
+    saved: 'Configuracion guardada',
     missingWallet: 'Conecta Controller Wallet para guardar una config.',
-  },
-  en: {
+    savedLocalOnly: 'Configuracion guardada',
+    savedLocalWithWalletNote: 'Configuracion guardada',
+    savedLocalWithSyncError: 'No se pudo sincronizar la configuracion. Intentalo de nuevo.',
+    savedAndSynced: 'Configuracion guardada',
+   },
+   en: {
     title: 'GENERAL & GAME CONFIGURATION',
     generalTitle: '1. GENERAL SETTINGS',
     gameTitle: '2. GAME SETTINGS',
@@ -107,10 +121,16 @@ const copy = {
     exitFive: 'EXIT 5',
     exitEven: 'EVEN',
     exitSix: 'EXIT 6',
-    saved: 'Config saved and locked',
+    saved: 'Configuration saved',
     missingWallet: 'Connect Controller Wallet to save a config.',
-  },
+    savedLocalOnly: 'Configuration saved',
+    savedLocalWithWalletNote: 'Configuration saved',
+    savedLocalWithSyncError: 'Could not sync the configuration. Please try again.',
+    savedAndSynced: 'Configuration saved',
+   },
 } as const
+
+type StatusTone = 'error' | 'success' | 'warning'
 
 type GameConfigViewProps = {
   embedded?: boolean
@@ -118,21 +138,40 @@ type GameConfigViewProps = {
 }
 
 export function GameConfigView({ embedded = false, onClose }: GameConfigViewProps) {
-  const language = useAppSettingsStore((state) => state.language)
-  const soundEnabled = useAppSettingsStore((state) => state.soundEnabled)
+  const savedLanguage = useAppSettingsStore((state) => state.language)
+  const savedSoundEnabled = useAppSettingsStore((state) => state.soundEnabled)
+  const aiDifficulty = useAppSettingsStore((state) => state.aiDifficulty)
   const setLanguage = useAppSettingsStore((state) => state.setLanguage)
   const questionDifficulty = useAppSettingsStore((state) => state.questionDifficulty)
+  const answerTimeLimitSecs = useAppSettingsStore((state) => state.answerTimeLimitSecs)
+  const turnTimeLimitSecs = useAppSettingsStore((state) => state.turnTimeLimitSecs)
+  const exitHomeRule = useAppSettingsStore((state) => state.exitHomeRule)
+  const shopEnabledOnSafeSquares = useAppSettingsStore((state) => state.shopEnabledOnSafeSquares)
+  const setAiDifficulty = useAppSettingsStore((state) => state.setAiDifficulty)
   const setSoundEnabled = useAppSettingsStore((state) => state.setSoundEnabled)
   const setQuestionDifficulty = useAppSettingsStore((state) => state.setQuestionDifficulty)
+  const setAnswerTimeLimitSecs = useAppSettingsStore((state) => state.setAnswerTimeLimitSecs)
+  const setTurnTimeLimitSecs = useAppSettingsStore((state) => state.setTurnTimeLimitSecs)
+  const setExitHomeRule = useAppSettingsStore((state) => state.setExitHomeRule)
+  const setShopEnabledOnSafeSquares = useAppSettingsStore((state) => state.setShopEnabledOnSafeSquares)
   const setSelectedConfigId = useAppSettingsStore((state) => state.setSelectedConfigId)
-  const text = copy[language]
-
-  const [draft, setDraft] = useState<ConfigDraft>(() => ({
-    ...defaultDraft,
-    difficultyLevel: questionDifficulty,
-  }))
+  const [draft, setDraft] = useState<ConfigDraft>(defaultDraft)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [statusTone, setStatusTone] = useState<StatusTone>('success')
   const [isSaving, setIsSaving] = useState(false)
+  const text = copy[draft.language]
+
+  useEffect(() => {
+    setDraft({
+      answerTimeLimitSecs,
+      difficultyLevel: questionDifficulty || aiDifficulty,
+      exitHomeRule,
+      language: savedLanguage,
+      shopEnabledOnSafeSquares,
+      soundEnabled: savedSoundEnabled,
+      turnTimeLimitSecs,
+    })
+  }, [aiDifficulty, answerTimeLimitSecs, exitHomeRule, questionDifficulty, savedLanguage, savedSoundEnabled, shopEnabledOnSafeSquares, turnTimeLimitSecs])
 
   const { account, address } = useAccount()
   const { isConnected, status, username } = useControllerWallet()
@@ -153,60 +192,74 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
     hard: text.hard,
   }
 
-  useEffect(() => {
-    setDraft((current) =>
-      current.difficultyLevel === questionDifficulty
-        ? current
-        : {
-            ...current,
-            difficultyLevel: questionDifficulty,
-          },
-    )
-  }, [questionDifficulty])
-
   const updateDraft = <K extends keyof ConfigDraft>(field: K, value: ConfigDraft[K]) => {
+    setStatusMessage(null)
     setDraft((current) => ({
       ...current,
       [field]: value,
     }))
-
-    if (field === 'difficultyLevel') {
-      setQuestionDifficulty(value as DifficultyPreset)
-    }
   }
 
   const onSave = async () => {
-    if (!account || !address) {
-      setStatusMessage(text.missingWallet)
-      return
+    const sanitizedDraft: ConfigDraft = {
+      ...draft,
+      answerTimeLimitSecs: clampAnswerTime(draft.answerTimeLimitSecs),
+      turnTimeLimitSecs: clampTurnTime(draft.turnTimeLimitSecs),
     }
 
     setIsSaving(true)
     setStatusMessage(null)
+    setStatusTone('success')
+
+    setDraft(sanitizedDraft)
+    setLanguage(sanitizedDraft.language)
+    setSoundEnabled(sanitizedDraft.soundEnabled)
+    setAiDifficulty(sanitizedDraft.difficultyLevel)
+    setQuestionDifficulty(sanitizedDraft.difficultyLevel)
+    setAnswerTimeLimitSecs(sanitizedDraft.answerTimeLimitSecs)
+    setTurnTimeLimitSecs(sanitizedDraft.turnTimeLimitSecs)
+    setExitHomeRule(sanitizedDraft.exitHomeRule)
+    setShopEnabledOnSafeSquares(sanitizedDraft.shopEnabledOnSafeSquares)
+
+    if (!account || !address) {
+      setStatusTone('success')
+      setStatusMessage(text.savedLocalOnly)
+      setIsSaving(false)
+      return
+    }
 
     try {
       const createHash = await createGameConfig(account, {
-        answerTimeLimitSecs: draft.answerTimeLimitSecs,
-        turnTimeLimitSecs: draft.turnTimeLimitSecs,
-        difficultyLevel: difficultyToValue[draft.difficultyLevel],
-        exitHomeRule: exitRuleToValue[draft.exitHomeRule],
-        shopEnabledOnSafeSquares: draft.shopEnabledOnSafeSquares,
+        answerTimeLimitSecs: sanitizedDraft.answerTimeLimitSecs,
+        turnTimeLimitSecs: sanitizedDraft.turnTimeLimitSecs,
+        difficultyLevel: difficultyToValue[sanitizedDraft.difficultyLevel],
+        exitHomeRule: exitRuleToValue[sanitizedDraft.exitHomeRule],
+        shopEnabledOnSafeSquares: sanitizedDraft.shopEnabledOnSafeSquares,
       })
 
       await account.waitForTransaction(createHash)
 
       const latestConfig = await readLatestGameConfigByCreator(address)
       if (!latestConfig) {
-        throw new Error('No se pudo leer la nueva config desde Torii.')
+        throw new Error(draft.language === 'es' ? 'No se pudo leer la nueva config desde Torii.' : 'Could not read the new config from Torii.')
       }
 
       const lockHash = await lockGameConfig(account, latestConfig.config_id)
       await account.waitForTransaction(lockHash)
 
       setSelectedConfigId(latestConfig.config_id.toString())
-      setStatusMessage(`${text.saved}: #${latestConfig.config_id.toString()}`)
+      setStatusTone('success')
+      setStatusMessage(text.savedAndSynced)
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : `${error}`)
+      const details = error instanceof Error ? error.message : `${error}`
+
+      if (isInternalConfigSyncError(details)) {
+        setStatusTone('success')
+        setStatusMessage(text.savedLocalOnly)
+      } else {
+        setStatusTone('warning')
+        setStatusMessage(text.savedLocalWithSyncError)
+      }
     } finally {
       setIsSaving(false)
     }
@@ -252,8 +305,8 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
                 <div className="relative w-full sm:w-[220px]">
                   <select
                     className="w-full appearance-none rounded-full border-[3px] border-[#a96639] bg-gradient-to-b from-[#d48f5b] to-[#ae6130] px-4 py-2 pr-10 text-center text-[16px] font-black uppercase text-[#fff2d7] shadow-[inset_0_2px_0_rgba(255,255,255,0.3),0_4px_6px_rgba(0,0,0,0.2)] outline-none"
-                    onChange={(event) => setLanguage(event.target.value as 'es' | 'en')}
-                    value={language}
+                    onChange={(event) => updateDraft('language', event.target.value as AppLanguage)}
+                    value={draft.language}
                   >
                     <option value="es">ESPANOL</option>
                     <option value="en">ENGLISH</option>
@@ -269,20 +322,20 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
                 </div>
                 <button
                   className={`relative flex h-[44px] w-[176px] items-center rounded-full border-[3px] p-[4px] shadow-[inset_0_3px_6px_rgba(0,0,0,0.2)] transition-colors ${
-                    soundEnabled
+                    draft.soundEnabled
                       ? 'border-[#3d8f38] bg-gradient-to-b from-[#71d659] to-[#45aa34]'
                       : 'border-[#a96639] bg-[#e8d1b1]'
                   }`}
-                  onClick={() => setSoundEnabled(!soundEnabled)}
+                  onClick={() => updateDraft('soundEnabled', !draft.soundEnabled)}
                   type="button"
                 >
-                  <div className={`flex w-full items-center ${soundEnabled ? 'justify-between' : 'justify-between flex-row-reverse'}`}>
-                    <span className={`px-2 text-[11px] font-black tracking-wide ${soundEnabled ? 'text-white' : 'text-[#88624b]'}`}>
-                      {soundEnabled ? text.enabled : text.disabled}
+                  <div className={`flex w-full items-center ${draft.soundEnabled ? 'justify-between' : 'justify-between flex-row-reverse'}`}>
+                    <span className={`px-2 text-[11px] font-black tracking-wide ${draft.soundEnabled ? 'text-white' : 'text-[#88624b]'}`}>
+                      {draft.soundEnabled ? text.enabled : text.disabled}
                     </span>
                     <div
                       className={`h-[30px] w-[30px] flex-shrink-0 rounded-full border-[2px] ${
-                        soundEnabled
+                        draft.soundEnabled
                           ? 'border-[#f2deba] bg-[#fff2d7] shadow-[-2px_0_4px_rgba(0,0,0,0.2)]'
                           : 'border-[#a96639] bg-gradient-to-b from-[#f2deba] to-[#d1ac7f] shadow-[2px_0_4px_rgba(0,0,0,0.2)]'
                       }`}
@@ -330,26 +383,26 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
               <div className="flex items-center justify-between border-b-[2px] border-[#e8d4b7] pb-4">
                 <p className="max-w-[180px] text-[15px] font-black uppercase leading-tight text-[#5c3214] sm:text-[17px]">{text.responseTime}</p>
                 <div className="rounded-[12px] border-[2px] border-[#cbaa85] bg-[#eae0c9] px-5 py-1.5 shadow-inner">
-                  <input
-                    className="w-[40px] bg-transparent text-center text-[18px] font-black text-[#5c3214] outline-none"
-                    min={5}
-                    onChange={(event) => updateDraft('answerTimeLimitSecs', Number(event.target.value))}
-                    type="number"
-                    value={draft.answerTimeLimitSecs}
-                  />
+                    <input
+                      className="w-[40px] bg-transparent text-center text-[18px] font-black text-[#5c3214] outline-none"
+                      min={5}
+                      onChange={(event) => updateDraft('answerTimeLimitSecs', clampAnswerTime(Number(event.target.value)))}
+                      type="number"
+                      value={draft.answerTimeLimitSecs}
+                    />
                 </div>
               </div>
 
               <div className="flex items-center justify-between border-b-[2px] border-[#e8d4b7] pb-4">
                 <p className="max-w-[180px] text-[15px] font-black uppercase leading-tight text-[#5c3214] sm:text-[17px]">{text.turnLimit}</p>
                 <div className="rounded-[12px] border-[2px] border-[#cbaa85] bg-[#eae0c9] px-5 py-1.5 shadow-inner">
-                  <input
-                    className="w-[40px] bg-transparent text-center text-[18px] font-black text-[#5c3214] outline-none"
-                    min={10}
-                    onChange={(event) => updateDraft('turnTimeLimitSecs', Number(event.target.value))}
-                    type="number"
-                    value={draft.turnTimeLimitSecs}
-                  />
+                    <input
+                      className="w-[40px] bg-transparent text-center text-[18px] font-black text-[#5c3214] outline-none"
+                      min={10}
+                      onChange={(event) => updateDraft('turnTimeLimitSecs', clampTurnTime(Number(event.target.value)))}
+                      type="number"
+                      value={draft.turnTimeLimitSecs}
+                    />
                 </div>
               </div>
 
@@ -425,7 +478,15 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
         </div>
 
         {statusMessage ? (
-          <div className="mx-auto mt-4 max-w-[880px] rounded-[16px] border-[2px] border-[#cbaa85] bg-[#f7ecd6] px-4 py-3 text-center text-[16px] font-black text-[#5c3214] shadow-inner">
+          <div
+            className={`mx-auto mt-4 max-w-[880px] rounded-[16px] border-[2px] px-4 py-3 text-center text-[16px] font-black shadow-inner ${
+              statusTone === 'error'
+                ? 'border-[#cf8262] bg-[#ffe2d4] text-[#7a2f1d]'
+                : statusTone === 'warning'
+                  ? 'border-[#d0b17a] bg-[#fff2cf] text-[#6b4318]'
+                  : 'border-[#9dc08d] bg-[#eef8dc] text-[#35571d]'
+            }`}
+          >
             {statusMessage}
           </div>
         ) : null}
@@ -438,7 +499,7 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
             type="button"
             style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}
           >
-            {isSaving ? text.saving : 'GUARDAR CAMBIOS'}
+            {isSaving ? text.saving : text.save}
           </button>
 
           <button

@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Board3D } from '../components/game/board3d'
+import FinalRankingScreen from '../components/game/FinalRankingScreen'
 import { GameAvatar } from '../components/game/game-avatar'
 import { LogDrawer } from '../components/game/log-drawer'
 import { TriviaQuestionModal } from '../components/game/trivia-question-modal'
 import { getPlayerVisualThemeByColor } from '../lib/player-color-themes'
+import { usePlayerProfileActions } from '../lib/use-player-profile'
 import type { TokenSkinId } from '../lib/token-cosmetics'
-import { drawTriviaQuestion, pickAiTriviaAnswer, triviaSecondsByDifficulty, type TriviaDifficulty, type TriviaQuestion } from '../lib/trivia-engine'
+import { drawTriviaQuestion, pickAiTriviaAnswer, type TriviaDifficulty, type TriviaQuestion } from '../lib/trivia-engine'
 import { useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import type {
   MatchDiceState,
@@ -20,9 +22,8 @@ import type {
   TokenHint,
 } from '../components/game/match-types'
 import { useAppSettingsStore } from '../store/app-settings-store'
-import { useReadonlyGameState } from '../store/game-state-store'
 import { useGameUiStore } from '../store/game-ui-store'
-import FinalRankingScreen from '../components/game/FinalRankingScreen'
+import { useReadonlyGameState } from '../store/game-state-store'
 
 const TRACK_LENGTH = 68
 
@@ -204,6 +205,7 @@ const matchCopyByLanguage = {
     securePlace: (name: string, place: string) => `${name} asegura el ${place}.`,
     skip: 'Saltar',
     tokenLabel: 'ficha',
+    turnTimedOut: (name: string) => `${name} agoto el tiempo del turno y lo pierde.`,
     turnWaiting: 'En espera',
     yourTurn: 'Tu turno',
     viewVictory: 'Ver victoria',
@@ -250,6 +252,7 @@ const matchCopyByLanguage = {
     securePlace: (name: string, place: string) => `${name} secures ${place}.`,
     skip: 'Skip',
     tokenLabel: 'token',
+    turnTimedOut: (name: string) => `${name} ran out of turn time and loses the turn.`,
     turnWaiting: 'Waiting',
     yourTurn: 'Your turn',
     viewVictory: 'View victory',
@@ -1002,6 +1005,7 @@ const createInitialTokenTrackSteps = (inputTokens: MatchToken[]) => {
 export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps) {
   const [searchParams] = useSearchParams()
   const { username } = useControllerWallet()
+  const { awardCoins } = usePlayerProfileActions()
   const language = useAppSettingsStore((state) => state.language)
   const questionDifficulty = useAppSettingsStore((state) => state.questionDifficulty)
   const selectedTokenSkinId = useAppSettingsStore((state) => state.selectedTokenSkinId)
@@ -1067,6 +1071,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   const [triviaSecondsLeft, setTriviaSecondsLeft] = useState(0)
   const hudRollIntervalRef = useRef<null | number>(null)
   const hudRollTimeoutRef = useRef<null | number>(null)
+  const turnTimeoutRef = useRef<null | number>(null)
   const victoryPreviewTimeoutRef = useRef<null | number>(null)
   const aiActionTimeoutRef = useRef<null | number>(null)
   const botWatchdogIntervalRef = useRef<null | number>(null)
@@ -1075,6 +1080,14 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   const botTurnStartedAtRef = useRef(0)
   const botHeartbeatRef = useRef(0)
   const botForceAdvanceRef = useRef(false)
+  const rewardsGrantedRef = useRef(false)
+  const runtimeStateRef = useRef({
+    currentTurnPlayerId,
+    hudDiceRolling: false,
+    isPlacementFlowBlocking: false,
+    isTokenMoving: false,
+    showFinalClassification: false,
+  })
   const usedTriviaQuestionIdsRef = useRef<Set<string>>(new Set())
   const finalPlacementsRef = useRef<FinalPlacement[]>([])
   const botRuntimeRef = useRef<BotRuntimeState>({
@@ -1162,6 +1175,16 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     finalPlacementsRef.current = finalPlacements
   }, [finalPlacements])
 
+  useEffect(() => {
+    runtimeStateRef.current = {
+      currentTurnPlayerId,
+      hudDiceRolling,
+      isPlacementFlowBlocking,
+      isTokenMoving,
+      showFinalClassification,
+    }
+  }, [currentTurnPlayerId, hudDiceRolling, isPlacementFlowBlocking, isTokenMoving, showFinalClassification])
+
   const clearTriviaTimers = useCallback(() => {
     if (triviaCountdownIntervalRef.current !== null) {
       window.clearInterval(triviaCountdownIntervalRef.current)
@@ -1184,7 +1207,8 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     (question: TriviaQuestion) => {
       clearTriviaTimers()
 
-      const expiresAt = Date.now() + triviaSecondsByDifficulty[question.difficulty] * 1000
+      const responseWindowSeconds = activeSessionState.rules.answerTimeLimitSecs
+      const expiresAt = Date.now() + responseWindowSeconds * 1000
 
       setTurnTrivia({
         expiresAt,
@@ -1194,9 +1218,9 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
         result: 'idle',
         selectedOption: null,
       })
-      setTriviaSecondsLeft(triviaSecondsByDifficulty[question.difficulty])
+      setTriviaSecondsLeft(responseWindowSeconds)
     },
-    [clearTriviaTimers],
+    [activeSessionState.rules.answerTimeLimitSecs, clearTriviaTimers],
   )
 
   const isTriviaBlockingTurn = turnTrivia.phase !== 'closed' || (Boolean(turnTrivia.question) && !turnTrivia.movementUnlocked)
@@ -1233,6 +1257,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     setLogEvents(createInitialLogEvents(language))
     setFinalPlacements([])
     finalPlacementsRef.current = []
+    rewardsGrantedRef.current = false
     setAnnouncementIndex(0)
     setShowFinalClassification(false)
     setShowPlacementDetails(false)
@@ -1783,6 +1808,63 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   useEffect(() => {
     setWinnerPlayerId(isMatchComplete ? finalPlacements[0]?.id || currentTurnPlayerId : null)
   }, [currentTurnPlayerId, finalPlacements, isMatchComplete])
+
+  useEffect(() => {
+    if (showVictoryPreviewControl || rewardsGrantedRef.current || !showFinalClassification || finalPlacements.length === 0) {
+      return
+    }
+
+    const localPlacement = finalPlacements.find((placement) => placement.id === humanPlayerId)
+
+    if (localPlacement) {
+      awardCoins(localPlacement.reward)
+    }
+
+    rewardsGrantedRef.current = true
+  }, [awardCoins, finalPlacements, humanPlayerId, showFinalClassification, showVictoryPreviewControl])
+
+  useEffect(() => {
+    if (turnTimeoutRef.current !== null) {
+      window.clearTimeout(turnTimeoutRef.current)
+      turnTimeoutRef.current = null
+    }
+
+    if (isPlacementFlowBlocking || activeSessionState.rules.timePerTurn <= 0) {
+      return
+    }
+
+    const scheduledTurnPlayerId = currentTurnPlayerId
+    const scheduledPlayerName = playersById[scheduledTurnPlayerId]?.name || ui.fallbackPlayer
+
+    const handleTurnTimeout = () => {
+      const runtimeState = runtimeStateRef.current
+
+      if (
+        runtimeState.currentTurnPlayerId !== scheduledTurnPlayerId ||
+        runtimeState.isPlacementFlowBlocking ||
+        runtimeState.showFinalClassification
+      ) {
+        return
+      }
+
+      if (advancingTurnRef.current || runtimeState.hudDiceRolling || runtimeState.isTokenMoving) {
+        turnTimeoutRef.current = window.setTimeout(handleTurnTimeout, 250)
+        return
+      }
+
+      logEvent('question', ui.turnTimedOut(scheduledPlayerName), 'warning')
+      advanceTurn()
+    }
+
+    turnTimeoutRef.current = window.setTimeout(handleTurnTimeout, activeSessionState.rules.timePerTurn * 1000)
+
+    return () => {
+      if (turnTimeoutRef.current !== null) {
+        window.clearTimeout(turnTimeoutRef.current)
+        turnTimeoutRef.current = null
+      }
+    }
+  }, [activeSessionState.rules.timePerTurn, advanceTurn, currentTurnPlayerId, isPlacementFlowBlocking, logEvent, playersById, ui])
 
   useEffect(() => {
     if (finalPlacements.length === 0 || showFinalClassification) {
@@ -2667,6 +2749,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     setWinnerPlayerId(null)
     setFinalPlacements([])
     finalPlacementsRef.current = []
+    rewardsGrantedRef.current = false
     setAnnouncementIndex(0)
     setShowFinalClassification(false)
     setShowPlacementDetails(false)
