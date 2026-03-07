@@ -98,14 +98,81 @@ fn setup_world() -> (
     ILobbySystemDispatcher,
     ITurnSystemDispatcher,
 ) {
+    let global_state_model = declare("m_GlobalState").unwrap().contract_class();
+    let game_model = declare("m_Game").unwrap().contract_class();
+    let game_config_model = declare("m_GameConfig").unwrap().contract_class();
+    let lobby_code_index_model = declare("m_LobbyCodeIndex").unwrap().contract_class();
+    let public_lobby_index_model = declare("m_PublicLobbyIndex").unwrap().contract_class();
+    let game_player_model = declare("m_GamePlayer").unwrap().contract_class();
+    let game_seat_model = declare("m_GameSeat").unwrap().contract_class();
+    let token_model = declare("m_Token").unwrap().contract_class();
+    let turn_state_model = declare("m_TurnState").unwrap().contract_class();
+    let dice_state_model = declare("m_DiceState").unwrap().contract_class();
+    let bonus_state_model = declare("m_BonusState").unwrap().contract_class();
+    let runtime_config_model = declare("m_GameRuntimeConfig").unwrap().contract_class();
+    let board_square_model = declare("m_BoardSquare").unwrap().contract_class();
+    let square_occupancy_model = declare("m_SquareOccupancy").unwrap().contract_class();
+    let lobby_created_event = declare("e_LobbyCreated").unwrap().contract_class();
+    let player_joined_event = declare("e_PlayerJoined").unwrap().contract_class();
+    let player_ready_changed_event = declare("e_PlayerReadyChanged").unwrap().contract_class();
+    let game_started_event = declare("e_GameStarted").unwrap().contract_class();
+    let turn_started_event = declare("e_TurnStarted").unwrap().contract_class();
+    let token_moved_event = declare("e_TokenMoved").unwrap().contract_class();
+    let token_captured_event = declare("e_TokenCaptured").unwrap().contract_class();
+    let token_reached_home_event = declare("e_TokenReachedHome").unwrap().contract_class();
+    let bonus_awarded_event = declare("e_BonusAwarded").unwrap().contract_class();
+    let blockade_created_event = declare("e_BlockadeCreated").unwrap().contract_class();
+    let blockade_broken_event = declare("e_BlockadeBroken").unwrap().contract_class();
+    let bridge_formed_event = declare("e_BridgeFormed").unwrap().contract_class();
+    let bridge_broken_event = declare("e_BridgeBroken").unwrap().contract_class();
+    let turn_ended_event = declare("e_TurnEnded").unwrap().contract_class();
+    let game_won_event = declare("e_GameWon").unwrap().contract_class();
+    let world_class = declare("world").unwrap().contract_class();
     let config_class = declare("config_system").unwrap().contract_class();
     let lobby_class = declare("lobby_system").unwrap().contract_class();
     let turn_class = declare("turn_system").unwrap().contract_class();
 
-    let mut world = spawn_test_world(
-        dojo::world::world::TEST_CLASS_HASH,
-        [namespace_def(*config_class.class_hash, *lobby_class.class_hash, *turn_class.class_hash)]
+    let namespace = NamespaceDef {
+        namespace: "parchis_trivia",
+        resources: [
+            TestResource::Model(*global_state_model.class_hash),
+            TestResource::Model(*game_model.class_hash),
+            TestResource::Model(*game_config_model.class_hash),
+            TestResource::Model(*lobby_code_index_model.class_hash),
+            TestResource::Model(*public_lobby_index_model.class_hash),
+            TestResource::Model(*game_player_model.class_hash),
+            TestResource::Model(*game_seat_model.class_hash),
+            TestResource::Model(*token_model.class_hash),
+            TestResource::Model(*turn_state_model.class_hash),
+            TestResource::Model(*dice_state_model.class_hash),
+            TestResource::Model(*bonus_state_model.class_hash),
+            TestResource::Model(*runtime_config_model.class_hash),
+            TestResource::Model(*board_square_model.class_hash),
+            TestResource::Model(*square_occupancy_model.class_hash),
+            TestResource::Event(*lobby_created_event.class_hash),
+            TestResource::Event(*player_joined_event.class_hash),
+            TestResource::Event(*player_ready_changed_event.class_hash),
+            TestResource::Event(*game_started_event.class_hash),
+            TestResource::Event(*turn_started_event.class_hash),
+            TestResource::Event(*token_moved_event.class_hash),
+            TestResource::Event(*token_captured_event.class_hash),
+            TestResource::Event(*token_reached_home_event.class_hash),
+            TestResource::Event(*bonus_awarded_event.class_hash),
+            TestResource::Event(*blockade_created_event.class_hash),
+            TestResource::Event(*blockade_broken_event.class_hash),
+            TestResource::Event(*bridge_formed_event.class_hash),
+            TestResource::Event(*bridge_broken_event.class_hash),
+            TestResource::Event(*turn_ended_event.class_hash),
+            TestResource::Event(*game_won_event.class_hash),
+            TestResource::Contract(*config_class.class_hash),
+            TestResource::Contract(*lobby_class.class_hash),
+            TestResource::Contract(*turn_class.class_hash),
+        ]
             .span(),
+    };
+
+    let mut world = spawn_test_world(
+        *world_class.class_hash, [namespace].span(),
     );
     world.sync_perms_and_inits(contract_defs());
 
@@ -245,6 +312,23 @@ fn count_legal_moves_for_token(mut moves: Array<LegalMove>, token_id: u8) -> u32
         }
     };
     count
+}
+
+fn has_legal_move(mut moves: Array<LegalMove>, token_id: u8, steps: u8) -> bool {
+    loop {
+        match moves.pop_front() {
+            Option::Some(next_move) => {
+                if next_move.token_id == token_id && next_move.steps == steps {
+                    return true;
+                }
+            },
+            Option::None => {
+                break;
+            },
+        }
+    };
+
+    false
 }
 
 #[test]
@@ -392,5 +476,6 @@ fn bridge_blocks_path_until_broken() {
     let legal_moves = turn_system.compute_legal_moves(game_id);
     stop_cheat_caller_address(turn_system.contract_address);
 
-    assert(count_legal_moves_for_token(legal_moves, 0) == 0, 'bridge should block path');
+    assert(!has_legal_move(legal_moves.clone(), 0, 4), 'bridge should block path');
+    assert(has_legal_move(legal_moves, 0, 1), 'short move should stay legal');
 }
