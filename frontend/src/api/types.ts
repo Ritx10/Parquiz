@@ -156,6 +156,14 @@ export type DojoPendingQuestionModel = {
   seed_nonce: string
 }
 
+export type DojoQuestionSetModel = {
+  set_id: bigint
+  merkle_root: string
+  question_count: number
+  version: number
+  enabled: boolean
+}
+
 export type DojoBoardSquareModel = {
   config_id: bigint
   square_index: number

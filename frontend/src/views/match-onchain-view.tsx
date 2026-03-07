@@ -14,6 +14,7 @@ import {
 import {
   readDojoGameSnapshot,
   readEgsTokenGameLink,
+  readQuestionSet,
   subscribeDojoGame,
   type DojoGameSnapshot,
 } from '../api/dojo-state'
@@ -23,6 +24,12 @@ import { LogDrawer } from '../components/game/log-drawer'
 import type { MatchLogEvent, MatchPlayer, MatchToken, PlayerColor } from '../components/game/match-types'
 import { isDojoConfigured } from '../config/dojo'
 import { appEnv } from '../config/env'
+import {
+  getHydratedQuestion,
+  LOCAL_QUESTION_SET_COUNT,
+  LOCAL_QUESTION_SET_ID,
+  LOCAL_QUESTION_SET_ROOT,
+} from '../lib/questions/local-question-bank'
 import { shortenAddress, useControllerWallet } from '../lib/starknet/use-controller-wallet'
 
 const TRACK_SQUARE_UI_OFFSET = 4
@@ -311,10 +318,8 @@ export function MatchOnchainView() {
   const [txHash, setTxHash] = useState<null | string>(null)
   const [actionError, setActionError] = useState<null | string>(null)
   const [isAwaitingOnchainSync, setIsAwaitingOnchainSync] = useState(false)
-  const [answerCorrectOption, setAnswerCorrectOption] = useState(0)
-  const [answerSelectedOption, setAnswerSelectedOption] = useState(0)
-  const [answerMerkleProof, setAnswerMerkleProof] = useState('')
-  const [answerMerkleDirections, setAnswerMerkleDirections] = useState('')
+  const [hydratedQuestionError, setHydratedQuestionError] = useState<null | string>(null)
+  const [selectedAnswerOption, setSelectedAnswerOption] = useState<null | number>(null)
 
   const refreshDebounceRef = useRef<null | number>(null)
   const playersByAddressRef = useRef<Record<string, string>>({})
@@ -394,6 +399,73 @@ export function MatchOnchainView() {
       cancelled = true
     }
   }, [activeTokenId])
+
+  useEffect(() => {
+    if (!snapshot?.pending_question) {
+      setHydratedQuestionError(null)
+      setSelectedAnswerOption(null)
+      return
+    }
+
+    const pendingQuestion = snapshot.pending_question
+    setSelectedAnswerOption(null)
+
+    let cancelled = false
+
+    const hydrateQuestion = async () => {
+      try {
+        const questionSet = await readQuestionSet(pendingQuestion.set_id)
+
+        if (cancelled) {
+          return
+        }
+
+        if (!questionSet || !questionSet.enabled) {
+          setHydratedQuestionError('QuestionSet on-chain no disponible o deshabilitado.')
+          return
+        }
+
+        if (questionSet.question_count !== LOCAL_QUESTION_SET_COUNT) {
+          setHydratedQuestionError(
+            `QuestionSet local desalineado. Esperado count ${LOCAL_QUESTION_SET_COUNT}, on-chain ${questionSet.question_count}.`,
+          )
+          return
+        }
+
+        if (normalizeAddressForCompare(questionSet.merkle_root) !== normalizeAddressForCompare(LOCAL_QUESTION_SET_ROOT)) {
+          setHydratedQuestionError(
+            `Merkle root local desalineado. Usa ${LOCAL_QUESTION_SET_ROOT} para el set_id ${LOCAL_QUESTION_SET_ID.toString()}.`,
+          )
+          return
+        }
+
+        const hydrated = getHydratedQuestion(
+          pendingQuestion.question_index,
+          pendingQuestion.category,
+          pendingQuestion.difficulty,
+        )
+
+        if (!hydrated) {
+          setHydratedQuestionError(
+            `No existe pregunta local para index ${pendingQuestion.question_index}, categoria ${pendingQuestion.category}, dificultad ${pendingQuestion.difficulty}.`,
+          )
+          return
+        }
+
+        setHydratedQuestionError(null)
+      } catch (error) {
+        if (!cancelled) {
+          setHydratedQuestionError(mapErrorToUserMessage(error))
+        }
+      }
+    }
+
+    void hydrateQuestion()
+
+    return () => {
+      cancelled = true
+    }
+  }, [snapshot?.pending_question])
 
   const refreshSnapshot = useCallback(async () => {
     if (!activeGameId || !isDojoConfigured) {
@@ -708,6 +780,18 @@ export function MatchOnchainView() {
     }, {})
   }, [uiLegalMoves])
 
+  const hydratedQuestion = useMemo(() => {
+    if (!snapshot?.pending_question || hydratedQuestionError) {
+      return null
+    }
+
+    return getHydratedQuestion(
+      snapshot.pending_question.question_index,
+      snapshot.pending_question.category,
+      snapshot.pending_question.difficulty,
+    )
+  }, [hydratedQuestionError, snapshot?.pending_question])
+
   const activePlayerLabel = playerLabelFromAddress(activePlayerAddress)
   const winnerLabel = playerLabelFromAddress(snapshot?.game?.winner || '')
 
@@ -763,24 +847,18 @@ export function MatchOnchainView() {
       return
     }
 
-    const turnState = snapshot.turn_state
-    const pendingQuestion = snapshot.pending_question
-
-    const proof = answerMerkleProof
-      .split(',')
-      .map((value) => value.trim())
-      .filter((value) => value.length > 0)
-
-    const directions = answerMerkleDirections
-      .split(',')
-      .map((value) => value.trim())
-      .filter((value) => value.length > 0)
-      .map((value) => (value === '1' ? 1 : 0)) as Array<0 | 1>
-
-    if (proof.length !== directions.length) {
-      setActionError('merkleProof y merkleDirections deben tener la misma cantidad de elementos.')
+    if (!hydratedQuestion) {
+      setActionError(hydratedQuestionError || 'No se pudo hidratar la pregunta actual.')
       return
     }
+
+    if (selectedAnswerOption === null) {
+      setActionError('Selecciona una respuesta antes de enviar la transaccion.')
+      return
+    }
+
+    const turnState = snapshot.turn_state
+    const pendingQuestion = snapshot.pending_question
 
     void runTransaction('Submit answer', () =>
       submitAnswer(account, activeGameId, {
@@ -788,20 +866,19 @@ export function MatchOnchainView() {
         questionIndex: pendingQuestion.question_index,
         category: pendingQuestion.category,
         difficulty: pendingQuestion.difficulty,
-        correctOption: answerCorrectOption,
-        selectedOption: answerSelectedOption,
-        merkleProof: proof,
-        merkleDirections: directions,
+        correctOption: hydratedQuestion.correctOption,
+        selectedOption: selectedAnswerOption,
+        merkleProof: hydratedQuestion.merkleProof,
+        merkleDirections: hydratedQuestion.merkleDirections,
       }),
     )
   }, [
     account,
     activeGameId,
+    hydratedQuestion,
+    hydratedQuestionError,
     snapshot,
-    answerMerkleProof,
-    answerMerkleDirections,
-    answerCorrectOption,
-    answerSelectedOption,
+    selectedAnswerOption,
     runTransaction,
   ])
 
@@ -1105,52 +1182,51 @@ export function MatchOnchainView() {
                       : '-'}
                   </p>
 
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <label className="text-xs uppercase tracking-wide">
-                      correct_option
-                      <input
-                        className="mt-1 w-full rounded-lg border border-[#c9a85a] bg-white px-2 py-1 text-sm font-bold"
-                        min={0}
-                        onChange={(event) => setAnswerCorrectOption(Number(event.target.value))}
-                        type="number"
-                        value={answerCorrectOption}
-                      />
-                    </label>
-                    <label className="text-xs uppercase tracking-wide">
-                      selected_option
-                      <input
-                        className="mt-1 w-full rounded-lg border border-[#c9a85a] bg-white px-2 py-1 text-sm font-bold"
-                        min={0}
-                        onChange={(event) => setAnswerSelectedOption(Number(event.target.value))}
-                        type="number"
-                        value={answerSelectedOption}
-                      />
-                    </label>
-                  </div>
+                  {hydratedQuestion ? (
+                    <>
+                      <div className="rounded-xl border border-[#c9a85a] bg-[#fff8e7] px-3 py-3">
+                        <p className="text-xs font-black uppercase tracking-wide text-[#7a5b18]">
+                          Fuente local verificada contra root on-chain
+                        </p>
+                        <p className="mt-2 text-base font-bold leading-snug text-board-night">
+                          {hydratedQuestion.prompt}
+                        </p>
+                      </div>
 
-                  <label className="block text-xs uppercase tracking-wide">
-                    merkle_proof (comma separated felt)
-                    <textarea
-                      className="mt-1 min-h-[64px] w-full rounded-lg border border-[#c9a85a] bg-white px-2 py-1 text-xs font-bold"
-                      onChange={(event) => setAnswerMerkleProof(event.target.value)}
-                      placeholder="0xabc,0xdef"
-                      value={answerMerkleProof}
-                    />
-                  </label>
+                      <div className="grid gap-2">
+                        {hydratedQuestion.options.map((option, index) => {
+                          const isSelected = selectedAnswerOption === index
 
-                  <label className="block text-xs uppercase tracking-wide">
-                    merkle_directions (comma separated 0/1)
-                    <input
-                      className="mt-1 w-full rounded-lg border border-[#c9a85a] bg-white px-2 py-1 text-sm font-bold"
-                      onChange={(event) => setAnswerMerkleDirections(event.target.value)}
-                      placeholder="0,1"
-                      value={answerMerkleDirections}
-                    />
-                  </label>
+                          return (
+                            <button
+                              className={`rounded-xl border px-3 py-2 text-left text-sm font-bold transition ${
+                                isSelected
+                                  ? 'border-[#8d6a17] bg-[#ffe596] text-[#5e4300]'
+                                  : 'border-[#c9a85a] bg-[#fff4d8] text-board-night hover:bg-[#fff0c2]'
+                              }`}
+                              key={`${hydratedQuestion.questionIndex}-${index}`}
+                              onClick={() => setSelectedAnswerOption(index)}
+                              type="button"
+                            >
+                              {index}. {option}
+                            </button>
+                          )
+                        })}
+                      </div>
+
+                      <p className="rounded-xl border border-[#d6af50] bg-[#fff6dd] px-3 py-2 text-xs font-black uppercase tracking-wide text-board-night">
+                        proof nodes: {hydratedQuestion.merkleProof.length} · root: {LOCAL_QUESTION_SET_ROOT}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
+                      {hydratedQuestionError || 'Esperando datos de la pregunta on-chain.'}
+                    </p>
+                  )}
 
                   <button
                     className={`action-button-primary ${canSubmitAnswer && !txPendingLabel ? '' : 'cursor-not-allowed opacity-60'}`}
-                    disabled={!canSubmitAnswer || Boolean(txPendingLabel)}
+                    disabled={!canSubmitAnswer || Boolean(txPendingLabel) || !hydratedQuestion || selectedAnswerOption === null}
                     onClick={onSubmitAnswer}
                     type="button"
                   >

@@ -15,6 +15,7 @@ import type {
   DojoDiceRolledEvent,
   DojoDiceStateModel,
   DojoPendingQuestionModel,
+  DojoQuestionSetModel,
   DojoSquareOccupancyModel,
   DojoTokenCapturedEvent,
   DojoTokenModel,
@@ -381,6 +382,14 @@ const normalizePendingQuestionModel = (raw: RawModel): DojoPendingQuestionModel 
   seed_nonce: typeof raw.seed_nonce === 'string' ? raw.seed_nonce : normalizeHex(raw.seed_nonce),
 })
 
+const normalizeQuestionSetModel = (raw: RawModel): DojoQuestionSetModel => ({
+  set_id: toBigInt(raw.set_id),
+  merkle_root: typeof raw.merkle_root === 'string' ? normalizeHex(raw.merkle_root) : normalizeHex(raw.merkle_root),
+  question_count: toNumber(raw.question_count),
+  version: toNumber(raw.version),
+  enabled: toBoolean(raw.enabled),
+})
+
 const normalizeBoardSquareModel = (raw: RawModel): DojoBoardSquareModel => ({
   config_id: toBigInt(raw.config_id),
   square_index: toNumber(raw.square_index),
@@ -618,6 +627,18 @@ export const readLatestGameIdByPlayer = async (playerAddress: string): Promise<b
     .sort((left, right) => Number(right.game_id - left.game_id))[0]
 
   return latest?.game_id ?? null
+}
+
+export const readQuestionSet = async (setId: bigint): Promise<DojoQuestionSetModel | null> => {
+  const client = await getToriiClient()
+  const row = await fetchModelByKeys(client, 'QuestionSet', [setId])
+
+  if (!row) {
+    return null
+  }
+
+  const questionSet = normalizeQuestionSetModel(row)
+  return questionSet.set_id > 0n ? questionSet : null
 }
 
 export const readEgsTokenGameLink = async (tokenId: bigint): Promise<DojoEgsTokenGameLinkModel | null> => {
