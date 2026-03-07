@@ -5,8 +5,8 @@ type ParquizSplashScreenProps = {
   onEnterHome: () => void
 }
 
-const LOGO_READY_MS = 1650
-const EXIT_MS = 440
+const LOGO_READY_MS = 640
+const EXIT_MS = 220
 const PARQUIZ_LOGO_PATH = '/parquiz-logo.png'
 const LOGIN_BUTTON_PATH = '/login-button.png'
 
@@ -74,13 +74,6 @@ export function ParquizSplashScreen({ onEnterHome }: ParquizSplashScreenProps) {
 
   return (
     <section className={`parquiz-splash ${isExiting ? 'parquiz-splash--exit' : ''}`}>
-      <span className="parquiz-splash__halo parquiz-splash__halo--left" />
-      <span className="parquiz-splash__halo parquiz-splash__halo--right" />
-      <span className="parquiz-splash__particle parquiz-splash__particle--a" />
-      <span className="parquiz-splash__particle parquiz-splash__particle--b" />
-      <span className="parquiz-splash__particle parquiz-splash__particle--c" />
-      <span className="parquiz-splash__particle parquiz-splash__particle--d" />
-
       <div className="parquiz-splash__logo-stage">
         <img alt="ParQuiz" className="parquiz-splash__logo-image" src={PARQUIZ_LOGO_PATH} />
 
