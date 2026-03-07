@@ -1,9 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { GameAvatar } from './game-avatar';
+import { getPlayerSkinSrc } from '../../lib/player-skins';
+import { useAppSettingsStore } from '../../store/app-settings-store';
 
 type PlayerColor = 'red' | 'green' | 'blue' | 'yellow';
 type PodiumPlace = 1 | 2 | 3 | 4;
 
 interface RankingEntry {
+  avatar: string;
   id: string;
   name: string;
   place: PodiumPlace;
@@ -12,12 +16,12 @@ interface RankingEntry {
   title: string;
 }
 
-const ranking: RankingEntry[] = [
-  { id: "P1", name: "P1", place: 1, reward: 1000, color: "red", title: "GANADOR" },
-  { id: "P2", name: "P2", place: 2, reward: 500, color: "green", title: "2° LUGAR" },
-  { id: "P4", name: "P4", place: 3, reward: 250, color: "blue", title: "3° LUGAR" },
-  { id: "P3", name: "P3", place: 4, reward: 100, color: "yellow", title: "4° LUGAR" }
-];
+const defaultRanking = [
+  { id: "P1", name: "P1", place: 1, reward: 1000, color: "red", title: "GANADOR", avatar: 'P1' },
+  { id: "P2", name: "P2", place: 2, reward: 500, color: "green", title: "2° LUGAR", avatar: 'P2' },
+  { id: "P4", name: "P4", place: 3, reward: 250, color: "blue", title: "3° LUGAR", avatar: 'P4' },
+  { id: "P3", name: "P3", place: 4, reward: 100, color: "yellow", title: "4° LUGAR", avatar: 'P3' }
+] as const satisfies RankingEntry[];
 
 const avatarToneByColor: Record<PlayerColor, string> = {
   blue: 'from-[#d6edff] via-[#8fd4ff] to-[#3e93df]',
@@ -84,12 +88,23 @@ const placeMedalRibbons = (place: PodiumPlace) => {
 
 export default function FinalRankingScreen() {
   const [show, setShow] = useState(false);
+  const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId);
+  const selectedSkinSrc = getPlayerSkinSrc(selectedSkinId);
 
   useEffect(() => {
     // Pequeño delay para asegurar que el montaje haya sucedido antes de aplicar las clases de show
     const t = setTimeout(() => setShow(true), 50);
     return () => clearTimeout(t);
   }, []);
+
+  const ranking = defaultRanking.map((entry) =>
+    entry.place === 1 && selectedSkinSrc
+      ? {
+          ...entry,
+          avatar: selectedSkinSrc,
+        }
+      : entry,
+  );
 
   const podiumPlacementByPlace = ranking.reduce((acc, entry) => {
     acc[entry.place] = entry;
@@ -155,9 +170,14 @@ export default function FinalRankingScreen() {
                    <div className="absolute -top-[70px] text-[80px] drop-shadow-[0_4px_8px_rgba(0,0,0,0.4)] animate-bounce z-40">👑</div>
                  )}
                  
-                 <div className={`relative rounded-full border-[6px] ${placeRibbonClassNew[placement.place]} shadow-[0_10px_20px_rgba(0,0,0,0.3)] ${placeOrder === 1 ? 'h-[135px] w-[135px]' : 'h-[105px] w-[105px]'}`}>
+                    <div className={`relative rounded-full border-[6px] ${placeRibbonClassNew[placement.place]} shadow-[0_10px_20px_rgba(0,0,0,0.3)] ${placeOrder === 1 ? 'h-[135px] w-[135px]' : 'h-[105px] w-[105px]'}`}>
                     <div className={`flex h-full w-full items-center justify-center rounded-full border-[3px] border-[#FFF8E7] text-4xl font-black text-white/80 bg-gradient-to-b ${avatarToneByColor[placement.color]} shadow-inner overflow-hidden`}>
-                      {placement.name}
+                      <GameAvatar
+                        alt={placement.name}
+                        avatar={placement.avatar}
+                        imageClassName="h-full w-full object-contain p-2"
+                        textClassName="text-4xl font-black text-white/80"
+                      />
                     </div>
                  </div>
                  
@@ -171,7 +191,12 @@ export default function FinalRankingScreen() {
                    <div className="absolute -top-[14px] flex w-[32px] justify-between z-[-1]">
                       {placeMedalRibbons(placement.place)}
                    </div>
-                   <div className={`flex h-[68px] w-[68px] items-center justify-center rounded-full border-[4px] border-[#8C522B] bg-gradient-to-b ${placeMedalColors[placement.place].bg} shadow-[0_6px_10px_rgba(0,0,0,0.3),inset_0_3px_0_${placeMedalColors[placement.place].border}]`}>
+                   <div
+                     className={`flex h-[68px] w-[68px] items-center justify-center rounded-full border-[4px] border-[#8C522B] bg-gradient-to-b ${placeMedalColors[placement.place].bg}`}
+                     style={{
+                       boxShadow: `0 6px 10px rgba(0,0,0,0.3), inset 0 3px 0 ${placeMedalColors[placement.place].border}`,
+                     }}
+                   >
                      <span className="font-display text-[32px] text-[#5A3219] drop-shadow-[0_1px_0_rgba(255,255,255,0.6)]">{placeOrdinalLabel[placement.place]}</span>
                    </div>
                  </div>

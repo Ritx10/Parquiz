@@ -1,7 +1,7 @@
 import { useAccount } from '@starknet-react/core'
 import { useMemo, useState } from 'react'
 import { createGameConfig, lockGameConfig, readLatestGameConfigByCreator } from '../api'
-import { formatChain, shortenAddress, useControllerWallet } from '../lib/starknet/use-controller-wallet'
+import { shortenAddress, useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import { useAppSettingsStore } from '../store/app-settings-store'
 
 type DifficultyPreset = 'easy' | 'medium' | 'hard'
@@ -36,12 +36,6 @@ const exitRuleToValue: Record<ExitHomeRule, 0 | 1 | 2> = {
 }
 
 const difficultyButtonOrder: DifficultyPreset[] = ['easy', 'medium', 'hard']
-const contractRuleItems = [
-  { key: 'allowSplitDice', value: true },
-  { key: 'allowTwoStepSameToken', value: true },
-  { key: 'allowSumDice', value: true },
-  { key: 'requiresExactHome', value: true },
-] as const
 
 const copy = {
   es: {
@@ -123,22 +117,9 @@ type GameConfigViewProps = {
   onClose?: () => void
 }
 
-
-function RuleChip({ label, value }: { label: string; value: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-[16px] border border-[#dcc29a] bg-[#fbf3e4] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
-      <span className="text-[14px] font-black uppercase tracking-[0.02em] text-[#6e4325] sm:text-[16px]">{label}</span>
-      <span className="rounded-full border border-[#4ea42c] bg-gradient-to-b from-[#88ea50] to-[#57c930] px-4 py-1 text-[12px] font-black uppercase tracking-wide text-[#215412] shadow-[inset_0_1px_0_rgba(223,255,198,0.9)] sm:text-[14px]">
-        {value ? 'TRUE' : 'FALSE'}
-      </span>
-    </div>
-  )
-}
-
 export function GameConfigView({ embedded = false, onClose }: GameConfigViewProps) {
   const language = useAppSettingsStore((state) => state.language)
   const soundEnabled = useAppSettingsStore((state) => state.soundEnabled)
-  const selectedConfigId = useAppSettingsStore((state) => state.selectedConfigId)
   const setLanguage = useAppSettingsStore((state) => state.setLanguage)
   const setSoundEnabled = useAppSettingsStore((state) => state.setSoundEnabled)
   const setSelectedConfigId = useAppSettingsStore((state) => state.setSelectedConfigId)
@@ -149,7 +130,7 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
   const [isSaving, setIsSaving] = useState(false)
 
   const { account, address } = useAccount()
-  const { chainId, isConnected, status, username } = useControllerWallet()
+  const { isConnected, status, username } = useControllerWallet()
 
   const walletLabel = useMemo(() => {
     if (!address) {
@@ -160,7 +141,6 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
   }, [address])
 
   const userLabel = username || status || '-'
-  const balanceLabel = text.unavailable
 
   const difficultyLabel = {
     easy: text.easy,

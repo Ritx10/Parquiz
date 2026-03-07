@@ -2,13 +2,17 @@ import { useCallback, useState } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { appRouter } from './app/router'
 import { ParquizSplashScreen } from './components/splash/parquiz-splash-screen'
+import { useAppSettingsStore } from './store/app-settings-store'
 
 function App() {
   const [showSplash, setShowSplash] = useState(true)
 
   const handleEnterHome = useCallback(() => {
-    if (window.location.pathname !== '/') {
-      window.history.replaceState(null, '', '/')
+    const hasSelectedSkin = Boolean(useAppSettingsStore.getState().selectedSkinId)
+    const targetPath = hasSelectedSkin ? '/' : '/skin-selection'
+
+    if (window.location.pathname !== targetPath) {
+      window.history.replaceState(null, '', targetPath)
     }
 
     setShowSplash(false)

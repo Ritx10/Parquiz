@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Board3D } from '../components/game/board3d'
+import { GameAvatar } from '../components/game/game-avatar'
 import { LogDrawer } from '../components/game/log-drawer'
 import type {
   MatchDiceState,
@@ -139,45 +140,10 @@ const rewardByPlace: Record<PodiumPlace, number> = {
   4: 100,
 }
 
-const placeOrdinalLabel: Record<PodiumPlace, string> = {
-  1: '1º',
-  2: '2º',
-  3: '3º',
-  4: '4º',
-}
-
-const placeResultLabel: Record<PodiumPlace, string> = {
-  1: 'GANADOR',
-  2: '2° LUGAR',
-  3: '3° LUGAR',
-  4: '4° LUGAR',
-}
-
 const placeAnnouncementLabel: Record<1 | 2 | 3, string> = {
   1: 'HA GANADO',
   2: 'ES 2DO LUGAR',
   3: 'ES 3ER LUGAR',
-}
-
-const placePodiumHeightClass: Record<PodiumPlace, string> = {
-  1: 'h-[248px] sm:h-[268px]',
-  2: 'h-[186px] sm:h-[206px]',
-  3: 'h-[158px] sm:h-[178px]',
-  4: 'h-[132px] sm:h-[152px]',
-}
-
-const placeRibbonClass: Record<PodiumPlace, string> = {
-  1: 'border-[#ba4432] bg-gradient-to-b from-[#f1725a] to-[#c4452d] text-[#fff5d7]',
-  2: 'border-[#3d8f38] bg-gradient-to-b from-[#68cb64] to-[#3ea645] text-[#efffe8]',
-  3: 'border-[#356da8] bg-gradient-to-b from-[#5bb3ff] to-[#3f7fcf] text-[#eaf6ff]',
-  4: 'border-[#b08d33] bg-gradient-to-b from-[#ebcd6b] to-[#c79f3b] text-[#fff8da]',
-}
-
-const placeMedalClass: Record<PodiumPlace, string> = {
-  1: 'border-[#d89b16] bg-gradient-to-b from-[#ffe186] via-[#f8c74b] to-[#d99c1d] text-[#70450f]',
-  2: 'border-[#8fa4bb] bg-gradient-to-b from-[#edf4ff] via-[#cad9eb] to-[#95aac4] text-[#395069]',
-  3: 'border-[#b9783d] bg-gradient-to-b from-[#f3c190] via-[#dd9554] to-[#b56a33] text-[#5d3217]',
-  4: 'border-[#a87038] bg-gradient-to-b from-[#f0bf8d] via-[#cd8d53] to-[#ab6d38] text-[#5c3014]',
 }
 
 const avatarToneByColor: Record<PlayerColor, string> = {
@@ -933,57 +899,7 @@ const createInitialTokenTrackSteps = (inputTokens: MatchToken[]) => {
 }
 
 
-const placePodiumHeightClassNew: Record<PodiumPlace, string> = {
-  1: 'h-[320px]',
-  2: 'h-[240px]',
-  3: 'h-[180px]',
-  4: 'h-[130px]',
-}
-
-const placeMedalColors: Record<PodiumPlace, { bg: string, border: string }> = {
-  1: { bg: 'from-[#FFDF73] via-[#F4B41A] to-[#D48900]', border: '#FFEA99' },
-  2: { bg: 'from-[#E2E8F0] via-[#A0AEC0] to-[#718096]', border: '#F7FAFC' },
-  3: { bg: 'from-[#F6AD55] via-[#DD6B20] to-[#9C4221]', border: '#FBD38D' },
-  4: { bg: 'from-[#D69E2E] via-[#B7791F] to-[#975A16]', border: '#F6E05E' },
-}
-
-const placeRibbonClassNew: Record<PodiumPlace, string> = {
-  1: 'bg-[#E74C3C] border-[#C0392B]',
-  2: 'bg-[#2ECC71] border-[#27AE60]',
-  3: 'bg-[#3498DB] border-[#2980B9]',
-  4: 'bg-[#F1C40F] border-[#D68910]',
-}
-
-const placeMedalRibbons = (place: PodiumPlace) => {
-  const common = "w-[18px] h-[54px] rounded-b-sm border-x-2 border-b-2 shadow-sm origin-top";
-  if (place === 1) return (
-    <>
-      <div className={`${common} -rotate-[30deg] bg-gradient-to-b from-[#EF5350] to-[#C62828] border-[#8E0000]`} />
-      <div className={`${common} rotate-[30deg] bg-gradient-to-b from-[#EF5350] to-[#C62828] border-[#8E0000]`} />
-    </>
-  );
-  if (place === 2) return (
-    <>
-      <div className={`${common} -rotate-[30deg] bg-gradient-to-b from-[#42A5F5] to-[#1565C0] border-[#0D47A1]`} />
-      <div className={`${common} rotate-[30deg] bg-gradient-to-b from-[#42A5F5] to-[#1565C0] border-[#0D47A1]`} />
-    </>
-  );
-  if (place === 3) return (
-    <>
-      <div className={`${common} -rotate-[30deg] bg-gradient-to-b from-[#EF5350] to-[#C62828] border-[#8E0000]`} />
-      <div className={`${common} rotate-[30deg] bg-gradient-to-b from-[#42A5F5] to-[#1565C0] border-[#0D47A1]`} />
-    </>
-  );
-  return (
-    <>
-      <div className={`${common} -rotate-[30deg] bg-gradient-to-b from-[#FFA726] to-[#EF6C00] border-[#E65100]`} />
-      <div className={`${common} rotate-[30deg] bg-gradient-to-b from-[#FFA726] to-[#EF6C00] border-[#E65100]`} />
-    </>
-  );
-}
-
 export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps) {
-  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const gameState = useReadonlyGameState()
   const isAiPracticeMode = searchParams.get('mode') === 'ai'
@@ -1022,7 +938,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   const [finalPlacements, setFinalPlacements] = useState<FinalPlacement[] | null>(null)
   const [announcementIndex, setAnnouncementIndex] = useState(0)
   const [showFinalClassification, setShowFinalClassification] = useState(false)
-  const [showPlacementDetails, setShowPlacementDetails] = useState(false)
+  const [, setShowPlacementDetails] = useState(false)
   const [isTokenMoving, setIsTokenMoving] = useState(false)
   const [hudDiceRolling, setHudDiceRolling] = useState(false)
   const [hudDicePreview, setHudDicePreview] = useState<{ dieA: DiceFaceValue; dieB: DiceFaceValue }>({
@@ -2249,17 +2165,6 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
       ? finalPlacements[announcementIndex]
       : null
 
-  const podiumPlacementByPlace = useMemo(() => {
-    if (!finalPlacements) {
-      return {} as Partial<Record<PodiumPlace, FinalPlacement>>
-    }
-
-    return finalPlacements.reduce<Partial<Record<PodiumPlace, FinalPlacement>>>((acc, placement) => {
-      acc[placement.place] = placement
-      return acc
-    }, {})
-  }, [finalPlacements])
-
   const skipToFinalClassification = () => {
     if (!finalPlacements) {
       return
@@ -2267,10 +2172,6 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
 
     setAnnouncementIndex(Math.min(announcementCount, finalPlacements.length))
     setShowFinalClassification(true)
-  }
-
-  const goBackToMenu = () => {
-    navigate('/')
   }
 
   const activeAnnouncementTitle = activeAnnouncementPlacement
@@ -2518,7 +2419,12 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
               <span
                 className={`inline-flex h-[118px] w-[118px] items-center justify-center rounded-full border-[4px] border-[#7c3f21] bg-gradient-to-b text-3xl font-black text-[#2c190d] ${avatarToneByColor[activeAnnouncementPlacement.color]}`}
               >
-                {activeAnnouncementPlacement.avatar}
+                <GameAvatar
+                  alt={activeAnnouncementPlacement.name}
+                  avatar={activeAnnouncementPlacement.avatar}
+                  imageClassName="h-full w-full object-contain p-2"
+                  textClassName="text-3xl font-black text-[#2c190d]"
+                />
               </span>
               <span className="absolute -bottom-2 rounded-full border border-[#8f532d] bg-gradient-to-b from-[#7e4c2d] to-[#5b341f] px-3 py-1 text-[11px] font-black tracking-[0.15em] text-[#ffe8bf]">
                 {activeAnnouncementPlacement.tag}

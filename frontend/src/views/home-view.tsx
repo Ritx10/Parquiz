@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { GameAvatar } from '../components/game/game-avatar'
+import { getPlayerSkinSrc, playerSkins } from '../lib/player-skins'
 import { GameConfigView } from './game-config-view'
 import { type AiDifficulty, useAppSettingsStore } from '../store/app-settings-store'
 
@@ -31,7 +33,12 @@ type ShopTab = 'avatars' | 'tokens' | 'dice' | 'themes'
 
 type ShopItem = {
   id: string
-  icon: string
+  icon?: string
+  isStarterSkin?: boolean
+  isSkinItem?: boolean
+  mediaSrc?: string
+  name?: string
+  subtitle?: string
   price: number
   toneClass: string
 }
@@ -77,14 +84,21 @@ const difficultyOptions: DifficultyOption[] = [
 
 const shopItemsByTab: Record<ShopTab, ShopItem[]> = {
   avatars: [
-    { id: 'avatar-monkey', icon: '🐵', price: 500, toneClass: 'from-[#ffefdb] to-[#fddcab]' },
-    { id: 'avatar-wizard', icon: '🧙', price: 300, toneClass: 'from-[#eff2ff] to-[#d8dbfb]' },
-    { id: 'avatar-star', icon: '⭐', price: 200, toneClass: 'from-[#f4e8ff] to-[#e4d2fb]' },
-    { id: 'avatar-heart', icon: '💖', price: 500, toneClass: 'from-[#ffe7f1] to-[#ffc7dd]' },
-    { id: 'avatar-rainbow-die', icon: '🎲', price: 100, toneClass: 'from-[#e8fbff] to-[#cbf1ff]' },
-    { id: 'avatar-ice-die', icon: '🎲', price: 500, toneClass: 'from-[#edf7ff] to-[#d4e7f8]' },
-    { id: 'avatar-board-old', icon: '🧩', price: 500, toneClass: 'from-[#f2eadb] to-[#ddcfb8]' },
-    { id: 'avatar-board-gold', icon: '🧩', price: 1000, toneClass: 'from-[#f9ecd8] to-[#e8d2ad]' },
+    ...playerSkins.map((skin, index) => ({
+      id: skin.id,
+      isStarterSkin: skin.price === 0,
+      isSkinItem: true,
+      mediaSrc: skin.src,
+      name: skin.name,
+      subtitle: skin.subtitle,
+      price: skin.price,
+      toneClass:
+        index % 3 === 0
+          ? 'from-[#ffefdb] to-[#fddcab]'
+          : index % 3 === 1
+            ? 'from-[#eff2ff] to-[#d8dbfb]'
+            : 'from-[#e8fbff] to-[#cbf1ff]',
+    })),
   ],
   tokens: [
     { id: 'token-ruby', icon: '🔴', price: 300, toneClass: 'from-[#ffe5df] to-[#ffc5b8]' },
@@ -138,11 +152,15 @@ const homeCopyByLanguage = {
     difficultyMedium: 'MEDIO',
     difficultyHard: 'DIFICIL',
     shopModalTitle: 'TIENDA PARQUIZ',
-    shopTabAvatars: 'AVATARES',
+    shopTabAvatars: 'SKINS DE CAPIS',
     shopTabTokens: 'FICHAS',
     shopTabDice: 'DADOS',
     shopTabThemes: 'TEMAS',
     closeShop: 'CERRAR TIENDA',
+    equipSkin: 'EQUIPAR',
+    equippedSkin: 'EQUIPADA',
+    starterSkin: 'INICIAL',
+    premiumSkin: 'CATALOGO',
     level: 'Nivel 15',
     prestige: 'Prestigio 2',
   },
@@ -165,11 +183,15 @@ const homeCopyByLanguage = {
     difficultyMedium: 'MEDIUM',
     difficultyHard: 'HARD',
     shopModalTitle: 'PARQUIZ SHOP',
-    shopTabAvatars: 'AVATARS',
+    shopTabAvatars: 'CAPI SKINS',
     shopTabTokens: 'TOKENS',
     shopTabDice: 'DICE',
     shopTabThemes: 'THEMES',
     closeShop: 'CLOSE SHOP',
+    equipSkin: 'EQUIP',
+    equippedSkin: 'EQUIPPED',
+    starterSkin: 'STARTER',
+    premiumSkin: 'CATALOG',
     level: 'Level 15',
     prestige: 'Prestige 2',
   },
@@ -257,7 +279,10 @@ export function HomeView() {
   const aiDifficulty = useAppSettingsStore((state) => state.aiDifficulty)
   const setAiDifficulty = useAppSettingsStore((state) => state.setAiDifficulty)
   const language = useAppSettingsStore((state) => state.language)
+  const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
+  const setSelectedSkinId = useAppSettingsStore((state) => state.setSelectedSkinId)
   const ui = homeCopyByLanguage[language]
+  const selectedSkinSrc = getPlayerSkinSrc(selectedSkinId)
   const shopItems = shopItemsByTab[activeShopTab]
   const coinBalance = 125000
   const coinLabel = coinBalance.toLocaleString('en-US')
@@ -340,7 +365,12 @@ export function HomeView() {
                 <span
                   className={`inline-flex h-16 w-16 items-center justify-center rounded-full border-2 border-[#ffefc4] bg-gradient-to-b ${seatGradientClass[me?.color || 'blue']} text-lg font-black text-white shadow-[0_4px_10px_rgba(12,22,43,0.4)]`}
                 >
-                  {me?.avatar || 'PQ'}
+                  <GameAvatar
+                    alt="Avatar del jugador"
+                    avatar={selectedSkinSrc || me?.avatar || 'PQ'}
+                    imageClassName="h-full w-full object-contain p-1"
+                    textClassName="text-lg font-black text-white"
+                  />
                 </span>
 
                 <div className="min-w-0 flex-1">
@@ -622,18 +652,64 @@ export function HomeView() {
                 <div className="mt-3 rounded-[24px] border-[3px] border-[#ceaf84] bg-gradient-to-b from-[#fff4dc] to-[#f6e0bc] p-3 sm:p-4">
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {shopItems.map((item) => (
+                      (() => {
+                        const isEquippedSkin = item.isSkinItem && item.id === selectedSkinId
+
+                        return (
                       <article
-                        className="rounded-[20px] border-2 border-[#d7b889] bg-gradient-to-b from-[#fff8e8] to-[#f3dfba] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]"
+                        className={`rounded-[20px] border-2 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)] ${
+                          isEquippedSkin
+                            ? 'border-[#e0b54f] bg-gradient-to-b from-[#fff7d6] to-[#f2dda5] shadow-[0_0_0_3px_rgba(247,202,88,0.28)]'
+                            : 'border-[#d7b889] bg-gradient-to-b from-[#fff8e8] to-[#f3dfba]'
+                        }`}
                         key={item.id}
                       >
                         <div className={`flex h-28 items-center justify-center rounded-[16px] bg-gradient-to-b ${item.toneClass} text-[70px] sm:text-[76px]`}>
-                          {item.icon}
+                          {item.mediaSrc ? (
+                            <GameAvatar alt={item.name || item.id} avatar={item.mediaSrc} imageClassName="h-full w-full object-contain p-2" />
+                          ) : (
+                            item.icon
+                          )}
                         </div>
+                        {item.name ? (
+                          <>
+                            <div className="mt-2 flex items-center justify-center gap-2">
+                              <p className="text-center text-[12px] font-black uppercase tracking-wide text-[#6d4324] sm:text-[13px]">
+                                {item.name}
+                              </p>
+                              {item.isSkinItem ? (
+                                <span className="rounded-full border border-[#b98236] bg-gradient-to-b from-[#ffe28f] to-[#f3b949] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-[#5f3817]">
+                                  {item.isStarterSkin ? ui.starterSkin : ui.premiumSkin}
+                                </span>
+                              ) : null}
+                            </div>
+                            {item.subtitle ? (
+                              <p className="mt-1 text-center text-[10px] font-black uppercase tracking-[0.12em] text-[#91633d] sm:text-[11px]">
+                                {item.subtitle}
+                              </p>
+                            ) : null}
+                          </>
+                        ) : null}
                         <div className="mt-2 rounded-full border border-[#d2b083] bg-[#e8cfaa] px-3 py-1 text-center font-display text-[34px] leading-none text-[#5a3417] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
                           <span className="mr-1 text-[#f6be2f]">🪙</span>
                           {item.price}
                         </div>
+                        {item.isSkinItem ? (
+                          <button
+                            className={`mt-2 w-full rounded-full border px-3 py-1.5 font-display text-lg uppercase tracking-wide transition ${
+                              isEquippedSkin
+                                ? 'border-[#2a6719] bg-gradient-to-b from-[#73df58] to-[#3f9f22] text-white shadow-[inset_0_2px_0_rgba(210,255,195,0.8),0_4px_0_rgba(38,95,22,0.85)]'
+                                : 'border-[#8f562f] bg-gradient-to-b from-[#a46539] to-[#7a4727] text-[#f7ddad] shadow-[inset_0_1px_0_rgba(255,225,189,0.45),0_4px_0_rgba(102,58,29,0.88)] hover:brightness-105'
+                            }`}
+                            onClick={() => setSelectedSkinId(item.id)}
+                            type="button"
+                          >
+                            {isEquippedSkin ? ui.equippedSkin : ui.equipSkin}
+                          </button>
+                        ) : null}
                       </article>
+                        )
+                      })()
                     ))}
                   </div>
                 </div>

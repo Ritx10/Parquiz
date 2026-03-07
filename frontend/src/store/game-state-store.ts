@@ -1,4 +1,7 @@
+import { useMemo } from 'react'
 import type { ReadonlyGameState } from '../components/game/match-types'
+import { getPlayerSkinSrc } from '../lib/player-skins'
+import { useAppSettingsStore } from './app-settings-store'
 
 const gameStateSnapshot: ReadonlyGameState = {
   lobbyId: 'lobby-dojo-12',
@@ -53,5 +56,24 @@ const gameStateSnapshot: ReadonlyGameState = {
 }
 
 export function useReadonlyGameState() {
-  return gameStateSnapshot
+  const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
+  const selectedSkinSrc = getPlayerSkinSrc(selectedSkinId)
+
+  return useMemo(() => {
+    if (!selectedSkinSrc) {
+      return gameStateSnapshot
+    }
+
+    return {
+      ...gameStateSnapshot,
+      players: gameStateSnapshot.players.map((player) =>
+        player.id === 'p-green'
+          ? {
+              ...player,
+              avatar: selectedSkinSrc,
+            }
+          : player,
+      ),
+    }
+  }, [selectedSkinSrc])
 }

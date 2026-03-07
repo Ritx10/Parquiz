@@ -5,6 +5,7 @@ import { GameBoardPage } from '../pages/game-board-page'
 import { HomePage } from '../pages/home-page'
 import { LobbyPage } from '../pages/lobby-page'
 import { NotFoundPage } from '../pages/not-found-page'
+import { SkinSelectionPage } from '../pages/skin-selection-page'
 import { AppShell } from '../layout/app-shell'
 
 export const appRouter = createBrowserRouter([
@@ -15,6 +16,10 @@ export const appRouter = createBrowserRouter([
       {
         index: true,
         element: <HomePage />,
+      },
+      {
+        path: 'skin-selection',
+        element: <SkinSelectionPage />,
       },
       {
         path: 'lobby',

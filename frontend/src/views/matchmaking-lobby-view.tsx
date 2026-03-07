@@ -1,5 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { GameAvatar } from '../components/game/game-avatar'
+import { getPlayerSkinSrc } from '../lib/player-skins'
+import { useAppSettingsStore } from '../store/app-settings-store'
 
 type MatchmakingStatus = 'connecting' | 'searching' | 'found'
 
@@ -25,15 +28,18 @@ const rivalPool = [
   { id: 'rival-4', name: 'RayoStar', avatar: '⭐' },
 ] as const
 
-const localPlayer: MatchmakingParticipant = {
-  id: 'you-player',
-  name: 'PARQUIZ_PLAYER_77',
-  avatar: 'TU',
-  role: 'you',
-}
-
 export function MatchmakingLobbyView() {
   const navigate = useNavigate()
+  const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
+  const localPlayer = useMemo<MatchmakingParticipant>(
+    () => ({
+      id: 'you-player',
+      name: 'PARQUIZ_PLAYER_77',
+      avatar: getPlayerSkinSrc(selectedSkinId) || 'TU',
+      role: 'you',
+    }),
+    [selectedSkinId],
+  )
   const [status, setStatus] = useState<MatchmakingStatus>('connecting')
   const [countdown, setCountdown] = useState<number | null>(null)
   const [matchedPlayers, setMatchedPlayers] = useState<MatchmakingParticipant[]>([localPlayer])
@@ -139,7 +145,12 @@ export function MatchmakingLobbyView() {
                                   : 'border-[#2f74aa] bg-gradient-to-b from-[#8dd7ff] to-[#3d9fe1] text-white'
                               }`}
                             >
-                              {player.avatar}
+                              <GameAvatar
+                                alt={player.name}
+                                avatar={player.avatar}
+                                imageClassName="h-full w-full object-contain p-2"
+                                textClassName="text-[40px]"
+                              />
                             </span>
                             <p className="mt-2 text-lg font-black uppercase tracking-wide text-[#5a3417]">
                               {player.name}

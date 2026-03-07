@@ -1,18 +1,14 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { GameAvatar } from '../components/game/game-avatar'
+import { getPlayerSkinSrc } from '../lib/player-skins'
+import { useAppSettingsStore } from '../store/app-settings-store'
 
 type LobbyParticipant = {
   id: string
   name: string
   avatar: string
   isHost: boolean
-}
-
-const hostPlayer: LobbyParticipant = {
-  id: 'host-local',
-  name: 'PARQUIZ_PLAYER_77',
-  avatar: '🧑',
-  isHost: true,
 }
 
 const friendCandidates: Omit<LobbyParticipant, 'isHost'>[] = [
@@ -26,13 +22,6 @@ const remoteHost: LobbyParticipant = {
   name: 'HOST_AMIGO',
   avatar: '🧔',
   isHost: true,
-}
-
-const localJoinedPlayer: LobbyParticipant = {
-  id: 'local-joined',
-  name: 'PARQUIZ_PLAYER_77',
-  avatar: '🧑',
-  isHost: false,
 }
 
 const generateRoomCode = () => {
@@ -49,6 +38,26 @@ const generateRoomCode = () => {
 
 export function FriendsLobbyView() {
   const navigate = useNavigate()
+  const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
+  const localAvatar = getPlayerSkinSrc(selectedSkinId) || '🧑'
+  const hostPlayer = useMemo<LobbyParticipant>(
+    () => ({
+      id: 'host-local',
+      name: 'PARQUIZ_PLAYER_77',
+      avatar: localAvatar,
+      isHost: true,
+    }),
+    [localAvatar],
+  )
+  const localJoinedPlayer = useMemo<LobbyParticipant>(
+    () => ({
+      id: 'local-joined',
+      name: 'PARQUIZ_PLAYER_77',
+      avatar: localAvatar,
+      isHost: false,
+    }),
+    [localAvatar],
+  )
   const [createdRoomCode, setCreatedRoomCode] = useState<null | string>(null)
   const [activeRoomCode, setActiveRoomCode] = useState<null | string>(null)
   const [players, setPlayers] = useState<LobbyParticipant[]>([])
@@ -217,7 +226,12 @@ export function FriendsLobbyView() {
                       {player ? (
                         <>
                           <span className="inline-flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#8e5b32] bg-gradient-to-b from-[#fff2dc] to-[#efcda0] text-3xl shadow-[0_3px_8px_rgba(37,22,10,0.2)]">
-                            {player.avatar}
+                            <GameAvatar
+                              alt={player.name}
+                              avatar={player.avatar}
+                              imageClassName="h-full w-full object-contain p-1"
+                              textClassName="text-3xl"
+                            />
                           </span>
                           <p className="mt-2 text-sm font-black uppercase tracking-wide text-[#5a3417]">
                             {player.name}
