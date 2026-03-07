@@ -20,6 +20,7 @@ import {
 } from '../api/dojo-state'
 import type { DojoTrackedEvent, LegalMoveApi, MoveType } from '../api/types'
 import { Board3D } from '../components/game/board3d'
+import { GameAvatar } from '../components/game/game-avatar'
 import { LogDrawer } from '../components/game/log-drawer'
 import type { MatchLogEvent, MatchPlayer, MatchToken, PlayerColor } from '../components/game/match-types'
 import { isDojoConfigured } from '../config/dojo'
@@ -38,11 +39,54 @@ const TRACK_SQUARE_UI_OFFSET = 4
 const TRACK_LENGTH = 68
 const BOARD_DEFAULT_SAFE_TRACK_REFS = [12, 17, 29, 34, 46, 51, 63, 68]
 
+type DiceFaceValue = 1 | 2 | 3 | 4 | 5 | 6
+
 const seatColorMap: Record<number, PlayerColor> = {
   0: 'blue',
   1: 'red',
   2: 'green',
   3: 'yellow',
+}
+
+const hudAccentClass: Record<PlayerColor, string> = {
+  green: 'bg-[#2bc58d] text-[#0b3d2d]',
+  red: 'bg-[#ff6d5e] text-[#4a1008]',
+  blue: 'bg-[#4a9bff] text-[#0d3058]',
+  yellow: 'bg-[#f4cc4e] text-[#4a3404]',
+}
+
+const dicePipLayout: Record<DiceFaceValue, Array<{ left: string; top: string }>> = {
+  1: [{ left: '50%', top: '50%' }],
+  2: [
+    { left: '28%', top: '28%' },
+    { left: '72%', top: '72%' },
+  ],
+  3: [
+    { left: '28%', top: '28%' },
+    { left: '50%', top: '50%' },
+    { left: '72%', top: '72%' },
+  ],
+  4: [
+    { left: '28%', top: '28%' },
+    { left: '72%', top: '28%' },
+    { left: '28%', top: '72%' },
+    { left: '72%', top: '72%' },
+  ],
+  5: [
+    { left: '28%', top: '28%' },
+    { left: '72%', top: '28%' },
+    { left: '50%', top: '50%' },
+    { left: '28%', top: '72%' },
+    { left: '72%', top: '72%' },
+  ],
+  6: [
+    { left: '28%', top: '24%' },
+    { left: '72%', top: '24%' },
+    { left: '28%', top: '50%' },
+    { left: '72%', top: '50%' },
+    { left: '28%', top: '76%' },
+    { left: '72%', top: '76%' },
+  ],
 }
 
 const laneBaseByColor: Record<PlayerColor, number> = {
@@ -217,6 +261,152 @@ const buildBonusText = (bonus10: number, bonus20: number) => {
   return parts.length > 0 ? parts.join(' + ') : 'sin bonus'
 }
 
+const normalizeDiceFace = (value: null | number, fallback: DiceFaceValue): DiceFaceValue => {
+  if (!value || value < 1 || value > 6) {
+    return fallback
+  }
+
+  return value as DiceFaceValue
+}
+
+function HudDie({ value, rolling }: { value: null | number; rolling: boolean }) {
+  const face = normalizeDiceFace(value, 1)
+
+  return (
+    <span
+      className={`relative inline-flex h-11 w-11 items-center justify-center rounded-[11px] border border-[#aeb9ca] bg-gradient-to-b from-[#fefefe] to-[#dce6f4] shadow-[0_5px_0_rgba(53,74,107,0.45)] ${rolling ? 'animate-spin' : ''}`}
+    >
+      {dicePipLayout[face].map((pip, index) => (
+        <span
+          className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#1e3553]"
+          key={`${face}-${index}`}
+          style={{ left: pip.left, top: pip.top }}
+        />
+      ))}
+    </span>
+  )
+}
+
+function PlayerHudCard({ player, isTurn }: { player: MatchPlayer; isTurn: boolean }) {
+  return (
+    <article className="w-[132px] rounded-2xl border border-white/20 bg-[#082944]/78 px-3 py-2 text-center text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+      <div className={`mx-auto mb-2 h-1.5 w-full rounded-full ${hudAccentClass[player.color]}`} />
+      <span className="mx-auto mb-2 inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border-2 border-white/45 bg-[#fff4dc] shadow-[0_4px_10px_rgba(0,0,0,0.2)]">
+        <GameAvatar
+          alt={player.name}
+          avatar={player.avatar}
+          imageClassName="h-full w-full object-contain p-1"
+          textClassName="text-sm font-black text-[#2c190d]"
+        />
+      </span>
+      <p className="truncate font-display text-lg leading-none">{player.name}</p>
+
+      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide">
+        <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full ${hudAccentClass[player.color]}`}>
+          D
+        </span>
+        {isTurn ? 'Tu turno' : 'En espera'}
+      </div>
+
+      <div className="mt-2 flex items-center justify-center gap-1.5">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <span
+            className={`h-2.5 w-2.5 rounded-full border border-white/15 ${
+              index < player.tokensInGoal ? hudAccentClass[player.color] : 'bg-white/20'
+            }`}
+            key={`${player.id}-progress-${index}`}
+          />
+        ))}
+      </div>
+    </article>
+  )
+}
+
+function TurnDiceLauncher({
+  isActive,
+  canRoll,
+  rolling,
+  dieA,
+  dieB,
+  preview,
+  onRoll,
+}: {
+  isActive: boolean
+  canRoll: boolean
+  rolling: boolean
+  dieA: null | number
+  dieB: null | number
+  preview: { dieA: DiceFaceValue; dieB: DiceFaceValue }
+  onRoll: () => void
+}) {
+  const isEnabled = isActive && canRoll && !rolling
+
+  return (
+    <div className="pointer-events-none mt-2 flex flex-col items-center gap-1.5">
+      <button
+        className={`pointer-events-auto flex items-center gap-2 rounded-2xl border px-2 py-2 transition-all ${
+          isEnabled
+            ? 'border-[#7cd5ff] bg-[#0d3358]/88 shadow-[0_0_0_3px_rgba(124,213,255,0.35)] hover:-translate-y-0.5'
+            : isActive
+              ? 'cursor-not-allowed border-[#5e738f] bg-[#0d3358]/55 opacity-80'
+              : 'cursor-not-allowed border-white/12 bg-[#0d3358]/45 opacity-60'
+        } ${rolling && isActive ? 'animate-pulse' : ''}`}
+        disabled={!isEnabled}
+        onClick={onRoll}
+        type="button"
+      >
+        <HudDie rolling={rolling && isActive} value={rolling && isActive ? preview.dieA : dieA} />
+        <HudDie rolling={rolling && isActive} value={rolling && isActive ? preview.dieB : dieB} />
+      </button>
+
+      <span className="rounded-full border border-white/20 bg-black/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#dbf4ff]">
+        {rolling && isActive ? 'Lanzando...' : isActive ? (canRoll ? 'Click para tirar' : 'Dados ya usados') : 'En espera'}
+      </span>
+    </div>
+  )
+}
+
+function PlayerHudSlot({
+  player,
+  turnPlayerId,
+  canRoll,
+  rolling,
+  dieA,
+  dieB,
+  preview,
+  onRoll,
+}: {
+  player?: MatchPlayer
+  turnPlayerId: string
+  canRoll: boolean
+  rolling: boolean
+  dieA: null | number
+  dieB: null | number
+  preview: { dieA: DiceFaceValue; dieB: DiceFaceValue }
+  onRoll: () => void
+}) {
+  if (!player) {
+    return null
+  }
+
+  const isTurn = turnPlayerId === player.id
+
+  return (
+    <div className="pointer-events-none flex flex-col items-center">
+      <PlayerHudCard isTurn={isTurn} player={player} />
+      <TurnDiceLauncher
+        canRoll={canRoll}
+        dieA={dieA}
+        dieB={dieB}
+        isActive={isTurn}
+        onRoll={onRoll}
+        preview={preview}
+        rolling={rolling}
+      />
+    </div>
+  )
+}
+
 const tokenUiId = (owner: string, tokenId: number) => `${owner}-${tokenId}`
 
 const trackEventToLog = (
@@ -324,8 +514,15 @@ export function MatchOnchainView() {
   const [isAwaitingOnchainSync, setIsAwaitingOnchainSync] = useState(false)
   const [hydratedQuestionError, setHydratedQuestionError] = useState<null | string>(null)
   const [selectedAnswerOption, setSelectedAnswerOption] = useState<null | number>(null)
+  const [hudDiceRolling, setHudDiceRolling] = useState(false)
+  const [hudDicePreview, setHudDicePreview] = useState<{ dieA: DiceFaceValue; dieB: DiceFaceValue }>({
+    dieA: 1,
+    dieB: 1,
+  })
 
   const refreshDebounceRef = useRef<null | number>(null)
+  const hudRollIntervalRef = useRef<null | number>(null)
+  const hudRollTimeoutRef = useRef<null | number>(null)
   const playersByAddressRef = useRef<Record<string, string>>({})
   const colorBySeatRef = useRef<Record<number, PlayerColor>>(seatColorMap)
 
@@ -532,6 +729,13 @@ export function MatchOnchainView() {
     }, {})
   }, [players])
 
+  const playersByColor = useMemo(() => {
+    return players.reduce<Partial<Record<PlayerColor, MatchPlayer>>>((acc, player) => {
+      acc[player.color] = player
+      return acc
+    }, {})
+  }, [players])
+
   useEffect(() => {
     playersByAddressRef.current = Object.entries(playersByAddress).reduce<Record<string, string>>((acc, [key, value]) => {
       acc[key] = value.name
@@ -688,6 +892,16 @@ export function MatchOnchainView() {
       if (refreshDebounceRef.current !== null) {
         window.clearTimeout(refreshDebounceRef.current)
         refreshDebounceRef.current = null
+      }
+
+      if (hudRollIntervalRef.current !== null) {
+        window.clearInterval(hudRollIntervalRef.current)
+        hudRollIntervalRef.current = null
+      }
+
+      if (hudRollTimeoutRef.current !== null) {
+        window.clearTimeout(hudRollTimeoutRef.current)
+        hudRollTimeoutRef.current = null
       }
     }
   }, [activeGameId, scheduleSnapshotRefresh, onTrackedEvent])
@@ -943,234 +1157,314 @@ export function MatchOnchainView() {
   const deadlineExpired = deadline > 0 && nowSecs > deadline
 
   const canRoll = isMyTurn && snapshot?.turn_state?.phase === 0
+  const canRollAction = canRoll && !hudDiceRolling && !txPendingLabel && !isAwaitingOnchainSync
   const canSubmitAnswer = isMyTurn && snapshot?.turn_state?.phase === 1
   const canMove = isMyTurn && snapshot?.turn_state?.phase === 2
   const canEndTurn = isMyTurn && snapshot?.turn_state?.phase === 2
   const canSkipShop = isMyTurn && snapshot?.turn_state?.phase === 3
 
+  const triggerHudDiceRoll = useCallback(() => {
+    if (!canRoll || hudDiceRolling) {
+      return
+    }
+
+    setHudDiceRolling(true)
+
+    if (hudRollIntervalRef.current !== null) {
+      window.clearInterval(hudRollIntervalRef.current)
+    }
+
+    hudRollIntervalRef.current = window.setInterval(() => {
+      setHudDicePreview({
+        dieA: (Math.floor(Math.random() * 6) + 1) as DiceFaceValue,
+        dieB: (Math.floor(Math.random() * 6) + 1) as DiceFaceValue,
+      })
+    }, 90)
+
+    if (hudRollTimeoutRef.current !== null) {
+      window.clearTimeout(hudRollTimeoutRef.current)
+    }
+
+    hudRollTimeoutRef.current = window.setTimeout(() => {
+      if (hudRollIntervalRef.current !== null) {
+        window.clearInterval(hudRollIntervalRef.current)
+        hudRollIntervalRef.current = null
+      }
+
+      setHudDiceRolling(false)
+      onRoll()
+    }, 620)
+  }, [canRoll, hudDiceRolling, onRoll])
+
   return (
     <section
-      className="min-h-screen bg-cover bg-center bg-no-repeat px-4 py-6"
+      className="min-h-screen bg-cover bg-center bg-no-repeat px-3 py-4 sm:px-4 sm:py-6"
       style={{ backgroundImage: "url('/home-background.jpg')" }}
     >
-      <header className="hidden game-panel overflow-hidden bg-gradient-to-r from-[#11427e] via-[#1f68b5] to-[#2e7fd4] text-white">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9cd8ff]">Partida</p>
-            <h2 className="font-display text-3xl uppercase tracking-wide text-[#ffeb9f]">Modo On-chain</h2>
-            <p className="text-sm font-semibold text-[#def2ff]">
-              Estado en vivo por Dojo/Torii + transacciones Starknet.
+      <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-4">
+        <article className="game-panel bg-gradient-to-b from-[#fff3ce] via-[#ffe7ae] to-[#ffd57d] text-board-night">
+          <div className="game-wood px-4 py-2 text-center">
+            <p className="font-display text-2xl uppercase tracking-wide">Sesion on-chain</p>
+          </div>
+
+          <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
+            <input
+              className="rounded-xl border border-[#c9a85a] bg-white px-3 py-2 text-sm font-bold text-board-night"
+              onChange={(event) => setGameIdInput(event.target.value)}
+              placeholder="game_id (decimal o 0x...)"
+              value={gameIdInput}
+            />
+
+            <input
+              className="rounded-xl border border-[#c9a85a] bg-white px-3 py-2 text-sm font-bold text-board-night"
+              onChange={(event) => setTokenIdInput(event.target.value)}
+              placeholder="token_id EGS (decimal o 0x...)"
+              value={tokenIdInput}
+            />
+
+            <button
+              className="action-button-primary max-w-[220px]"
+              onClick={() => applySearchParams({ gameId: gameIdInput, tokenId: tokenIdInput })}
+              type="button"
+            >
+              Cargar sesion
+            </button>
+
+            <div className="flex flex-wrap gap-2">
+              <Link className="action-button-secondary max-w-[200px]" to="/board-mock">
+                Ir a /board-mock
+              </Link>
+              <Link className="action-button-secondary max-w-[200px]" to="/">
+                Volver al inicio
+              </Link>
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-2 text-xs font-black uppercase tracking-wide text-board-night md:grid-cols-3 xl:grid-cols-6">
+            <p className="rounded-xl border border-[#d6af50] bg-[#fff6dd] px-3 py-2">Network: {appEnv.defaultNetwork}</p>
+            <p className="rounded-xl border border-[#d6af50] bg-[#fff6dd] px-3 py-2">
+              Wallet: {isConnected && address ? shortenAddress(address) : 'desconectada'}
+            </p>
+            <p className="rounded-xl border border-[#d6af50] bg-[#fff6dd] px-3 py-2">Namespace: {appEnv.namespace}</p>
+            <p className="rounded-xl border border-[#d6af50] bg-[#fff6dd] px-3 py-2">
+              Turno activo: {activePlayerLabel}
+            </p>
+            <p className="rounded-xl border border-[#d6af50] bg-[#fff6dd] px-3 py-2">
+              Deadline: {deadline > 0 ? (deadlineExpired ? 'expirado' : 'vigente') : 'sin deadline'}
+            </p>
+            <p className="rounded-xl border border-[#d6af50] bg-[#fff6dd] px-3 py-2">
+              Dados: {snapshot?.dice_state ? `${snapshot.dice_state.die_a} / ${snapshot.dice_state.die_b}` : '-'}
             </p>
           </div>
 
-          <div className="grid gap-1 text-xs font-black uppercase tracking-wide text-[#d9edff]">
-            <p>Network: {appEnv.defaultNetwork}</p>
-            <p>Wallet: {isConnected && address ? shortenAddress(address) : 'desconectada'}</p>
-            <p>Dojo namespace: {appEnv.namespace}</p>
-          </div>
-        </div>
-      </header>
+          {!isDojoConfigured ? (
+            <p className="mt-3 rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
+              Faltan variables Dojo/Torii (world, torii URL o manifest) en `.env`.
+            </p>
+          ) : null}
 
-      <article className="game-panel bg-gradient-to-b from-[#fff3ce] via-[#ffe7ae] to-[#ffd57d] text-board-night">
-        <div className="game-wood px-4 py-2 text-center">
-          <p className="font-display text-2xl uppercase tracking-wide">Sesion on-chain</p>
-        </div>
+          {requestedGameId === null && gameIdInput.trim().length > 0 ? (
+            <p className="mt-3 rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
+              `game_id` invalido. Usa decimal o hexadecimal 0x.
+            </p>
+          ) : null}
 
-        <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
-          <input
-            className="rounded-xl border border-[#c9a85a] bg-white px-3 py-2 text-sm font-bold text-board-night"
-            onChange={(event) => setGameIdInput(event.target.value)}
-            placeholder="game_id (decimal o 0x...)"
-            value={gameIdInput}
-          />
+          {activeTokenId === null && tokenIdInput.trim().length > 0 ? (
+            <p className="mt-3 rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
+              `token_id` invalido. Usa decimal o hexadecimal 0x.
+            </p>
+          ) : null}
 
-          <input
-            className="rounded-xl border border-[#c9a85a] bg-white px-3 py-2 text-sm font-bold text-board-night"
-            onChange={(event) => setTokenIdInput(event.target.value)}
-            placeholder="token_id EGS (decimal o 0x...)"
-            value={tokenIdInput}
-          />
+          {activeTokenId !== null ? (
+            <p className="mt-3 rounded-xl border border-[#1c5da6] bg-[#e8f3ff] px-3 py-2 text-sm font-bold text-[#174b80]">
+              {isResolvingTokenLink ? 'Buscando token EGS...' : linkedTokenStatus || 'Token EGS cargado.'}
+            </p>
+          ) : null}
 
-          <button
-            className="action-button-primary max-w-[220px]"
-            onClick={() => applySearchParams({ gameId: gameIdInput, tokenId: tokenIdInput })}
-            type="button"
-          >
-            Cargar sesion
-          </button>
+          {activeTokenId !== null && activeGameId !== null && linkedTokenGameId === null ? (
+            <button className="action-button-primary mt-3 max-w-[260px]" onClick={onBindToken} type="button">
+              Vincular token a esta partida
+            </button>
+          ) : null}
 
-          <Link className="action-button-secondary max-w-[200px]" to="/board-mock">
-            Ir a /board-mock
-          </Link>
-        </div>
+          {snapshotError ? (
+            <p className="mt-3 rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
+              {snapshotError}
+            </p>
+          ) : null}
 
-        <div className="mt-4">
-          <Link className="action-button-secondary max-w-[220px]" to="/">
-            Volver al inicio
-          </Link>
-        </div>
+          {actionError ? (
+            <p className="mt-3 rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
+              {actionError}
+            </p>
+          ) : null}
 
-        {!isDojoConfigured ? (
-          <p className="mt-3 rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
-            Faltan variables Dojo/Torii (world, torii URL o manifest) en `.env`.
-          </p>
-        ) : null}
+          {txPendingLabel ? (
+            <p className="mt-3 rounded-xl border border-[#1c5da6] bg-[#e8f3ff] px-3 py-2 text-sm font-bold text-[#174b80]">
+              Tx pendiente: {txPendingLabel}
+              {txHash ? ` - ${txHash}` : ''}
+            </p>
+          ) : null}
 
-        {requestedGameId === null && gameIdInput.trim().length > 0 ? (
-          <p className="mt-3 rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
-            `game_id` invalido. Usa decimal o hexadecimal 0x.
-          </p>
-        ) : null}
+          {!txPendingLabel && isAwaitingOnchainSync ? (
+            <p className="mt-3 rounded-xl border border-[#1c5da6] bg-[#e8f3ff] px-3 py-2 text-sm font-bold text-[#174b80]">
+              Esperando sincronizacion de estado en Torii...
+            </p>
+          ) : null}
+        </article>
 
-        {activeTokenId === null && tokenIdInput.trim().length > 0 ? (
-          <p className="mt-3 rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
-            `token_id` invalido. Usa decimal o hexadecimal 0x.
-          </p>
-        ) : null}
+        {activeGameId !== null ? (
+          <>
+            <article className="game-panel bg-gradient-to-r from-[#103962] via-[#145183] to-[#103962] text-[#def2ff]">
+              {isLoadingSnapshot ? (
+                <p className="text-sm font-black uppercase tracking-wide">Cargando estado on-chain...</p>
+              ) : (
+                <div className="grid gap-2 text-xs font-black uppercase tracking-wide md:grid-cols-2 xl:grid-cols-4">
+                  <p>Game ID: {snapshot?.game?.game_id.toString() || activeGameId.toString()}</p>
+                  <p>Estado: {gameStatusLabel[snapshot?.game?.status || 0] || 'UNKNOWN'}</p>
+                  <p>Fase: {phaseLabel[snapshot?.turn_state?.phase || 0] || 'UNKNOWN'}</p>
+                  <p>Turno: {snapshot?.game?.turn_index || 0}</p>
+                  <p>Jugador activo: {activePlayerLabel}</p>
+                  <p>Ganador: {snapshot?.game?.winner && snapshot.game.winner !== '0x0' ? winnerLabel : 'pendiente'}</p>
+                  <p>
+                    Bonus activo: {activeBonusState ? buildBonusText(activeBonusState.pending_bonus_10, activeBonusState.pending_bonus_20) : 'sin bonus'}
+                  </p>
+                  <p>VRF: click en los dados del HUD del jugador activo</p>
+                </div>
+              )}
+            </article>
 
-        {activeTokenId !== null ? (
-          <p className="mt-3 rounded-xl border border-[#1c5da6] bg-[#e8f3ff] px-3 py-2 text-sm font-bold text-[#174b80]">
-            {isResolvingTokenLink ? 'Buscando token EGS...' : linkedTokenStatus || 'Token EGS cargado.'}
-          </p>
-        ) : null}
-
-        {activeTokenId !== null && activeGameId !== null && linkedTokenGameId === null ? (
-          <button className="action-button-primary mt-3 max-w-[260px]" onClick={onBindToken} type="button">
-            Vincular token a esta partida
-          </button>
-        ) : null}
-
-        {snapshotError ? (
-          <p className="mt-3 rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
-            {snapshotError}
-          </p>
-        ) : null}
-
-        {actionError ? (
-          <p className="mt-3 rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
-            {actionError}
-          </p>
-        ) : null}
-
-        {txPendingLabel ? (
-          <p className="mt-3 rounded-xl border border-[#1c5da6] bg-[#e8f3ff] px-3 py-2 text-sm font-bold text-[#174b80]">
-            Tx pendiente: {txPendingLabel}
-            {txHash ? ` - ${txHash}` : ''}
-          </p>
-        ) : null}
-
-        {!txPendingLabel && isAwaitingOnchainSync ? (
-          <p className="mt-3 rounded-xl border border-[#1c5da6] bg-[#e8f3ff] px-3 py-2 text-sm font-bold text-[#174b80]">
-            Esperando sincronizacion de estado en Torii...
-          </p>
-        ) : null}
-      </article>
-
-      {activeGameId !== null ? (
-        <>
-          <article className="game-panel bg-gradient-to-r from-[#103962] via-[#145183] to-[#103962] text-[#def2ff]">
-            {isLoadingSnapshot ? (
-              <p className="text-sm font-black uppercase tracking-wide">Cargando estado on-chain...</p>
-            ) : (
-              <div className="grid gap-2 text-xs font-black uppercase tracking-wide md:grid-cols-2 xl:grid-cols-4">
-                <p>Game ID: {snapshot?.game?.game_id.toString() || activeGameId.toString()}</p>
-                <p>Estado: {gameStatusLabel[snapshot?.game?.status || 0] || 'UNKNOWN'}</p>
-                <p>Fase: {phaseLabel[snapshot?.turn_state?.phase || 0] || 'UNKNOWN'}</p>
-                <p>Turno: {snapshot?.game?.turn_index || 0}</p>
-                <p>Jugador activo: {activePlayerLabel}</p>
-                <p>Ganador: {snapshot?.game?.winner && snapshot.game.winner !== '0x0' ? winnerLabel : 'pendiente'}</p>
-                <p>
-                  Dados: {snapshot?.dice_state ? `${snapshot.dice_state.die_a} / ${snapshot.dice_state.die_b}` : '-'}
-                </p>
-                <p>
-                  Bonus activo: {activeBonusState ? buildBonusText(activeBonusState.pending_bonus_10, activeBonusState.pending_bonus_20) : 'sin bonus'}
-                </p>
-              </div>
-            )}
-          </article>
-
-          <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-            <article className="game-panel bg-gradient-to-b from-[#efcd9a] via-[#e6bf86] to-[#d6a86d] p-3 xl:p-4">
+            <article className="game-panel mx-auto bg-gradient-to-b from-[#efcd9a] via-[#e6bf86] to-[#d6a86d] p-3 xl:p-4">
               <div className="mb-3 flex items-center justify-between rounded-2xl border border-[#4e2f14] bg-gradient-to-r from-[#845223] via-[#9b632e] to-[#7b4b1e] px-3 py-2 shadow-wood">
                 <p className="font-display text-xl uppercase tracking-[0.08em] text-[#fff0c7]">Board 3D on-chain</p>
                 <span className="rounded-full border border-[#7a4e12] bg-gradient-to-b from-[#f8d772] to-[#e4b23a] px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#603d0b]">
-                  legalidad via compute_legal_moves
+                  mismo HUD de /board-mock, estado real Dojo
                 </span>
               </div>
 
-              <Board3D
-                blockedSquares={blockedSquares}
-                highlightedSquares={highlightedSquares}
-                movableTokenIds={highlightedTokenIds}
-                onTokenClick={(tokenId) => {
-                  if (!movesByToken[tokenId]) {
-                    setSelectedTokenId(null)
-                    return
-                  }
+              <div className="relative mx-auto max-w-[980px] pb-16 pt-16 lg:px-[150px] lg:pb-0 lg:pt-0">
+                <Board3D
+                  blockedSquares={blockedSquares}
+                  highlightedSquares={highlightedSquares}
+                  movableTokenIds={highlightedTokenIds}
+                  onTokenClick={(tokenId) => {
+                    if (!movesByToken[tokenId]) {
+                      setSelectedTokenId(null)
+                      return
+                    }
 
-                  setSelectedTokenId((current) => (current === tokenId ? null : tokenId))
-                }}
-                players={players}
-                safeSquares={safeSquares}
-                selectedTokenId={selectedTokenId}
-                tokenHints={tokenHints}
-                tokens={uiTokens}
-              />
+                    setSelectedTokenId((current) => (current === tokenId ? null : tokenId))
+                  }}
+                  players={players}
+                  safeSquares={safeSquares}
+                  selectedTokenId={selectedTokenId}
+                  tokenHints={tokenHints}
+                  tokens={uiTokens}
+                />
+
+                <div className="pointer-events-none absolute inset-x-0 top-2 flex items-start justify-between px-2 lg:hidden">
+                  <PlayerHudSlot
+                    canRoll={canRollAction}
+                    dieA={snapshot?.dice_state?.die_a ?? null}
+                    dieB={snapshot?.dice_state?.die_b ?? null}
+                    onRoll={triggerHudDiceRoll}
+                    player={playersByColor.green}
+                    preview={hudDicePreview}
+                    rolling={hudDiceRolling}
+                    turnPlayerId={activePlayerAddress}
+                  />
+                  <PlayerHudSlot
+                    canRoll={canRollAction}
+                    dieA={snapshot?.dice_state?.die_a ?? null}
+                    dieB={snapshot?.dice_state?.die_b ?? null}
+                    onRoll={triggerHudDiceRoll}
+                    player={playersByColor.red}
+                    preview={hudDicePreview}
+                    rolling={hudDiceRolling}
+                    turnPlayerId={activePlayerAddress}
+                  />
+                </div>
+
+                <div className="pointer-events-none absolute inset-x-0 bottom-2 flex items-end justify-between px-2 lg:hidden">
+                  <PlayerHudSlot
+                    canRoll={canRollAction}
+                    dieA={snapshot?.dice_state?.die_a ?? null}
+                    dieB={snapshot?.dice_state?.die_b ?? null}
+                    onRoll={triggerHudDiceRoll}
+                    player={playersByColor.yellow}
+                    preview={hudDicePreview}
+                    rolling={hudDiceRolling}
+                    turnPlayerId={activePlayerAddress}
+                  />
+                  <PlayerHudSlot
+                    canRoll={canRollAction}
+                    dieA={snapshot?.dice_state?.die_a ?? null}
+                    dieB={snapshot?.dice_state?.die_b ?? null}
+                    onRoll={triggerHudDiceRoll}
+                    player={playersByColor.blue}
+                    preview={hudDicePreview}
+                    rolling={hudDiceRolling}
+                    turnPlayerId={activePlayerAddress}
+                  />
+                </div>
+
+                <div className="pointer-events-none absolute inset-0 hidden lg:block">
+                  <div className="absolute left-4 top-[17%] -translate-y-1/2">
+                    <PlayerHudSlot
+                      canRoll={canRollAction}
+                      dieA={snapshot?.dice_state?.die_a ?? null}
+                      dieB={snapshot?.dice_state?.die_b ?? null}
+                      onRoll={triggerHudDiceRoll}
+                      player={playersByColor.green}
+                      preview={hudDicePreview}
+                      rolling={hudDiceRolling}
+                      turnPlayerId={activePlayerAddress}
+                    />
+                  </div>
+
+                  <div className="absolute right-4 top-[17%] -translate-y-1/2">
+                    <PlayerHudSlot
+                      canRoll={canRollAction}
+                      dieA={snapshot?.dice_state?.die_a ?? null}
+                      dieB={snapshot?.dice_state?.die_b ?? null}
+                      onRoll={triggerHudDiceRoll}
+                      player={playersByColor.red}
+                      preview={hudDicePreview}
+                      rolling={hudDiceRolling}
+                      turnPlayerId={activePlayerAddress}
+                    />
+                  </div>
+
+                  <div className="absolute bottom-[17%] left-4 translate-y-1/2">
+                    <PlayerHudSlot
+                      canRoll={canRollAction}
+                      dieA={snapshot?.dice_state?.die_a ?? null}
+                      dieB={snapshot?.dice_state?.die_b ?? null}
+                      onRoll={triggerHudDiceRoll}
+                      player={playersByColor.yellow}
+                      preview={hudDicePreview}
+                      rolling={hudDiceRolling}
+                      turnPlayerId={activePlayerAddress}
+                    />
+                  </div>
+
+                  <div className="absolute bottom-[17%] right-4 translate-y-1/2">
+                    <PlayerHudSlot
+                      canRoll={canRollAction}
+                      dieA={snapshot?.dice_state?.die_a ?? null}
+                      dieB={snapshot?.dice_state?.die_b ?? null}
+                      onRoll={triggerHudDiceRoll}
+                      player={playersByColor.blue}
+                      preview={hudDicePreview}
+                      rolling={hudDiceRolling}
+                      turnPlayerId={activePlayerAddress}
+                    />
+                  </div>
+                </div>
+              </div>
             </article>
 
-            <aside className="space-y-4">
-              <article className="game-panel bg-gradient-to-b from-[#ffefc8] via-[#ffe39d] to-[#ffd26b] text-board-night">
-                <div className="game-wood px-4 py-2 text-center">
-                  <p className="font-display text-2xl uppercase tracking-wide">Acciones on-chain</p>
-                </div>
-
-                <div className="mt-3 grid gap-2">
-                  <button
-                    className={`action-button-primary ${canRoll && !txPendingLabel ? '' : 'cursor-not-allowed opacity-60'}`}
-                    disabled={!canRoll || Boolean(txPendingLabel)}
-                    onClick={onRoll}
-                    type="button"
-                  >
-                    Roll (VRF)
-                  </button>
-
-                  <button
-                    className={`action-button-secondary ${canEndTurn && !txPendingLabel ? '' : 'cursor-not-allowed opacity-60'}`}
-                    disabled={!canEndTurn || Boolean(txPendingLabel)}
-                    onClick={onEndTurn}
-                    type="button"
-                  >
-                    End turn
-                  </button>
-
-                  <button
-                    className={`action-button-secondary ${canSkipShop && !txPendingLabel ? '' : 'cursor-not-allowed opacity-60'}`}
-                    disabled={!canSkipShop || Boolean(txPendingLabel)}
-                    onClick={onSkipShop}
-                    type="button"
-                  >
-                    Skip shop
-                  </button>
-
-                  <button
-                    className={`action-button-secondary ${deadlineExpired && !txPendingLabel ? '' : 'cursor-not-allowed opacity-60'}`}
-                    disabled={!deadlineExpired || Boolean(txPendingLabel)}
-                    onClick={onForceSkipTurn}
-                    type="button"
-                  >
-                    Force skip turn
-                  </button>
-
-                  <button className="action-button-secondary" onClick={() => setIsLogOpen(true)} type="button">
-                    Log eventos
-                  </button>
-                </div>
-
-                <p className="mt-3 rounded-xl border border-[#d6af50] bg-[#fff6dd] px-3 py-2 text-xs font-black uppercase tracking-wide text-board-night">
-                  Deadline: {deadline > 0 ? `${deadline} (${deadlineExpired ? 'expirado' : 'vigente'})` : 'sin deadline'}
-                </p>
-              </article>
-
+            <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr_0.9fr]">
               <article className="game-panel bg-gradient-to-b from-[#fff3ce] via-[#ffe7ae] to-[#ffd57d] text-board-night">
                 <div className="game-wood px-4 py-2 text-center">
                   <p className="font-display text-2xl uppercase tracking-wide">Respuesta</p>
@@ -1245,7 +1539,7 @@ export function MatchOnchainView() {
                   <p className="font-display text-2xl uppercase tracking-wide">Jugada legal</p>
                 </div>
 
-                <ul className="mt-3 max-h-[260px] space-y-2 overflow-y-auto text-sm font-bold">
+                <ul className="mt-3 max-h-[320px] space-y-2 overflow-y-auto text-sm font-bold">
                   {displayedMoves.length === 0 ? (
                     <li className="rounded-xl border border-[#c9a85a] bg-[#fff4d8] px-3 py-2">
                       {canMove ? 'Sin jugadas legales para el filtro actual.' : 'Fase de movimiento no activa.'}
@@ -1272,31 +1566,68 @@ export function MatchOnchainView() {
                   )}
                 </ul>
               </article>
-            </aside>
-          </div>
 
-          <article className="game-panel bg-gradient-to-b from-[#fff3ce] via-[#ffe7ae] to-[#ffd57d] text-board-night">
-            <div className="game-wood px-4 py-2 text-center">
-              <p className="font-display text-2xl uppercase tracking-wide">Jugadores</p>
-            </div>
+              <article className="game-panel bg-gradient-to-b from-[#ffefc8] via-[#ffe39d] to-[#ffd26b] text-board-night">
+                <div className="game-wood px-4 py-2 text-center">
+                  <p className="font-display text-2xl uppercase tracking-wide">Control live</p>
+                </div>
 
-            <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              {players.map((player) => (
-                <li className="rounded-xl border border-[#c9a85a] bg-[#fff4d8] px-3 py-2" key={player.id}>
-                  <p className="font-display text-lg leading-none">{player.name}</p>
-                  <p className="mt-1 text-xs font-black uppercase tracking-wide">
-                    color: {player.color} {player.isHost ? '- host' : ''}
+                <div className="mt-3 grid gap-2">
+                  <p className="rounded-xl border border-[#d6af50] bg-[#fff6dd] px-3 py-2 text-xs font-black uppercase tracking-wide text-board-night">
+                    Para tirar usa los dados del HUD del jugador activo.
                   </p>
-                  <p className="text-xs font-bold">Casa: {player.tokensInBase}</p>
-                  <p className="text-xs font-bold">Meta: {player.tokensInGoal}</p>
-                </li>
-              ))}
-            </ul>
-          </article>
-        </>
-      ) : null}
 
-      <LogDrawer events={logEvents} onClose={() => setIsLogOpen(false)} open={isLogOpen} />
+                  <button
+                    className={`action-button-secondary ${canEndTurn && !txPendingLabel ? '' : 'cursor-not-allowed opacity-60'}`}
+                    disabled={!canEndTurn || Boolean(txPendingLabel)}
+                    onClick={onEndTurn}
+                    type="button"
+                  >
+                    End turn
+                  </button>
+
+                  <button
+                    className={`action-button-secondary ${canSkipShop && !txPendingLabel ? '' : 'cursor-not-allowed opacity-60'}`}
+                    disabled={!canSkipShop || Boolean(txPendingLabel)}
+                    onClick={onSkipShop}
+                    type="button"
+                  >
+                    Skip shop
+                  </button>
+
+                  <button
+                    className={`action-button-secondary ${deadlineExpired && !txPendingLabel ? '' : 'cursor-not-allowed opacity-60'}`}
+                    disabled={!deadlineExpired || Boolean(txPendingLabel)}
+                    onClick={onForceSkipTurn}
+                    type="button"
+                  >
+                    Force skip turn
+                  </button>
+
+                  <button className="action-button-secondary" onClick={() => setIsLogOpen(true)} type="button">
+                    Log eventos
+                  </button>
+                </div>
+
+                <ul className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                  {players.map((player) => (
+                    <li className="rounded-xl border border-[#c9a85a] bg-[#fff4d8] px-3 py-2" key={player.id}>
+                      <p className="font-display text-lg leading-none">{player.name}</p>
+                      <p className="mt-1 text-xs font-black uppercase tracking-wide">
+                        color: {player.color} {player.isHost ? '- host' : ''}
+                      </p>
+                      <p className="text-xs font-bold">Casa: {player.tokensInBase}</p>
+                      <p className="text-xs font-bold">Meta: {player.tokensInGoal}</p>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            </div>
+          </>
+        ) : null}
+
+        <LogDrawer events={logEvents} onClose={() => setIsLogOpen(false)} open={isLogOpen} />
+      </div>
     </section>
   )
 }
