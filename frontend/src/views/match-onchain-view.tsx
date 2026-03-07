@@ -20,7 +20,6 @@ import {
 } from '../api/dojo-state'
 import type { DojoTrackedEvent, LegalMoveApi, MoveType } from '../api/types'
 import { Board3D } from '../components/game/board3d'
-import { GameAvatar } from '../components/game/game-avatar'
 import { LogDrawer } from '../components/game/log-drawer'
 import type { MatchLogEvent, MatchPlayer, MatchToken, PlayerColor } from '../components/game/match-types'
 import { isDojoConfigured } from '../config/dojo'
@@ -41,54 +40,11 @@ const TRACK_SQUARE_UI_OFFSET = 4
 const TRACK_LENGTH = 68
 const BOARD_DEFAULT_SAFE_TRACK_REFS = [12, 17, 29, 34, 46, 51, 63, 68]
 
-type DiceFaceValue = 1 | 2 | 3 | 4 | 5 | 6
-
 const seatColorMap: Record<number, PlayerColor> = {
   0: 'blue',
   1: 'red',
   2: 'green',
   3: 'yellow',
-}
-
-const hudAccentClass: Record<PlayerColor, string> = {
-  green: 'bg-[#2bc58d] text-[#0b3d2d]',
-  red: 'bg-[#ff6d5e] text-[#4a1008]',
-  blue: 'bg-[#4a9bff] text-[#0d3058]',
-  yellow: 'bg-[#f4cc4e] text-[#4a3404]',
-}
-
-const dicePipLayout: Record<DiceFaceValue, Array<{ left: string; top: string }>> = {
-  1: [{ left: '50%', top: '50%' }],
-  2: [
-    { left: '28%', top: '28%' },
-    { left: '72%', top: '72%' },
-  ],
-  3: [
-    { left: '28%', top: '28%' },
-    { left: '50%', top: '50%' },
-    { left: '72%', top: '72%' },
-  ],
-  4: [
-    { left: '28%', top: '28%' },
-    { left: '72%', top: '28%' },
-    { left: '28%', top: '72%' },
-    { left: '72%', top: '72%' },
-  ],
-  5: [
-    { left: '28%', top: '28%' },
-    { left: '72%', top: '28%' },
-    { left: '50%', top: '50%' },
-    { left: '28%', top: '72%' },
-    { left: '72%', top: '72%' },
-  ],
-  6: [
-    { left: '28%', top: '24%' },
-    { left: '72%', top: '24%' },
-    { left: '28%', top: '50%' },
-    { left: '72%', top: '50%' },
-    { left: '28%', top: '76%' },
-    { left: '72%', top: '76%' },
-  ],
 }
 
 const laneBaseByColor: Record<PlayerColor, number> = {
@@ -353,152 +309,6 @@ const buildBonusText = (bonus10: number, bonus20: number, language: 'es' | 'en')
   return parts.length > 0 ? parts.join(' + ') : onchainCopyByLanguage[language].waitingBonus
 }
 
-const normalizeDiceFace = (value: null | number, fallback: DiceFaceValue): DiceFaceValue => {
-  if (!value || value < 1 || value > 6) {
-    return fallback
-  }
-
-  return value as DiceFaceValue
-}
-
-function HudDie({ value, rolling }: { value: null | number; rolling: boolean }) {
-  const face = normalizeDiceFace(value, 1)
-
-  return (
-    <span
-      className={`relative inline-flex h-11 w-11 items-center justify-center rounded-[11px] border border-[#aeb9ca] bg-gradient-to-b from-[#fefefe] to-[#dce6f4] shadow-[0_5px_0_rgba(53,74,107,0.45)] ${rolling ? 'animate-spin' : ''}`}
-    >
-      {dicePipLayout[face].map((pip, index) => (
-        <span
-          className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#1e3553]"
-          key={`${face}-${index}`}
-          style={{ left: pip.left, top: pip.top }}
-        />
-      ))}
-    </span>
-  )
-}
-
-function PlayerHudCard({ player, isTurn }: { player: MatchPlayer; isTurn: boolean }) {
-  return (
-    <article className="w-[132px] rounded-2xl border border-white/20 bg-[#082944]/78 px-3 py-2 text-center text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
-      <div className={`mx-auto mb-2 h-1.5 w-full rounded-full ${hudAccentClass[player.color]}`} />
-      <span className="mx-auto mb-2 inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border-2 border-white/45 bg-[#fff4dc] shadow-[0_4px_10px_rgba(0,0,0,0.2)]">
-        <GameAvatar
-          alt={player.name}
-          avatar={player.avatar}
-          imageClassName="h-full w-full object-contain p-1"
-          textClassName="text-sm font-black text-[#2c190d]"
-        />
-      </span>
-      <p className="truncate font-display text-lg leading-none">{player.name}</p>
-
-      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide">
-        <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full ${hudAccentClass[player.color]}`}>
-          D
-        </span>
-        {isTurn ? 'Tu turno' : 'En espera'}
-      </div>
-
-      <div className="mt-2 flex items-center justify-center gap-1.5">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <span
-            className={`h-2.5 w-2.5 rounded-full border border-white/15 ${
-              index < player.tokensInGoal ? hudAccentClass[player.color] : 'bg-white/20'
-            }`}
-            key={`${player.id}-progress-${index}`}
-          />
-        ))}
-      </div>
-    </article>
-  )
-}
-
-function TurnDiceLauncher({
-  isActive,
-  canRoll,
-  rolling,
-  dieA,
-  dieB,
-  preview,
-  onRoll,
-}: {
-  isActive: boolean
-  canRoll: boolean
-  rolling: boolean
-  dieA: null | number
-  dieB: null | number
-  preview: { dieA: DiceFaceValue; dieB: DiceFaceValue }
-  onRoll: () => void
-}) {
-  const isEnabled = isActive && canRoll && !rolling
-
-  return (
-    <div className="pointer-events-none mt-2 flex flex-col items-center gap-1.5">
-      <button
-        className={`pointer-events-auto flex items-center gap-2 rounded-2xl border px-2 py-2 transition-all ${
-          isEnabled
-            ? 'border-[#7cd5ff] bg-[#0d3358]/88 shadow-[0_0_0_3px_rgba(124,213,255,0.35)] hover:-translate-y-0.5'
-            : isActive
-              ? 'cursor-not-allowed border-[#5e738f] bg-[#0d3358]/55 opacity-80'
-              : 'cursor-not-allowed border-white/12 bg-[#0d3358]/45 opacity-60'
-        } ${rolling && isActive ? 'animate-pulse' : ''}`}
-        disabled={!isEnabled}
-        onClick={onRoll}
-        type="button"
-      >
-        <HudDie rolling={rolling && isActive} value={rolling && isActive ? preview.dieA : dieA} />
-        <HudDie rolling={rolling && isActive} value={rolling && isActive ? preview.dieB : dieB} />
-      </button>
-
-      <span className="rounded-full border border-white/20 bg-black/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#dbf4ff]">
-        {rolling && isActive ? 'Lanzando...' : isActive ? (canRoll ? 'Click para tirar' : 'Dados ya usados') : 'En espera'}
-      </span>
-    </div>
-  )
-}
-
-function PlayerHudSlot({
-  player,
-  turnPlayerId,
-  canRoll,
-  rolling,
-  dieA,
-  dieB,
-  preview,
-  onRoll,
-}: {
-  player?: MatchPlayer
-  turnPlayerId: string
-  canRoll: boolean
-  rolling: boolean
-  dieA: null | number
-  dieB: null | number
-  preview: { dieA: DiceFaceValue; dieB: DiceFaceValue }
-  onRoll: () => void
-}) {
-  if (!player) {
-    return null
-  }
-
-  const isTurn = turnPlayerId === player.id
-
-  return (
-    <div className="pointer-events-none flex flex-col items-center">
-      <PlayerHudCard isTurn={isTurn} player={player} />
-      <TurnDiceLauncher
-        canRoll={canRoll}
-        dieA={dieA}
-        dieB={dieB}
-        isActive={isTurn}
-        onRoll={onRoll}
-        preview={preview}
-        rolling={rolling}
-      />
-    </div>
-  )
-}
-
 const tokenUiId = (owner: string, tokenId: number) => `${owner}-${tokenId}`
 
 const trackEventToLog = (
@@ -634,15 +444,8 @@ export function MatchOnchainView() {
   const [isAwaitingOnchainSync, setIsAwaitingOnchainSync] = useState(false)
   const [hydratedQuestionError, setHydratedQuestionError] = useState<null | string>(null)
   const [selectedAnswerOption, setSelectedAnswerOption] = useState<null | number>(null)
-  const [hudDiceRolling, setHudDiceRolling] = useState(false)
-  const [hudDicePreview, setHudDicePreview] = useState<{ dieA: DiceFaceValue; dieB: DiceFaceValue }>({
-    dieA: 1,
-    dieB: 1,
-  })
 
   const refreshDebounceRef = useRef<null | number>(null)
-  const hudRollIntervalRef = useRef<null | number>(null)
-  const hudRollTimeoutRef = useRef<null | number>(null)
   const playersByAddressRef = useRef<Record<string, string>>({})
   const colorBySeatRef = useRef<Record<number, PlayerColor>>(seatColorMap)
 
@@ -1026,16 +829,6 @@ export function MatchOnchainView() {
         window.clearTimeout(refreshDebounceRef.current)
         refreshDebounceRef.current = null
       }
-
-      if (hudRollIntervalRef.current !== null) {
-        window.clearInterval(hudRollIntervalRef.current)
-        hudRollIntervalRef.current = null
-      }
-
-      if (hudRollTimeoutRef.current !== null) {
-        window.clearTimeout(hudRollTimeoutRef.current)
-        hudRollTimeoutRef.current = null
-      }
     }
   }, [activeGameId, scheduleSnapshotRefresh, onTrackedEvent])
 
@@ -1299,44 +1092,10 @@ export function MatchOnchainView() {
   const deadlineExpired = deadline > 0 && nowSecs > deadline
 
   const canRoll = isMyTurn && snapshot?.turn_state?.phase === 0
-  const canRollAction = canRoll && !hudDiceRolling && !txPendingLabel && !isAwaitingOnchainSync
   const canSubmitAnswer = isMyTurn && snapshot?.turn_state?.phase === 1
   const canMove = isMyTurn && snapshot?.turn_state?.phase === 2
   const canEndTurn = isMyTurn && snapshot?.turn_state?.phase === 2
   const canSkipShop = isMyTurn && snapshot?.turn_state?.phase === 3
-
-  const triggerHudDiceRoll = useCallback(() => {
-    if (!canRoll || hudDiceRolling) {
-      return
-    }
-
-    setHudDiceRolling(true)
-
-    if (hudRollIntervalRef.current !== null) {
-      window.clearInterval(hudRollIntervalRef.current)
-    }
-
-    hudRollIntervalRef.current = window.setInterval(() => {
-      setHudDicePreview({
-        dieA: (Math.floor(Math.random() * 6) + 1) as DiceFaceValue,
-        dieB: (Math.floor(Math.random() * 6) + 1) as DiceFaceValue,
-      })
-    }, 90)
-
-    if (hudRollTimeoutRef.current !== null) {
-      window.clearTimeout(hudRollTimeoutRef.current)
-    }
-
-    hudRollTimeoutRef.current = window.setTimeout(() => {
-      if (hudRollIntervalRef.current !== null) {
-        window.clearInterval(hudRollIntervalRef.current)
-        hudRollIntervalRef.current = null
-      }
-
-      setHudDiceRolling(false)
-      onRoll()
-    }, 620)
-  }, [canRoll, hudDiceRolling, onRoll])
 
   return (
     <section
@@ -1499,15 +1258,16 @@ export function MatchOnchainView() {
                       return
                     }
 
-                  setSelectedTokenId((current) => (current === tokenId ? null : tokenId))
-                }}
-                players={players}
-                safeSquares={safeSquares}
-                selectedTokenId={selectedTokenId}
-                tokenHints={tokenHints}
-                tokens={uiTokens}
-                visualSkinByColor={visualSkinByColor}
-              />
+                    setSelectedTokenId((current) => (current === tokenId ? null : tokenId))
+                  }}
+                  players={players}
+                  safeSquares={safeSquares}
+                  selectedTokenId={selectedTokenId}
+                  tokenHints={tokenHints}
+                  tokens={uiTokens}
+                  visualSkinByColor={visualSkinByColor}
+                />
+              </div>
             </article>
 
             <aside className="space-y-4">
@@ -1664,6 +1424,9 @@ export function MatchOnchainView() {
                 </ul>
               </article>
 
+            </aside>
+          </div>
+
           <article className="game-panel bg-gradient-to-b from-[#fff3ce] via-[#ffe7ae] to-[#ffd57d] text-board-night">
             <div className="game-wood px-4 py-2 text-center">
               <p className="font-display text-2xl uppercase tracking-wide">{ui.playersTitle}</p>
@@ -1674,15 +1437,16 @@ export function MatchOnchainView() {
                 const theme = getPlayerVisualThemeByColor(player.color, player.visualSkinId)
 
                 return (
-                <li className="rounded-xl border border-[#c9a85a] bg-[#fff4d8] px-3 py-2" key={player.id}>
-                  <p className="font-display text-lg leading-none">{player.name}</p>
-                  <p className="mt-1 text-xs font-black uppercase tracking-wide">
-                    {language === 'es' ? 'color' : 'color'}: {player.visualSkinId || player.color} {player.isHost ? (language === 'es' ? '- anfitrion' : '- host') : ''}
-                  </p>
-                  <p className="text-xs font-bold">{language === 'es' ? 'Casa' : 'Home'}: {player.tokensInBase}</p>
-                  <p className="text-xs font-bold">{language === 'es' ? 'Meta' : 'Goal'}: {player.tokensInGoal}</p>
-                  <div className={`mt-2 h-2 rounded-full ${theme.stripClass}`} />
-                </li>
+                  <li className="rounded-xl border border-[#c9a85a] bg-[#fff4d8] px-3 py-2" key={player.id}>
+                    <p className="font-display text-lg leading-none">{player.name}</p>
+                    <p className="mt-1 text-xs font-black uppercase tracking-wide">
+                      {language === 'es' ? 'color' : 'color'}: {player.visualSkinId || player.color}{' '}
+                      {player.isHost ? (language === 'es' ? '- anfitrion' : '- host') : ''}
+                    </p>
+                    <p className="text-xs font-bold">{language === 'es' ? 'Casa' : 'Home'}: {player.tokensInBase}</p>
+                    <p className="text-xs font-bold">{language === 'es' ? 'Meta' : 'Goal'}: {player.tokensInGoal}</p>
+                    <div className={`mt-2 h-2 rounded-full ${theme.stripClass}`} />
+                  </li>
                 )
               })}
             </ul>
@@ -1691,7 +1455,6 @@ export function MatchOnchainView() {
       ) : null}
 
         <LogDrawer events={logEvents} onClose={() => setIsLogOpen(false)} open={isLogOpen} />
-      </div>
     </section>
   )
 }
