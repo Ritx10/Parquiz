@@ -1,4 +1,4 @@
-import { KeysClause, MemberClause, ToriiQueryBuilder, createClient, parseEntities } from '@dojoengine/sdk'
+import { KeysClause, ToriiQueryBuilder, createClient, parseEntities } from '@dojoengine/sdk'
 import type { Entity, Subscription, ToriiClient } from '@dojoengine/torii-client'
 import { dojoRuntimeConfig, isDojoConfigured } from '../config/dojo'
 import { appEnv } from '../config/env'
@@ -226,8 +226,30 @@ const extractModels = (items: Entity[], modelName: string): RawModel[] => {
     .filter((value): value is RawModel => Boolean(value))
 }
 
-const buildMemberEqClause = (modelName: string, member: string, value: bigint | number | string) =>
-  (MemberClause as any)(modelTag(modelName), member, 'Eq', value).build()
+const isBigNumberishLike = (value: unknown) => {
+  if (typeof value === 'bigint' || typeof value === 'number') {
+    return true
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim()
+    return /^0x[0-9a-f]+$/i.test(normalized) || /^\d+$/.test(normalized)
+  }
+
+  return false
+}
+
+const memberValueMatches = (left: unknown, right: bigint | number | string) => {
+  if (isBigNumberishLike(left) && isBigNumberishLike(right)) {
+    return toBigInt(left) === toBigInt(right)
+  }
+
+  if (typeof left === 'string' && typeof right === 'string') {
+    return normalizeAddress(left) === normalizeAddress(right)
+  }
+
+  return left === right
+}
 
 const buildKeysClause = (modelName: string, keys: Array<bigint | number | string>) =>
   (KeysClause as any)([modelTag(modelName)], keys.map((value) => `${value}`), 'FixedLen').build()
@@ -271,13 +293,32 @@ const fetchModelsByMember = async (
   value: bigint | number | string,
   limit = 256,
 ): Promise<RawModel[]> => {
-  const query = new ToriiQueryBuilder<any>()
-    .withEntityModels([modelTag(modelName) as any])
-    .withClause(buildMemberEqClause(modelName, member, value))
-    .withLimit(limit)
+  const pageSize = Math.min(Math.max(limit, 32), 256)
+  const matches: RawModel[] = []
+  let cursor: string | undefined
 
-  const response = await client.getEntities(query.build())
-  return extractModels(response.items, modelName)
+  while (matches.length < limit) {
+    const query = new ToriiQueryBuilder<any>()
+      .withEntityModels([modelTag(modelName) as any])
+      .withLimit(pageSize)
+
+    if (cursor) {
+      query.withCursor(cursor)
+    }
+
+    const response = await client.getEntities(query.build())
+    const pageMatches = extractModels(response.items, modelName).filter((row) => memberValueMatches(row[member], value))
+
+    matches.push(...pageMatches)
+
+    if (!response.next_cursor || response.items.length === 0) {
+      break
+    }
+
+    cursor = response.next_cursor
+  }
+
+  return matches.slice(0, limit)
 }
 
 const normalizeGameModel = (raw: RawModel): DojoGameModel => ({
@@ -710,12 +751,22 @@ export const subscribeDojoGame = async (params: SubscribeDojoGameParams): Promis
   const subscriptions: Subscription[] = []
   const worldAddresses = dojoRuntimeConfig.worldAddress ? [dojoRuntimeConfig.worldAddress] : undefined
 
-  const registerEntitySubscription = async (
-    modelName: string,
-    clause: ReturnType<typeof buildMemberEqClause>,
-  ) => {
-    const subscription = await client.onEntityUpdated(
-      clause,
+  const entityModelFilters: Array<{ modelName: string; member: string; value: bigint | number | string }> = [
+    { modelName: 'Game', member: 'game_id', value: params.gameId },
+    { modelName: 'TurnState', member: 'game_id', value: params.gameId },
+    { modelName: 'DiceState', member: 'game_id', value: params.gameId },
+    { modelName: 'GameRuntimeConfig', member: 'game_id', value: params.gameId },
+    { modelName: 'PendingQuestion', member: 'game_id', value: params.gameId },
+    { modelName: 'GamePlayer', member: 'game_id', value: params.gameId },
+    { modelName: 'Token', member: 'game_id', value: params.gameId },
+    { modelName: 'BonusState', member: 'game_id', value: params.gameId },
+    { modelName: 'SquareOccupancy', member: 'game_id', value: params.gameId },
+    ...(params.configId !== undefined ? [{ modelName: 'BoardSquare', member: 'config_id', value: params.configId }] : []),
+  ]
+
+  try {
+    const entitySubscription = await client.onEntityUpdated(
+      null,
       worldAddresses,
       (...callbackArgs: unknown[]) => {
         const entity = readCallbackEntity(callbackArgs)
@@ -724,20 +775,21 @@ export const subscribeDojoGame = async (params: SubscribeDojoGameParams): Promis
           return
         }
 
-        const models = extractModels([entity], modelName)
+        const shouldRefresh = entityModelFilters.some(({ modelName, member, value }) => {
+          const model = extractModels([entity], modelName)[0]
+          return model ? memberValueMatches(model[member], value) : false
+        })
 
-        if (models.length > 0) {
+        if (shouldRefresh) {
           params.onStateMutation()
         }
       },
     )
 
-    subscriptions.push(subscription)
-  }
+    subscriptions.push(entitySubscription)
 
-  const registerEventSubscription = async (eventModelName: OnchainEventModelName) => {
-    const subscription = await client.onEventMessageUpdated(
-      buildMemberEqClause(eventModelName, 'game_id', params.gameId),
+    const eventSubscription = await client.onEventMessageUpdated(
+      null,
       worldAddresses,
       (...callbackArgs: unknown[]) => {
         const entity = readCallbackEntity(callbackArgs)
@@ -746,42 +798,26 @@ export const subscribeDojoGame = async (params: SubscribeDojoGameParams): Promis
           return
         }
 
-        const model = extractModels([entity], eventModelName)[0]
+        for (const eventModelName of trackedEventModelNames) {
+          const model = extractModels([entity], eventModelName)[0]
 
-        if (!model) {
-          return
+          if (!model || !memberValueMatches(model.game_id, params.gameId)) {
+            continue
+          }
+
+          const parsedEvent = normalizeTrackedEvent(eventModelName, model)
+
+          if (parsedEvent) {
+            params.onTrackedEvent(parsedEvent)
+          }
+
+          params.onStateMutation()
+          break
         }
-
-        const parsedEvent = normalizeTrackedEvent(eventModelName, model)
-
-        if (parsedEvent) {
-          params.onTrackedEvent(parsedEvent)
-        }
-
-        params.onStateMutation()
       },
     )
 
-    subscriptions.push(subscription)
-  }
-
-  try {
-    await Promise.all([
-      registerEntitySubscription('Game', buildKeysClause('Game', [params.gameId])),
-      registerEntitySubscription('TurnState', buildKeysClause('TurnState', [params.gameId])),
-      registerEntitySubscription('DiceState', buildKeysClause('DiceState', [params.gameId])),
-      registerEntitySubscription('GameRuntimeConfig', buildKeysClause('GameRuntimeConfig', [params.gameId])),
-      registerEntitySubscription('PendingQuestion', buildMemberEqClause('PendingQuestion', 'game_id', params.gameId)),
-      registerEntitySubscription('GamePlayer', buildMemberEqClause('GamePlayer', 'game_id', params.gameId)),
-      registerEntitySubscription('Token', buildMemberEqClause('Token', 'game_id', params.gameId)),
-      registerEntitySubscription('BonusState', buildMemberEqClause('BonusState', 'game_id', params.gameId)),
-      registerEntitySubscription('SquareOccupancy', buildMemberEqClause('SquareOccupancy', 'game_id', params.gameId)),
-      ...(params.configId !== undefined
-        ? [registerEntitySubscription('BoardSquare', buildMemberEqClause('BoardSquare', 'config_id', params.configId))]
-        : []),
-    ])
-
-    await Promise.all(trackedEventModelNames.map((eventModelName) => registerEventSubscription(eventModelName)))
+    subscriptions.push(eventSubscription)
   } catch {
     for (const subscription of subscriptions) {
       try {

@@ -8,6 +8,25 @@ const isBrowser = typeof window !== 'undefined'
 
 const isInsecureLocalUrl = (value: string) => /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/.*)?$/i.test(value)
 
+const normalizeLocalToriiGrpcUrl = (value: string) => {
+  if (!isInsecureLocalUrl(value)) {
+    return value
+  }
+
+  try {
+    const url = new URL(value)
+
+    if (url.port === '8080') {
+      url.port = '50051'
+      return url.toString().replace(/\/$/, '')
+    }
+  } catch {
+    return value
+  }
+
+  return value
+}
+
 const resolveSecureLocalProxyUrl = (value: string, proxyPath: string) => {
   if (!isBrowser) {
     return value
@@ -88,7 +107,10 @@ export const appEnv = {
   vrfProviderAddress:
     parseAddress(import.meta.env.VITE_VRF_PROVIDER_ADDRESS) ||
     '0x051fea4450da9d6aee758bdeba88b2f665bcbf549d2c61421aa724e9ac0ced8f',
-  dojoToriiUrl: resolveSecureLocalProxyUrl(import.meta.env.VITE_DOJO_TORII_URL || 'http://127.0.0.1:8080', '/torii'),
+  dojoToriiUrl: resolveSecureLocalProxyUrl(
+    normalizeLocalToriiGrpcUrl(import.meta.env.VITE_DOJO_TORII_URL || 'http://127.0.0.1:50051'),
+    '/torii',
+  ),
   dojoRelayUrl: import.meta.env.VITE_DOJO_RELAY_URL || '/ip4/127.0.0.1/tcp/9090',
   dojoManifestPath:
     import.meta.env.VITE_DOJO_MANIFEST_PATH || '../manifest_dev.json',
