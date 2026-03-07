@@ -103,11 +103,15 @@ pub mod admin_system {
     fn assert_admin_or_init(ref world: dojo::world::WorldStorage, caller: ContractAddress) {
         let mut admin: AdminAccount = world.read_model(GLOBAL_STATE_SINGLETON_ID);
 
-        if admin.singleton_id != GLOBAL_STATE_SINGLETON_ID {
+        if admin.singleton_id != GLOBAL_STATE_SINGLETON_ID || admin.account == zero_address() {
             admin = AdminAccount { singleton_id: GLOBAL_STATE_SINGLETON_ID, account: caller };
             world.write_model(@admin);
         }
 
         assert(admin.account == caller, 'not_admin');
+    }
+
+    fn zero_address() -> ContractAddress {
+        0.try_into().unwrap()
     }
 }

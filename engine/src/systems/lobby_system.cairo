@@ -406,7 +406,7 @@ pub mod lobby_system {
 
     fn load_or_init_global_state(ref world: dojo::world::WorldStorage) -> GlobalState {
         let mut state: GlobalState = world.read_model(GLOBAL_STATE_SINGLETON_ID);
-        if state.singleton_id != GLOBAL_STATE_SINGLETON_ID {
+        if state.singleton_id != GLOBAL_STATE_SINGLETON_ID || state.next_game_id == 0 || state.next_config_id == 0 {
             state = GlobalState {
                 singleton_id: GLOBAL_STATE_SINGLETON_ID,
                 next_game_id: 1,
