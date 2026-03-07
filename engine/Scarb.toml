@@ -24,6 +24,3 @@ allow-prebuilt-plugins = ["dojo_cairo_macros"]
 cairo_test = "2.13.1"
 dojo_cairo_test = "1.8.0"
 snforge_std = "0.53.0"
-
-[patch.scarbs-xyz]
-openzeppelin = { git = "https://github.com/OpenZeppelin/cairo-contracts", tag = "v2.0.0" }
