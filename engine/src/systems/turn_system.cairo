@@ -395,7 +395,6 @@ pub mod turn_system {
         assert(payload_difficulty == pending.difficulty, 'q_diff');
 
         let leaf_hash = build_question_leaf_hash(
-            payload_question_id,
             payload_question_index,
             payload_category,
             payload_difficulty,
@@ -1679,10 +1678,9 @@ pub mod turn_system {
     }
 
     fn build_question_leaf_hash(
-        question_id: u64, question_index: u32, category: u8, difficulty: u8, correct_option: u8,
+        question_index: u32, category: u8, difficulty: u8, correct_option: u8,
     ) -> felt252 {
         let fields = array![
-            question_id.into(),
             question_index.into(),
             category.into(),
             difficulty.into(),
@@ -1879,7 +1877,7 @@ pub mod turn_system {
 
         #[test]
         fn merkle_verification_with_direction_works() {
-            let leaf = build_question_leaf_hash(1001, 12, 0, 2, 3);
+            let leaf = build_question_leaf_hash(12, 0, 2, 3);
             let root = hash_pair_with_direction(leaf, 12345, 0);
 
             let proof = array![12345];
@@ -1891,7 +1889,7 @@ pub mod turn_system {
 
         #[test]
         fn merkle_verification_rejects_length_mismatch() {
-            let leaf = build_question_leaf_hash(42, 0, 0, 0, 1);
+            let leaf = build_question_leaf_hash(0, 0, 0, 1);
             let root = hash_pair_with_direction(leaf, 7, 1);
 
             let proof = array![7, 8];
