@@ -24,7 +24,6 @@ import { LogDrawer } from '../components/game/log-drawer'
 import type { MatchLogEvent, MatchPlayer, MatchToken, PlayerColor } from '../components/game/match-types'
 import { isDojoConfigured } from '../config/dojo'
 import { appEnv } from '../config/env'
-<<<<<<< HEAD
 import { getPlayerSkinSrc } from '../lib/player-skins'
 import {
   getHydratedQuestion,

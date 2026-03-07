@@ -4,12 +4,13 @@ import { useAppSettingsStore } from '../store/app-settings-store'
 export function AppShell() {
   const location = useLocation()
   const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
+  const isDevRoute = location.pathname.startsWith('/dev/')
 
-  if (!selectedSkinId && location.pathname !== '/skin-selection') {
+  if (!selectedSkinId && location.pathname !== '/skin-selection' && !isDevRoute) {
     return <Navigate replace to="/skin-selection" />
   }
 
-  if (selectedSkinId && location.pathname === '/skin-selection') {
+  if (selectedSkinId && location.pathname === '/skin-selection' && !isDevRoute) {
     return <Navigate replace to="/" />
   }
 

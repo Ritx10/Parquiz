@@ -1,10 +1,30 @@
 import type { ReactNode } from 'react'
-import { devnet, mainnet, sepolia, type Chain } from '@starknet-react/chains'
+import { mainnet, sepolia, type Chain } from '@starknet-react/chains'
 import { StarknetConfig, cartridge, jsonRpcProvider } from '@starknet-react/core'
-import { appEnv } from '../config/env'
+import { appEnv, KATANA_CHAIN_ID } from '../config/env'
 import { controllerConnector } from '../lib/starknet/controller-connector'
 
-const supportedChains = appEnv.defaultNetwork === 'katana' ? [devnet, sepolia, mainnet] : [mainnet, sepolia]
+const katanaChain: Chain = {
+  id: BigInt(KATANA_CHAIN_ID),
+  network: 'katana',
+  name: 'Katana Local',
+  testnet: true,
+  nativeCurrency: {
+    address: '0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7',
+    name: 'Ether',
+    symbol: 'ETH',
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: { http: [appEnv.katanaRpcUrl] },
+    public: { http: [appEnv.katanaRpcUrl] },
+  },
+  paymasterRpcUrls: {
+    avnu: { http: [appEnv.katanaRpcUrl] },
+  },
+}
+
+const supportedChains = appEnv.defaultNetwork === 'katana' ? [katanaChain, mainnet] : [mainnet, sepolia]
 
 const provider = jsonRpcProvider({
   rpc: (chain: Chain) => {
@@ -12,7 +32,7 @@ const provider = jsonRpcProvider({
       return { nodeUrl: appEnv.mainnetRpcUrl }
     }
 
-    if (appEnv.defaultNetwork === 'katana' && chain.id === devnet.id) {
+    if (appEnv.defaultNetwork === 'katana' && chain.id === katanaChain.id) {
       return { nodeUrl: appEnv.katanaRpcUrl }
     }
 
@@ -24,7 +44,7 @@ const defaultChainId =
   appEnv.defaultNetwork === 'mainnet'
     ? mainnet.id
     : appEnv.defaultNetwork === 'katana'
-      ? devnet.id
+      ? katanaChain.id
       : sepolia.id
 
 export function AppProviders({ children }: { children: ReactNode }) {

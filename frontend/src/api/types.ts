@@ -164,6 +164,24 @@ export type DojoQuestionSetModel = {
   enabled: boolean
 }
 
+export type DojoGlobalStateModel = {
+  singleton_id: number
+  next_game_id: bigint
+  next_config_id: bigint
+}
+
+export type DojoPublicLobbyIndexModel = {
+  config_id: bigint
+  game_id: bigint
+  is_active: boolean
+}
+
+export type DojoLobbyCodeIndexModel = {
+  code_hash: string
+  game_id: bigint
+  is_active: boolean
+}
+
 export type DojoBoardSquareModel = {
   config_id: bigint
   square_index: number

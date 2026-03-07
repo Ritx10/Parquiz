@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router-dom'
+import { DevBootstrapPage } from '../pages/dev-bootstrap-page'
 import { FriendsLobbyPage } from '../pages/friends-lobby-page'
 import { GameBoardMockPage } from '../pages/game-board-mock-page'
 import { GameBoardPage } from '../pages/game-board-page'
@@ -36,6 +37,10 @@ export const appRouter = createBrowserRouter([
       {
         path: 'board-mock',
         element: <GameBoardMockPage />,
+      },
+      {
+        path: 'dev/bootstrap',
+        element: <DevBootstrapPage />,
       },
     ],
   },

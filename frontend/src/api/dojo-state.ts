@@ -8,6 +8,8 @@ import type {
   DojoEgsTokenGameLinkModel,
   DojoGameConfigModel,
   DojoGameModel,
+  DojoGlobalStateModel,
+  DojoLobbyCodeIndexModel,
   DojoGamePlayerModel,
   DojoGameRuntimeConfigModel,
   DojoGameWonEvent,
@@ -16,6 +18,7 @@ import type {
   DojoDiceStateModel,
   DojoPendingQuestionModel,
   DojoQuestionSetModel,
+  DojoPublicLobbyIndexModel,
   DojoSquareOccupancyModel,
   DojoTokenCapturedEvent,
   DojoTokenModel,
@@ -390,6 +393,24 @@ const normalizeQuestionSetModel = (raw: RawModel): DojoQuestionSetModel => ({
   enabled: toBoolean(raw.enabled),
 })
 
+const normalizeGlobalStateModel = (raw: RawModel): DojoGlobalStateModel => ({
+  singleton_id: toNumber(raw.singleton_id),
+  next_game_id: toBigInt(raw.next_game_id),
+  next_config_id: toBigInt(raw.next_config_id),
+})
+
+const normalizePublicLobbyIndexModel = (raw: RawModel): DojoPublicLobbyIndexModel => ({
+  config_id: toBigInt(raw.config_id),
+  game_id: toBigInt(raw.game_id),
+  is_active: toBoolean(raw.is_active),
+})
+
+const normalizeLobbyCodeIndexModel = (raw: RawModel): DojoLobbyCodeIndexModel => ({
+  code_hash: typeof raw.code_hash === 'string' ? normalizeHex(raw.code_hash) : normalizeHex(raw.code_hash),
+  game_id: toBigInt(raw.game_id),
+  is_active: toBoolean(raw.is_active),
+})
+
 const normalizeBoardSquareModel = (raw: RawModel): DojoBoardSquareModel => ({
   config_id: toBigInt(raw.config_id),
   square_index: toNumber(raw.square_index),
@@ -611,6 +632,37 @@ export const readLatestGameConfigByCreator = async (
   return rows
     .map((row) => normalizeGameConfigModel(row))
     .sort((left, right) => Number(right.config_id - left.config_id))[0] || null
+}
+
+export const readGlobalState = async (): Promise<DojoGlobalStateModel | null> => {
+  const client = await getToriiClient()
+  const row = await fetchModelByKeys(client, 'GlobalState', [1])
+
+  return row ? normalizeGlobalStateModel(row) : null
+}
+
+export const readPublicLobbyIndex = async (configId: bigint): Promise<DojoPublicLobbyIndexModel | null> => {
+  const client = await getToriiClient()
+  const row = await fetchModelByKeys(client, 'PublicLobbyIndex', [configId])
+
+  if (!row) {
+    return null
+  }
+
+  const publicLobby = normalizePublicLobbyIndexModel(row)
+  return publicLobby.game_id > 0n ? publicLobby : null
+}
+
+export const readLobbyCodeIndex = async (codeHash: bigint | string): Promise<DojoLobbyCodeIndexModel | null> => {
+  const client = await getToriiClient()
+  const row = await fetchModelByKeys(client, 'LobbyCodeIndex', [codeHash])
+
+  if (!row) {
+    return null
+  }
+
+  const lobbyCode = normalizeLobbyCodeIndexModel(row)
+  return lobbyCode.game_id > 0n ? lobbyCode : null
 }
 
 export const readLatestGameIdByPlayer = async (playerAddress: string): Promise<bigint | null> => {

@@ -10,8 +10,23 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: isTest ? [wasm(), topLevelAwait(), react()] : [wasm(), topLevelAwait(), react(), mkcert()],
     server: {
+      cors: true,
       host: '0.0.0.0',
       port: 5173,
+      proxy: {
+        '/rpc': {
+          target: 'http://127.0.0.1:5050',
+          changeOrigin: true,
+          secure: false,
+          rewrite: (path) => path.replace(/^\/rpc/, ''),
+        },
+        '/torii': {
+          target: 'http://127.0.0.1:8080',
+          changeOrigin: true,
+          secure: false,
+          rewrite: (path) => path.replace(/^\/torii/, ''),
+        },
+      },
       strictPort: true,
     },
     preview: {

@@ -12,6 +12,7 @@ const connectorChains =
 export const controllerConnector = new ControllerConnector({
   chains: connectorChains,
   defaultChainId: appEnv.controllerDefaultChainId,
+  rpcUrl: appEnv.activeRpcUrl,
   policies: sessionPolicies,
   lazyload: true,
   propagateSessionErrors: true,
