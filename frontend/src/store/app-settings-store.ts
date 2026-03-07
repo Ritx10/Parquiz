@@ -8,11 +8,13 @@ type AppSettingsState = {
   language: AppLanguage
   soundEnabled: boolean
   aiDifficulty: AiDifficulty
+  questionDifficulty: AiDifficulty
   selectedConfigId: string
   selectedSkinId: null | string
   setLanguage: (language: AppLanguage) => void
   setSoundEnabled: (enabled: boolean) => void
   setAiDifficulty: (difficulty: AiDifficulty) => void
+  setQuestionDifficulty: (difficulty: AiDifficulty) => void
   setSelectedConfigId: (configId: string) => void
   setSelectedSkinId: (skinId: null | string) => void
   toggleSound: () => void
@@ -22,6 +24,7 @@ type StoredSettings = {
   language?: AppLanguage
   soundEnabled?: boolean
   aiDifficulty?: AiDifficulty
+  questionDifficulty?: AiDifficulty
   selectedConfigId?: string
   selectedSkinId?: null | string
 }
@@ -40,12 +43,13 @@ const normalizeAiDifficulty = (value: unknown): AiDifficulty => {
 
 const readStoredSettings = (): Pick<
   AppSettingsState,
-  'aiDifficulty' | 'language' | 'selectedConfigId' | 'selectedSkinId' | 'soundEnabled'
+  'aiDifficulty' | 'language' | 'questionDifficulty' | 'selectedConfigId' | 'selectedSkinId' | 'soundEnabled'
 > => {
   if (typeof window === 'undefined') {
     return {
       aiDifficulty: 'medium',
       language: 'es',
+      questionDifficulty: 'medium',
       selectedSkinId: null,
       soundEnabled: true,
       selectedConfigId: '1',
@@ -59,6 +63,7 @@ const readStoredSettings = (): Pick<
       return {
         aiDifficulty: 'medium',
         language: 'es',
+        questionDifficulty: 'medium',
         selectedSkinId: null,
         soundEnabled: true,
         selectedConfigId: '1',
@@ -70,6 +75,7 @@ const readStoredSettings = (): Pick<
     return {
       aiDifficulty: normalizeAiDifficulty(parsed.aiDifficulty),
       language: normalizeLanguage(parsed.language),
+      questionDifficulty: normalizeAiDifficulty(parsed.questionDifficulty),
       selectedSkinId: normalizePlayerSkinId(parsed.selectedSkinId ?? null),
       soundEnabled: parsed.soundEnabled ?? true,
       selectedConfigId: parsed.selectedConfigId || '1',
@@ -78,6 +84,7 @@ const readStoredSettings = (): Pick<
     return {
       aiDifficulty: 'medium',
       language: 'es',
+      questionDifficulty: 'medium',
       selectedSkinId: null,
       soundEnabled: true,
       selectedConfigId: '1',
@@ -88,6 +95,7 @@ const readStoredSettings = (): Pick<
 const persistSettings = (settings: {
   aiDifficulty: AiDifficulty
   language: AppLanguage
+  questionDifficulty: AiDifficulty
   selectedSkinId: null | string
   soundEnabled: boolean
   selectedConfigId: string
@@ -99,12 +107,13 @@ const persistSettings = (settings: {
   try {
     window.localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({
-        aiDifficulty: settings.aiDifficulty,
-        language: settings.language,
-        selectedSkinId: settings.selectedSkinId,
-        soundEnabled: settings.soundEnabled,
-        selectedConfigId: settings.selectedConfigId,
+        JSON.stringify({
+          aiDifficulty: settings.aiDifficulty,
+          language: settings.language,
+          questionDifficulty: settings.questionDifficulty,
+          selectedSkinId: settings.selectedSkinId,
+          soundEnabled: settings.soundEnabled,
+          selectedConfigId: settings.selectedConfigId,
       }),
     )
   } catch {
@@ -122,6 +131,7 @@ persistSettings(initialSettings)
 export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
   aiDifficulty: initialSettings.aiDifficulty,
   language: initialSettings.language,
+  questionDifficulty: initialSettings.questionDifficulty,
   selectedSkinId: initialSettings.selectedSkinId,
   soundEnabled: initialSettings.soundEnabled,
   selectedConfigId: initialSettings.selectedConfigId,
@@ -130,6 +140,7 @@ export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
     persistSettings({
       aiDifficulty: get().aiDifficulty,
       language,
+      questionDifficulty: get().questionDifficulty,
       selectedSkinId: get().selectedSkinId,
       soundEnabled: get().soundEnabled,
       selectedConfigId: get().selectedConfigId,
@@ -140,6 +151,7 @@ export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
     persistSettings({
       aiDifficulty: get().aiDifficulty,
       language: get().language,
+      questionDifficulty: get().questionDifficulty,
       selectedSkinId: get().selectedSkinId,
       soundEnabled: enabled,
       selectedConfigId: get().selectedConfigId,
@@ -150,6 +162,18 @@ export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
     persistSettings({
       aiDifficulty: difficulty,
       language: get().language,
+      questionDifficulty: get().questionDifficulty,
+      selectedSkinId: get().selectedSkinId,
+      soundEnabled: get().soundEnabled,
+      selectedConfigId: get().selectedConfigId,
+    })
+  },
+  setQuestionDifficulty: (difficulty) => {
+    set({ questionDifficulty: difficulty })
+    persistSettings({
+      aiDifficulty: get().aiDifficulty,
+      language: get().language,
+      questionDifficulty: difficulty,
       selectedSkinId: get().selectedSkinId,
       soundEnabled: get().soundEnabled,
       selectedConfigId: get().selectedConfigId,
@@ -160,6 +184,7 @@ export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
     persistSettings({
       aiDifficulty: get().aiDifficulty,
       language: get().language,
+      questionDifficulty: get().questionDifficulty,
       selectedSkinId: get().selectedSkinId,
       soundEnabled: get().soundEnabled,
       selectedConfigId,
@@ -170,6 +195,7 @@ export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
     persistSettings({
       aiDifficulty: get().aiDifficulty,
       language: get().language,
+      questionDifficulty: get().questionDifficulty,
       selectedSkinId,
       soundEnabled: get().soundEnabled,
       selectedConfigId: get().selectedConfigId,
@@ -181,6 +207,7 @@ export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
     persistSettings({
       aiDifficulty: get().aiDifficulty,
       language: get().language,
+      questionDifficulty: get().questionDifficulty,
       selectedSkinId: get().selectedSkinId,
       soundEnabled: nextEnabled,
       selectedConfigId: get().selectedConfigId,

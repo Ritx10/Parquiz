@@ -6,6 +6,7 @@ const typeIcon: Record<MatchLogEvent['type'], string> = {
   capture: '+20',
   home: '+10',
   bridge: 'BRDG',
+  question: 'QUIZ',
 }
 
 const formatRelativeTime = (timestamp: number) => {

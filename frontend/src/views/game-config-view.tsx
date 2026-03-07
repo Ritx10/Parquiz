@@ -1,5 +1,5 @@
 import { useAccount } from '@starknet-react/core'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createGameConfig, lockGameConfig, readLatestGameConfigByCreator } from '../api'
 import { shortenAddress, useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import { useAppSettingsStore } from '../store/app-settings-store'
@@ -121,11 +121,16 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
   const language = useAppSettingsStore((state) => state.language)
   const soundEnabled = useAppSettingsStore((state) => state.soundEnabled)
   const setLanguage = useAppSettingsStore((state) => state.setLanguage)
+  const questionDifficulty = useAppSettingsStore((state) => state.questionDifficulty)
   const setSoundEnabled = useAppSettingsStore((state) => state.setSoundEnabled)
+  const setQuestionDifficulty = useAppSettingsStore((state) => state.setQuestionDifficulty)
   const setSelectedConfigId = useAppSettingsStore((state) => state.setSelectedConfigId)
   const text = copy[language]
 
-  const [draft, setDraft] = useState<ConfigDraft>(defaultDraft)
+  const [draft, setDraft] = useState<ConfigDraft>(() => ({
+    ...defaultDraft,
+    difficultyLevel: questionDifficulty,
+  }))
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -148,11 +153,26 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
     hard: text.hard,
   }
 
+  useEffect(() => {
+    setDraft((current) =>
+      current.difficultyLevel === questionDifficulty
+        ? current
+        : {
+            ...current,
+            difficultyLevel: questionDifficulty,
+          },
+    )
+  }, [questionDifficulty])
+
   const updateDraft = <K extends keyof ConfigDraft>(field: K, value: ConfigDraft[K]) => {
     setDraft((current) => ({
       ...current,
       [field]: value,
     }))
+
+    if (field === 'difficultyLevel') {
+      setQuestionDifficulty(value as DifficultyPreset)
+    }
   }
 
   const onSave = async () => {

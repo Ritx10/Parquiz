@@ -30,7 +30,7 @@ export type MatchLegalMove = {
   blockedAt?: number
 }
 
-export type MatchLogEventType = 'roll' | 'move' | 'capture' | 'home' | 'bridge'
+export type MatchLogEventType = 'roll' | 'move' | 'capture' | 'home' | 'bridge' | 'question'
 
 export type MatchLogEvent = {
   id: string

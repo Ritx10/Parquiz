@@ -3,6 +3,9 @@ import { useSearchParams } from 'react-router-dom'
 import { Board3D } from '../components/game/board3d'
 import { GameAvatar } from '../components/game/game-avatar'
 import { LogDrawer } from '../components/game/log-drawer'
+import { TriviaQuestionModal } from '../components/game/trivia-question-modal'
+import { drawTriviaQuestion, pickAiTriviaAnswer, triviaSecondsByDifficulty, type TriviaDifficulty, type TriviaQuestion } from '../lib/trivia-engine'
+import { useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import type {
   MatchDiceState,
   MatchLegalMove,
@@ -14,6 +17,7 @@ import type {
   PlayerColor,
   TokenHint,
 } from '../components/game/match-types'
+import { useAppSettingsStore } from '../store/app-settings-store'
 import { useReadonlyGameState } from '../store/game-state-store'
 import { useGameUiStore } from '../store/game-ui-store'
 import FinalRankingScreen from '../components/game/FinalRankingScreen'
@@ -64,6 +68,26 @@ const wrapPosition = (position: number) => {
 const nextId = (prefix: string) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10_000)}`
 
 type PracticeDifficulty = 'easy' | 'medium' | 'hard'
+
+type TriviaFeedbackState = 'correct' | 'incorrect' | 'idle' | 'timeout'
+
+type TurnTriviaState = {
+  expiresAt: null | number
+  movementUnlocked: boolean
+  phase: 'closed' | 'feedback' | 'open'
+  question: null | TriviaQuestion
+  result: TriviaFeedbackState
+  selectedOption: null | number
+}
+
+const defaultTurnTriviaState: TurnTriviaState = {
+  expiresAt: null,
+  movementUnlocked: false,
+  phase: 'closed',
+  question: null,
+  result: 'idle',
+  selectedOption: null,
+}
 
 const aiThinkDelayByDifficulty: Record<PracticeDifficulty, number> = {
   easy: 980,
@@ -235,6 +259,7 @@ const parsePracticeDifficulty = (value: null | string): PracticeDifficulty => {
 const withAiPracticeState = (
   state: ReadonlyGameState,
   difficulty: PracticeDifficulty,
+  humanName: string,
 ): ReadonlyGameState => {
   const aiNamePrefix =
     difficulty === 'easy' ? 'BOT FACIL' : difficulty === 'hard' ? 'BOT DIFICIL' : 'BOT MEDIO'
@@ -246,7 +271,7 @@ const withAiPracticeState = (
       if (index === 0) {
         return {
           ...player,
-          name: 'PARQUIZ_PLAYER_77',
+          name: humanName,
         }
       }
 
@@ -640,6 +665,14 @@ function PlayerHudCard({ player, isTurn }: PlayerHudCardProps) {
   return (
     <article className="w-[132px] rounded-2xl border border-white/20 bg-[#082944]/78 px-3 py-2 text-center text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
       <div className={`mx-auto mb-2 h-1.5 w-full rounded-full ${hudAccentClass[player.color]}`} />
+      <span className="mx-auto mb-2 inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border-2 border-white/45 bg-[#fff4dc] shadow-[0_4px_10px_rgba(0,0,0,0.2)]">
+        <GameAvatar
+          alt={player.name}
+          avatar={player.avatar}
+          imageClassName="h-full w-full object-contain p-1"
+          textClassName="text-sm font-black text-[#2c190d]"
+        />
+      </span>
       <p className="truncate font-display text-lg leading-none">{player.name}</p>
 
       <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide">
@@ -901,13 +934,17 @@ const createInitialTokenTrackSteps = (inputTokens: MatchToken[]) => {
 
 export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps) {
   const [searchParams] = useSearchParams()
+  const { username } = useControllerWallet()
+  const questionDifficulty = useAppSettingsStore((state) => state.questionDifficulty)
   const gameState = useReadonlyGameState()
   const isAiPracticeMode = searchParams.get('mode') === 'ai'
   const practiceDifficulty = parsePracticeDifficulty(searchParams.get('difficulty'))
+  const humanDisplayName = username || 'PARQUIZ_PLAYER_77'
+  const activeTriviaDifficulty: TriviaDifficulty = isAiPracticeMode ? practiceDifficulty : questionDifficulty
 
   const activeSessionState = useMemo(
-    () => (isAiPracticeMode ? withAiPracticeState(gameState, practiceDifficulty) : gameState),
-    [gameState, isAiPracticeMode, practiceDifficulty],
+    () => (isAiPracticeMode ? withAiPracticeState(gameState, practiceDifficulty, humanDisplayName) : gameState),
+    [gameState, humanDisplayName, isAiPracticeMode, practiceDifficulty],
   )
 
   const humanPlayerId = activeSessionState.players[0]?.id || activeSessionState.turnPlayerId
@@ -945,14 +982,19 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     dieA: 1,
     dieB: 1,
   })
+  const [turnTrivia, setTurnTrivia] = useState<TurnTriviaState>(defaultTurnTriviaState)
+  const [triviaSecondsLeft, setTriviaSecondsLeft] = useState(0)
   const hudRollIntervalRef = useRef<null | number>(null)
   const hudRollTimeoutRef = useRef<null | number>(null)
   const victoryPreviewTimeoutRef = useRef<null | number>(null)
   const aiActionTimeoutRef = useRef<null | number>(null)
   const botWatchdogIntervalRef = useRef<null | number>(null)
+  const triviaCountdownIntervalRef = useRef<null | number>(null)
+  const triviaFeedbackTimeoutRef = useRef<null | number>(null)
   const botTurnStartedAtRef = useRef(0)
   const botHeartbeatRef = useRef(0)
   const botForceAdvanceRef = useRef(false)
+  const usedTriviaQuestionIdsRef = useRef<Set<string>>(new Set())
   const botRuntimeRef = useRef<BotRuntimeState>({
     bonusConsumed: false,
     bonusPending: false,
@@ -1005,11 +1047,53 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     }, {})
   }, [players])
 
+  const clearTriviaTimers = useCallback(() => {
+    if (triviaCountdownIntervalRef.current !== null) {
+      window.clearInterval(triviaCountdownIntervalRef.current)
+      triviaCountdownIntervalRef.current = null
+    }
+
+    if (triviaFeedbackTimeoutRef.current !== null) {
+      window.clearTimeout(triviaFeedbackTimeoutRef.current)
+      triviaFeedbackTimeoutRef.current = null
+    }
+  }, [])
+
+  const resetTriviaState = useCallback(() => {
+    clearTriviaTimers()
+    setTurnTrivia(defaultTurnTriviaState)
+    setTriviaSecondsLeft(0)
+  }, [clearTriviaTimers])
+
+  const openTriviaQuestion = useCallback(
+    (question: TriviaQuestion) => {
+      clearTriviaTimers()
+
+      const expiresAt = Date.now() + triviaSecondsByDifficulty[question.difficulty] * 1000
+
+      setTurnTrivia({
+        expiresAt,
+        movementUnlocked: false,
+        phase: 'open',
+        question,
+        result: 'idle',
+        selectedOption: null,
+      })
+      setTriviaSecondsLeft(triviaSecondsByDifficulty[question.difficulty])
+    },
+    [clearTriviaTimers],
+  )
+
+  const isTriviaBlockingTurn = turnTrivia.phase !== 'closed' || (Boolean(turnTrivia.question) && !turnTrivia.movementUnlocked)
+  const movementEnabled = dice.rolled && turnTrivia.movementUnlocked && turnTrivia.phase === 'closed'
+
   useEffect(() => {
     if (victoryPreviewTimeoutRef.current !== null) {
       window.clearTimeout(victoryPreviewTimeoutRef.current)
       victoryPreviewTimeoutRef.current = null
     }
+
+    usedTriviaQuestionIdsRef.current = new Set()
 
     setCurrentTurnPlayerId(activeSessionState.turnPlayerId)
     setTokens(initialTokens)
@@ -1035,8 +1119,9 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     setAnnouncementIndex(0)
     setShowFinalClassification(false)
     setShowPlacementDetails(false)
+    resetTriviaState()
     resetTurnVisuals()
-  }, [activeSessionState, initialTokens, resetTurnVisuals])
+  }, [activeSessionState, initialTokens, resetTriviaState, resetTurnVisuals])
 
   const legalMoves = useMemo(
     () =>
@@ -1071,8 +1156,10 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     [legalMoves],
   )
 
+  const interactiveLegalMoves = useMemo(() => (movementEnabled ? legalMoves : []), [legalMoves, movementEnabled])
+
   const tokenDiceChoices = useMemo(() => {
-    return legalMoves.reduce<Record<string, TokenDiceChoiceWithMove[]>>((acc, move) => {
+    return interactiveLegalMoves.reduce<Record<string, TokenDiceChoiceWithMove[]>>((acc, move) => {
       if (!acc[move.tokenId]) {
         acc[move.tokenId] = []
       }
@@ -1099,7 +1186,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
 
       return acc
     }, {})
-  }, [legalMoves, dice, bonusPending])
+  }, [interactiveLegalMoves, dice, bonusPending])
 
   const boardTokenDiceChoices = useMemo(() => {
     return Object.entries(tokenDiceChoices).reduce<
@@ -1134,18 +1221,18 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
 
   const filteredMoves = useMemo(() => {
     if (hoveredChoicePreview) {
-      return legalMoves.filter(
+      return interactiveLegalMoves.filter(
         (move) =>
           move.tokenId === hoveredChoicePreview.tokenId && move.resource === hoveredChoicePreview.choiceId,
       )
     }
 
     if (activeExpandedTokenId) {
-      return legalMoves.filter((move) => move.tokenId === activeExpandedTokenId)
+      return interactiveLegalMoves.filter((move) => move.tokenId === activeExpandedTokenId)
     }
 
-    return legalMoves
-  }, [activeExpandedTokenId, legalMoves, hoveredChoicePreview])
+    return interactiveLegalMoves
+  }, [activeExpandedTokenId, interactiveLegalMoves, hoveredChoicePreview])
 
   const moveHints = useMemo(() => {
     const ownTokens = tokens.filter((token) => token.ownerId === currentTurnPlayerId)
@@ -1153,7 +1240,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     return ownTokens.map<TokenHint>((token) => {
       const movesByResource: TokenHint['movesByResource'] = {}
 
-      legalMoves
+      interactiveLegalMoves
         .filter((move) => move.tokenId === token.id)
         .forEach((move) => {
           const current = movesByResource[move.resource] || []
@@ -1167,7 +1254,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
         movesByResource,
       }
     })
-  }, [tokens, legalMoves, currentTurnPlayerId])
+  }, [tokens, interactiveLegalMoves, currentTurnPlayerId])
 
   const tooltipByTokenId = useMemo(() => {
     const result: Record<string, string> = {}
@@ -1216,8 +1303,10 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
         window.clearInterval(botWatchdogIntervalRef.current)
         botWatchdogIntervalRef.current = null
       }
+
+      clearTriviaTimers()
     }
-  }, [])
+  }, [clearTriviaTimers])
 
   const logEvent = useCallback(
     (type: MatchLogEvent['type'], message: string, tone: 'info' | 'success' | 'warning') => {
@@ -1280,6 +1369,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     setCurrentTurnPlayerId(nextTurnPlayerId)
 
     resetTurnVisuals()
+    resetTriviaState()
     setSelectedTokenId(null)
     setExpandedTokenId(null)
     setHoveredChoicePreview(null)
@@ -1306,6 +1396,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     humanPlayerId,
     isAiPracticeMode,
     markBotHeartbeat,
+    resetTriviaState,
     resetTurnVisuals,
     turnOrder,
     winnerPlayerId,
@@ -1313,7 +1404,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
 
   const allConsumablesUsed = dice.consumed.dieA && dice.consumed.dieB
 
-  const canRoll = !dice.rolled || allConsumablesUsed || (dice.rolled && primaryLegalMoves.length === 0)
+  const canRoll = !isTriviaBlockingTurn && (!dice.rolled || allConsumablesUsed || (dice.rolled && primaryLegalMoves.length === 0))
   const isAiControlledTurn = isAiPracticeMode && currentTurnPlayerId !== humanPlayerId
   const canRollAction =
     canRoll && !winnerPlayerId && !hudDiceRolling && !isTokenMoving && !isAiControlledTurn
@@ -1357,6 +1448,122 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
       winnerPlayerId,
     ],
   )
+
+  const resolveTriviaAnswer = useCallback(
+    (selectedOption: null | number, source: 'ai' | 'player' | 'timeout') => {
+      if (!turnTrivia.question || turnTrivia.phase !== 'open') {
+        return
+      }
+
+      clearTriviaTimers()
+
+      const currentPlayerName = playersById[currentTurnPlayerId]?.name || 'Player'
+      const answeredCorrectly = selectedOption === turnTrivia.question.correctIndex
+      const result: TriviaFeedbackState = source === 'timeout' ? 'timeout' : answeredCorrectly ? 'correct' : 'incorrect'
+
+      setTurnTrivia((current) => {
+        if (!current.question) {
+          return current
+        }
+
+        return {
+          ...current,
+          expiresAt: null,
+          movementUnlocked: answeredCorrectly,
+          phase: 'feedback',
+          result,
+          selectedOption,
+        }
+      })
+
+      if (answeredCorrectly) {
+        logEvent(
+          'question',
+          `${currentPlayerName} answered correctly and can move ${dice.dieA}/${dice.dieB}.`,
+          'success',
+        )
+
+        if (isAiControlledTurn) {
+          markBotHeartbeat('bot trivia correct', {
+            playerId: currentTurnPlayerId,
+            selectedOption,
+          })
+        }
+
+        triviaFeedbackTimeoutRef.current = window.setTimeout(() => {
+          setTurnTrivia({
+            expiresAt: null,
+            movementUnlocked: true,
+            phase: 'closed',
+            question: null,
+            result: 'correct',
+            selectedOption,
+          })
+          triviaFeedbackTimeoutRef.current = null
+        }, 920)
+
+        return
+      }
+
+      logEvent(
+        'question',
+        source === 'timeout'
+          ? `${currentPlayerName} ran out of time and loses the turn.`
+          : `${currentPlayerName} answered incorrectly and loses the turn.`,
+        'warning',
+      )
+
+      if (isAiControlledTurn) {
+        markBotHeartbeat('bot trivia failed', {
+          playerId: currentTurnPlayerId,
+          result,
+          selectedOption,
+        })
+      }
+
+      triviaFeedbackTimeoutRef.current = window.setTimeout(() => {
+        triviaFeedbackTimeoutRef.current = null
+        advanceTurn()
+      }, 1150)
+    },
+    [
+      advanceTurn,
+      clearTriviaTimers,
+      currentTurnPlayerId,
+      dice.dieA,
+      dice.dieB,
+      isAiControlledTurn,
+      logEvent,
+      markBotHeartbeat,
+      playersById,
+      turnTrivia.phase,
+      turnTrivia.question,
+    ],
+  )
+
+  useEffect(() => {
+    if (turnTrivia.phase !== 'open' || !turnTrivia.question || !turnTrivia.expiresAt) {
+      return
+    }
+
+    setTriviaSecondsLeft(Math.max(0, Math.ceil((turnTrivia.expiresAt - Date.now()) / 1000)))
+
+    triviaCountdownIntervalRef.current = window.setInterval(() => {
+      const remainingSeconds = Math.max(0, Math.ceil((turnTrivia.expiresAt! - Date.now()) / 1000))
+      setTriviaSecondsLeft(remainingSeconds)
+
+      if (remainingSeconds <= 0) {
+        resolveTriviaAnswer(null, 'timeout')
+      }
+    }, 200)
+
+    return () => {
+      if (triviaCountdownIntervalRef.current !== null) {
+        window.clearInterval(triviaCountdownIntervalRef.current)
+        triviaCountdownIntervalRef.current = null
+      }
+    }
+  }, [resolveTriviaAnswer, turnTrivia.expiresAt, turnTrivia.phase, turnTrivia.question])
 
   useEffect(() => {
     if (!winnerPlayerId) {
@@ -1516,7 +1723,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   ])
 
   useEffect(() => {
-    if (winnerPlayerId || !dice.rolled || hudDiceRolling || isTokenMoving || advancingTurnRef.current) {
+    if (winnerPlayerId || !dice.rolled || hudDiceRolling || isTokenMoving || advancingTurnRef.current || isTriviaBlockingTurn) {
       return
     }
 
@@ -1540,18 +1747,10 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     }
 
     void applyMoveRef.current(bonusMoves[0])
-  }, [
-    winnerPlayerId,
-    bonusPending,
-    dice.rolled,
-    dice.consumed.bonus,
-    hudDiceRolling,
-    isTokenMoving,
-    legalMoves,
-  ])
+  }, [winnerPlayerId, bonusPending, dice.rolled, dice.consumed.bonus, hudDiceRolling, isTokenMoving, isTriviaBlockingTurn, legalMoves])
 
   useEffect(() => {
-    if (winnerPlayerId || !dice.rolled || hudDiceRolling || isTokenMoving || advancingTurnRef.current) {
+    if (winnerPlayerId || !dice.rolled || hudDiceRolling || isTokenMoving || advancingTurnRef.current || isTriviaBlockingTurn) {
       return
     }
 
@@ -1564,18 +1763,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     }
 
     advanceTurn()
-  }, [
-    advanceTurn,
-    winnerPlayerId,
-    dice.rolled,
-    dice.consumed.dieA,
-    dice.consumed.dieB,
-    dice.consumed.bonus,
-    hudDiceRolling,
-    isTokenMoving,
-    bonusPending,
-    primaryLegalMoves.length,
-  ])
+  }, [advanceTurn, winnerPlayerId, dice.rolled, dice.consumed.dieA, dice.consumed.dieB, dice.consumed.bonus, hudDiceRolling, isTokenMoving, isTriviaBlockingTurn, bonusPending, primaryLegalMoves.length])
 
   const rollDice = useCallback(() => {
     if (hudRollIntervalRef.current !== null) {
@@ -1600,6 +1788,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     }
 
     resetTurnVisuals()
+    resetTriviaState()
     setSelectedTokenId(null)
     setExpandedTokenId(null)
     setHoveredChoicePreview(null)
@@ -1620,6 +1809,11 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     const currentPlayerName = playersById[currentTurnPlayerId]?.name || 'Player'
     logEvent('roll', `${currentPlayerName} rolled ${nextRoll.dieA} and ${nextRoll.dieB}.`, 'info')
 
+    const nextQuestion = drawTriviaQuestion(activeTriviaDifficulty, usedTriviaQuestionIdsRef.current)
+    usedTriviaQuestionIdsRef.current.add(nextQuestion.id)
+    openTriviaQuestion(nextQuestion)
+    logEvent('question', `${currentPlayerName} received a ${activeTriviaDifficulty} trivia question.`, 'info')
+
     if (isAiControlledTurn) {
       markBotHeartbeat('bot rolled', {
         dieA: nextRoll.dieA,
@@ -1631,9 +1825,12 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     canRoll,
     currentTurnPlayerId,
     isAiControlledTurn,
+    activeTriviaDifficulty,
     logEvent,
     markBotHeartbeat,
+    openTriviaQuestion,
     playersById,
+    resetTriviaState,
     resetTurnVisuals,
     winnerPlayerId,
   ])
@@ -1743,7 +1940,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   }
 
   const applyMove = async (move: MatchLegalMove) => {
-    if (winnerPlayerId || isTokenMoving) {
+    if (winnerPlayerId || isTokenMoving || !movementEnabled) {
       return
     }
 
@@ -1936,6 +2133,22 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
           return
         }
 
+        if (turnTrivia.phase === 'open' && turnTrivia.question) {
+          const selectedOption = pickAiTriviaAnswer(turnTrivia.question, practiceDifficulty)
+
+          markBotHeartbeat('bot selected trivia answer', {
+            playerId: currentTurnPlayerId,
+            selectedOption,
+          })
+
+          resolveTriviaAnswer(selectedOption, 'ai')
+          return
+        }
+
+        if (isTriviaBlockingTurn) {
+          return
+        }
+
         const diceAlreadyUsed = dice.consumed.dieA && dice.consumed.dieB
         const bonusResolved = !bonusPending || dice.consumed.bonus
 
@@ -2020,10 +2233,14 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     debugBot,
     dice.consumed.dieA,
     dice.consumed.dieB,
+    isTriviaBlockingTurn,
+    resolveTriviaAnswer,
+    turnTrivia.phase,
+    turnTrivia.question,
   ])
 
   useEffect(() => {
-    if (winnerPlayerId || !dice.rolled || hudDiceRolling || isTokenMoving || advancingTurnRef.current) {
+    if (winnerPlayerId || !dice.rolled || hudDiceRolling || isTokenMoving || advancingTurnRef.current || isTriviaBlockingTurn) {
       return
     }
 
@@ -2057,22 +2274,10 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
         }
       }
     }
-  }, [
-    winnerPlayerId,
-    dice.rolled,
-    dice.dieA,
-    dice.dieB,
-    dice.consumed.dieA,
-    dice.consumed.dieB,
-    hudDiceRolling,
-    isTokenMoving,
-    tokens,
-    currentTurnPlayerId,
-    tokenDiceChoices,
-  ])
+  }, [winnerPlayerId, dice.rolled, dice.dieA, dice.dieB, dice.consumed.dieA, dice.consumed.dieB, hudDiceRolling, isTokenMoving, isTriviaBlockingTurn, tokens, currentTurnPlayerId, tokenDiceChoices])
 
   const onTokenClick = (tokenId: string) => {
-    if (winnerPlayerId || isTokenMoving || isAiControlledTurn) {
+    if (winnerPlayerId || isTokenMoving || isAiControlledTurn || !movementEnabled) {
       return
     }
 
@@ -2105,6 +2310,12 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   }
 
   const onTokenHover = (tokenId: string | null) => {
+    if (!movementEnabled) {
+      setExpandedTokenId(null)
+      setHoveredChoicePreview(null)
+      return
+    }
+
     if (!tokenId) {
       setExpandedTokenId(null)
       setHoveredChoicePreview(null)
@@ -2123,6 +2334,11 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   }
 
   const onTokenDiceChoiceHover = (tokenId: string, choiceId: MoveResource | null) => {
+    if (!movementEnabled) {
+      setHoveredChoicePreview(null)
+      return
+    }
+
     if (!choiceId) {
       setHoveredChoicePreview(null)
       return
@@ -2143,7 +2359,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   }
 
   const onTokenDiceChoiceSelect = (tokenId: string, choiceId: MoveResource) => {
-    if (winnerPlayerId || isTokenMoving || isAiControlledTurn) {
+    if (winnerPlayerId || isTokenMoving || isAiControlledTurn || !movementEnabled) {
       return
     }
 
@@ -2164,6 +2380,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     finalPlacements && !showFinalClassification && announcementIndex < announcementCount
       ? finalPlacements[announcementIndex]
       : null
+  const activeTriviaPlayer = playersById[currentTurnPlayerId] ?? null
 
   const skipToFinalClassification = () => {
     if (!finalPlacements) {
@@ -2232,6 +2449,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
               onTokenDiceChoiceHover={onTokenDiceChoiceHover}
               onTokenDiceChoiceSelect={onTokenDiceChoiceSelect}
               onTokenHover={onTokenHover}
+              players={players}
               safeSquares={[...activeSessionState.safeSquares]}
               selectedTokenId={selectedTokenId}
               tokenDiceChoices={boardTokenDiceChoices}
@@ -2363,6 +2581,19 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
             </button>
           </div>
         </div>
+      ) : null}
+
+      {turnTrivia.question ? (
+        <TriviaQuestionModal
+          answerState={turnTrivia.result}
+          difficulty={turnTrivia.question.difficulty}
+          isAiTurn={isAiControlledTurn}
+          onSelectOption={(optionIndex) => resolveTriviaAnswer(optionIndex, 'player')}
+          player={activeTriviaPlayer || undefined}
+          question={turnTrivia.question}
+          secondsLeft={triviaSecondsLeft}
+          selectedOption={turnTrivia.selectedOption}
+        />
       ) : null}
 
       {activeAnnouncementPlacement ? (
