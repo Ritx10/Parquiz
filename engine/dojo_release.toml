@@ -13,6 +13,7 @@ rpc_url = "https://api.cartridge.gg/x/starknet/sepolia"
 # world_address = "0x..."
 
 [writers]
+"parchis_trivia" = ["parchis_trivia-lobby_system", "parchis_trivia-turn_system", "parchis_trivia-shop_system", "parchis_trivia-egs_system"]
 "parchis_trivia-GameConfig" = ["parchis_trivia-config_system", "parchis_trivia-admin_system"]
 "parchis_trivia-BoardSquare" = ["parchis_trivia-config_system", "parchis_trivia-admin_system"]
 "parchis_trivia-GlobalState" = ["parchis_trivia-config_system", "parchis_trivia-lobby_system"]

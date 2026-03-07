@@ -14,6 +14,7 @@ private_key = "0xc5b2fcab997346f3ea1c00b002ecf6f382c5f9c9659a3894eb783c5320f912"
 # world_address = "0x..."
 
 [writers]
+"parchis_trivia" = ["parchis_trivia-lobby_system", "parchis_trivia-turn_system", "parchis_trivia-shop_system", "parchis_trivia-egs_system"]
 "parchis_trivia-GameConfig" = ["parchis_trivia-config_system", "parchis_trivia-admin_system"]
 "parchis_trivia-BoardSquare" = ["parchis_trivia-config_system", "parchis_trivia-admin_system"]
 "parchis_trivia-GlobalState" = ["parchis_trivia-config_system", "parchis_trivia-lobby_system"]
