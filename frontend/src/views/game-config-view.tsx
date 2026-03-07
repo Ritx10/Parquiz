@@ -123,16 +123,6 @@ type GameConfigViewProps = {
   onClose?: () => void
 }
 
-function ArcadeValueField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid grid-cols-[146px_minmax(0,1fr)] items-center gap-3">
-      <p className="text-[18px] font-black uppercase tracking-[0.02em] text-[#5d3418] sm:text-[20px]">{label}</p>
-      <div className="min-w-0 rounded-[14px] border border-[#dcc29a] bg-[#e8d8b8] px-4 py-3 text-[20px] font-black text-[#432510] shadow-[inset_0_1px_0_rgba(255,247,227,0.7)] sm:text-[21px]">
-        <span className="block truncate">{value}</span>
-      </div>
-    </div>
-  )
-}
 
 function RuleChip({ label, value }: { label: string; value: boolean }) {
   return (
@@ -227,99 +217,121 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
   }
 
   return (
-    <section className="relative isolate rounded-[42px] border-[6px] border-[#8d532c] bg-[#a66738] p-2 shadow-[0_28px_60px_rgba(24,10,4,0.62)] sm:p-3">
-      <span className="pointer-events-none absolute inset-[8px] rounded-[34px] border border-[#dfb181]/35" />
-      <span className="pointer-events-none absolute inset-0 rounded-[36px] bg-[linear-gradient(180deg,rgba(255,208,154,0.12),rgba(84,44,19,0.1))]" />
-
-      <div className="relative rounded-[34px] border-[3px] border-[#c0895a] bg-[#f3e4c5] px-5 pb-6 pt-7 shadow-[inset_0_1px_0_rgba(255,245,219,0.9)] sm:px-8 sm:pb-8 sm:pt-8">
-        <span className="pointer-events-none absolute inset-[3px] rounded-[29px] bg-[#f3e4c5]" />
-        {embedded ? (
-          <button
-            aria-label={text.close}
-            className="absolute right-5 top-5 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#bb8d60] bg-gradient-to-b from-[#f8ddb4] to-[#ddb171] text-[28px] font-black leading-none text-[#7f4b24] shadow-[inset_0_1px_0_rgba(255,249,236,0.75),0_3px_0_rgba(143,93,48,0.9)]"
-            onClick={handleCancel}
-            type="button"
-          >
-            ×
-          </button>
-        ) : null}
-
-        <div className="relative z-10 mx-auto w-fit max-w-full px-12">
-          <div className="rounded-[24px] border-[4px] border-[#9a6336] bg-gradient-to-b from-[#f6de82] via-[#efc45b] to-[#d89d39] px-8 py-3 shadow-[inset_0_1px_0_rgba(255,248,211,0.75),0_5px_0_rgba(145,92,35,0.95)] sm:min-w-[520px] sm:px-12 sm:py-4">
-            <h2 className="text-center font-display text-[34px] uppercase tracking-[0.03em] text-[#62371a] drop-shadow-[0_1px_0_rgba(255,234,180,0.8)] sm:text-[56px]">
+    <section className="relative isolate mx-auto mt-8 w-full max-w-[1000px] rounded-[32px] border-[8px] border-[#7f4b2e] bg-[#d4986a] p-2 shadow-[0_25px_50px_rgba(0,0,0,0.6)] sm:p-4">
+      <div className="relative rounded-[24px] border-[4px] border-[#5e3219] bg-[#fdf5e6] px-4 pb-6 pt-10 shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)] sm:px-8 sm:pb-8 sm:pt-12">
+        <div className="absolute left-1/2 top-0 z-20 w-[90%] max-w-[700px] -translate-x-1/2 -translate-y-1/2">
+          <div className="relative rounded-[16px] border-[6px] border-[#8c522b] bg-gradient-to-b from-[#f5d480] via-[#eab044] to-[#d59128] px-4 py-3 text-center shadow-[0_8px_16px_rgba(0,0,0,0.4),inset_0_2px_0_rgba(255,255,255,0.6)]">
+            <div className="absolute -left-3 top-1/2 h-8 w-6 -translate-y-1/2 rounded-l-md border-[3px] border-[#5e3219] bg-[#a8b2c1]" />
+            <div className="absolute -right-3 top-1/2 h-8 w-6 -translate-y-1/2 rounded-r-md border-[3px] border-[#5e3219] bg-[#a8b2c1]" />
+            <h2 className="font-display text-[24px] uppercase leading-tight tracking-wide text-[#5c3214] drop-shadow-[0_1px_0_rgba(255,255,255,0.4)] sm:text-[34px]">
               {text.title}
             </h2>
           </div>
         </div>
 
-        <div className="relative z-10 mt-6 grid gap-4 xl:grid-cols-2 xl:gap-5">
-          <article className="rounded-[28px] border-[3px] border-[#be8a5b] bg-[#f7efdf] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.66)] sm:p-5">
-            <h3 className="font-display text-[38px] uppercase tracking-[0.03em] text-[#55311a] sm:text-[56px]">{text.generalTitle}</h3>
+        {embedded ? (
+          <button
+            aria-label={text.close}
+            className="absolute -right-4 -top-4 z-30 flex h-12 w-12 items-center justify-center rounded-full border-[4px] border-[#5e3219] bg-gradient-to-b from-[#eab044] to-[#c9842f] text-[24px] font-black text-[#5c3214] shadow-[0_4px_8px_rgba(0,0,0,0.4),inset_0_2px_0_rgba(255,255,255,0.4)] transition hover:brightness-110 active:translate-y-[2px]"
+            onClick={handleCancel}
+            type="button"
+          >
+            x
+          </button>
+        ) : null}
 
-            <div className="mt-4 space-y-3">
-              <div className="rounded-[20px] border border-[#ddc39e] bg-[#fbf4e7] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                <div className="grid gap-2 sm:grid-cols-[200px_minmax(0,1fr)] sm:items-center sm:gap-5">
-                  <p className="text-[20px] font-black uppercase tracking-[0.03em] text-[#5f3618] sm:text-[26px]">{text.language}</p>
-                  <div className="relative">
-                    <select
-                      className="w-full appearance-none rounded-full border border-[#aa693b] bg-gradient-to-r from-[#bc7a46] to-[#91542d] px-6 py-3 pr-14 text-[22px] font-black uppercase tracking-[0.04em] text-[#fff1d0] shadow-[inset_0_1px_0_rgba(255,225,181,0.36)] outline-none sm:text-[24px]"
-                      onChange={(event) => setLanguage(event.target.value as 'es' | 'en')}
-                      value={language}
-                    >
-                      <option value="es">ESPANOL</option>
-                      <option value="en">ENGLISH</option>
-                    </select>
-                    <span className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 text-[18px] font-black text-[#ffe8bf]">v</span>
-                  </div>
+        <div className="relative z-10 mt-4 grid gap-6 xl:grid-cols-2">
+          <article className="rounded-[20px] border-[3px] border-[#cbaa85] bg-[#f7ecd6] p-4 shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)] sm:p-6">
+            <h3 className="mb-6 font-display text-[26px] uppercase tracking-wide text-[#5c3214] drop-shadow-sm sm:text-[30px]">
+              {text.generalTitle}
+            </h3>
+
+            <div className="space-y-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-[18px] font-black uppercase text-[#5c3214] sm:text-[20px]">{text.language} 🌐</p>
+                <div className="relative w-full sm:w-[220px]">
+                  <select
+                    className="w-full appearance-none rounded-full border-[3px] border-[#a96639] bg-gradient-to-b from-[#d48f5b] to-[#ae6130] px-4 py-2 pr-10 text-center text-[16px] font-black uppercase text-[#fff2d7] shadow-[inset_0_2px_0_rgba(255,255,255,0.3),0_4px_6px_rgba(0,0,0,0.2)] outline-none"
+                    onChange={(event) => setLanguage(event.target.value as 'es' | 'en')}
+                    value={language}
+                  >
+                    <option value="es">ESPANOL</option>
+                    <option value="en">ENGLISH</option>
+                  </select>
+                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[14px] font-black text-[#fff2d7]">▼</span>
                 </div>
               </div>
 
-              <div className="rounded-[20px] border border-[#ddc39e] bg-[#fbf4e7] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                <div className="grid gap-2 sm:grid-cols-[200px_minmax(0,1fr)] sm:items-center sm:gap-5">
-                  <p className="text-[20px] font-black uppercase tracking-[0.03em] text-[#5f3618] sm:text-[26px]">{text.sound}</p>
-                  <button
-                    className="flex w-full items-center justify-between rounded-full border border-[#aa693b] bg-gradient-to-r from-[#bc7a46] to-[#91542d] px-4 py-2.5 text-left shadow-[inset_0_1px_0_rgba(255,225,181,0.36)]"
-                    onClick={() => setSoundEnabled(!soundEnabled)}
-                    type="button"
-                  >
-                    <span className="text-[18px] font-black uppercase tracking-[0.04em] text-[#f9e4bf] sm:text-[20px]">&nbsp;</span>
-                    <span
-                      className={`rounded-full border px-6 py-2 text-[16px] font-black uppercase tracking-[0.05em] shadow-[inset_0_1px_0_rgba(221,255,191,0.84)] sm:text-[18px] ${
-                        soundEnabled
-                          ? 'border-[#4ca62b] bg-gradient-to-b from-[#81e94a] to-[#56c930] text-[#235611]'
-                          : 'border-[#8f5a34] bg-gradient-to-b from-[#efe5d3] to-[#d4c0a0] text-[#71411e]'
-                      }`}
-                    >
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-[18px] font-black uppercase text-[#5c3214] sm:text-[20px]">{text.sound} 🔊</p>
+                  <p className="text-[11px] font-bold uppercase text-[#88624b]">ACTIVADO / DESACTIVADO</p>
+                </div>
+                <button
+                  className={`relative flex h-[44px] w-[176px] items-center rounded-full border-[3px] p-[4px] shadow-[inset_0_3px_6px_rgba(0,0,0,0.2)] transition-colors ${
+                    soundEnabled
+                      ? 'border-[#3d8f38] bg-gradient-to-b from-[#71d659] to-[#45aa34]'
+                      : 'border-[#a96639] bg-[#e8d1b1]'
+                  }`}
+                  onClick={() => setSoundEnabled(!soundEnabled)}
+                  type="button"
+                >
+                  <div className={`flex w-full items-center ${soundEnabled ? 'justify-between' : 'justify-between flex-row-reverse'}`}>
+                    <span className={`px-2 text-[11px] font-black tracking-wide ${soundEnabled ? 'text-white' : 'text-[#88624b]'}`}>
                       {soundEnabled ? text.enabled : text.disabled}
                     </span>
-                  </button>
-                </div>
+                    <div
+                      className={`h-[30px] w-[30px] flex-shrink-0 rounded-full border-[2px] ${
+                        soundEnabled
+                          ? 'border-[#f2deba] bg-[#fff2d7] shadow-[-2px_0_4px_rgba(0,0,0,0.2)]'
+                          : 'border-[#a96639] bg-gradient-to-b from-[#f2deba] to-[#d1ac7f] shadow-[2px_0_4px_rgba(0,0,0,0.2)]'
+                      }`}
+                    />
+                  </div>
+                </button>
               </div>
 
-              <div className="rounded-[20px] border border-[#ddc39e] bg-[#fbf4e7] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] sm:px-5">
-                <h4 className="font-display text-[26px] uppercase tracking-[0.03em] text-[#56311a] sm:text-[32px]">{text.walletTitle}</h4>
-
-                <div className="mt-3 space-y-3">
-                  <ArcadeValueField label={text.walletStatus} value={isConnected ? text.connected : text.disconnected} />
-                  <ArcadeValueField label={text.walletAddress} value={isConnected ? walletLabel : '-'} />
-                  <ArcadeValueField label={text.walletNetwork} value={formatChain(chainId)} />
-                  <ArcadeValueField label={text.walletBalance} value={balanceLabel} />
-                  <ArcadeValueField label={text.walletUser} value={userLabel} />
+              <div className="mt-8 border-t-[3px] border-[#cbaa85] pt-6">
+                <h4 className="mb-4 font-display text-[22px] uppercase tracking-wide text-[#5c3214] sm:text-[24px]">
+                  {text.walletTitle} 👛
+                </h4>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-[15px] font-black uppercase text-[#5c3214]">{text.walletUser}</span>
+                    <div className="rounded-lg border border-[#d5c2a5] bg-[#eae0c9] px-3 py-1 shadow-inner">
+                      <span className="text-[14px] font-bold text-[#5c3214]">{userLabel}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-[15px] font-black uppercase text-[#5c3214]">{text.walletStatus}</span>
+                    <div className="rounded-lg border border-[#d5c2a5] bg-[#eae0c9] px-3 py-1 shadow-inner">
+                      <span className="text-[14px] font-bold text-[#5c3214]">{isConnected ? text.connected : text.disconnected}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-[15px] font-black uppercase text-[#5c3214]">{text.walletAddress}</span>
+                    <div className="flex items-center gap-2 rounded-lg border border-[#d5c2a5] bg-[#eae0c9] px-3 py-1 shadow-inner">
+                      <span className="font-mono text-[14px] font-bold text-[#5c3214]">{isConnected ? walletLabel : '-'}</span>
+                      <span className="text-sm text-gray-500">📋</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </article>
 
-          <article className="rounded-[28px] border-[3px] border-[#be8a5b] bg-[#f7efdf] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.66)] sm:p-5">
-            <h3 className="font-display text-[38px] uppercase tracking-[0.03em] text-[#55311a] sm:text-[56px]">{text.gameTitle}</h3>
-            <p className="mt-[-2px] text-[18px] font-black uppercase tracking-[0.03em] text-[#764526] sm:text-[21px]">{text.gameSubtitle}</p>
+          <article className="rounded-[20px] border-[3px] border-[#cbaa85] bg-[#f7ecd6] p-4 shadow-[inset_0_2px_4px_rgba(255,255,255,0.8)] sm:p-6">
+            <h3 className="font-display text-[26px] uppercase tracking-wide text-[#5c3214] drop-shadow-sm sm:text-[30px]">
+              {text.gameTitle}
+            </h3>
+            <p className="mb-6 mt-[-4px] text-[13px] font-black uppercase text-[#88624b]">{text.gameSubtitle}</p>
 
-            <div className="mt-3 space-y-3">
-              <div className="rounded-[18px] border border-[#ddc39e] bg-[#fbf4e7] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_170px] sm:items-center">
-                  <p className="text-[18px] font-black uppercase tracking-[0.03em] text-[#56311a] sm:text-[22px]">{text.responseTime}</p>
+            <div className="space-y-5">
+              <div className="flex items-center justify-between border-b-[2px] border-[#e8d4b7] pb-4">
+                <p className="max-w-[180px] text-[15px] font-black uppercase leading-tight text-[#5c3214] sm:text-[17px]">{text.responseTime}</p>
+                <div className="rounded-[12px] border-[2px] border-[#cbaa85] bg-[#eae0c9] px-5 py-1.5 shadow-inner">
                   <input
-                    className="w-full rounded-[14px] border border-[#dcc29a] bg-[#ead8b7] px-4 py-3 text-center text-[22px] font-black text-[#472814] outline-none shadow-[inset_0_1px_0_rgba(255,247,227,0.7)]"
+                    className="w-[40px] bg-transparent text-center text-[18px] font-black text-[#5c3214] outline-none"
                     min={5}
                     onChange={(event) => updateDraft('answerTimeLimitSecs', Number(event.target.value))}
                     type="number"
@@ -328,11 +340,11 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
                 </div>
               </div>
 
-              <div className="rounded-[18px] border border-[#ddc39e] bg-[#fbf4e7] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_170px] sm:items-center">
-                  <p className="text-[18px] font-black uppercase tracking-[0.03em] text-[#56311a] sm:text-[22px]">{text.turnLimit}</p>
+              <div className="flex items-center justify-between border-b-[2px] border-[#e8d4b7] pb-4">
+                <p className="max-w-[180px] text-[15px] font-black uppercase leading-tight text-[#5c3214] sm:text-[17px]">{text.turnLimit}</p>
+                <div className="rounded-[12px] border-[2px] border-[#cbaa85] bg-[#eae0c9] px-5 py-1.5 shadow-inner">
                   <input
-                    className="w-full rounded-[14px] border border-[#dcc29a] bg-[#ead8b7] px-4 py-3 text-center text-[22px] font-black text-[#472814] outline-none shadow-[inset_0_1px_0_rgba(255,247,227,0.7)]"
+                    className="w-[40px] bg-transparent text-center text-[18px] font-black text-[#5c3214] outline-none"
                     min={10}
                     onChange={(event) => updateDraft('turnTimeLimitSecs', Number(event.target.value))}
                     type="number"
@@ -341,35 +353,33 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
                 </div>
               </div>
 
-              <div className="rounded-[18px] border border-[#ddc39e] bg-[#fbf4e7] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_300px] sm:items-center">
-                  <p className="text-[18px] font-black uppercase tracking-[0.03em] text-[#56311a] sm:text-[22px]">{text.exitRule}</p>
-                  <div className="relative">
-                    <select
-                      className="w-full appearance-none rounded-full border border-[#aa693b] bg-gradient-to-r from-[#bc7a46] to-[#91542d] px-6 py-3 pr-14 text-[22px] font-black uppercase tracking-[0.04em] text-[#fff1d0] shadow-[inset_0_1px_0_rgba(255,225,181,0.36)] outline-none"
-                      onChange={(event) => updateDraft('exitHomeRule', event.target.value as ExitHomeRule)}
-                      value={draft.exitHomeRule}
-                    >
-                      <option value="FIVE">{text.exitFive}</option>
-                      <option value="EVEN">{text.exitEven}</option>
-                      <option value="SIX">{text.exitSix}</option>
-                    </select>
-                    <span className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 text-[18px] font-black text-[#ffe8bf]">v</span>
-                  </div>
+              <div className="flex items-center justify-between border-b-[2px] border-[#e8d4b7] pb-4">
+                <p className="max-w-[150px] text-[15px] font-black uppercase leading-tight text-[#5c3214] sm:text-[17px]">{text.exitRule}</p>
+                <div className="relative w-[150px]">
+                  <select
+                    className="w-full appearance-none rounded-full border-[3px] border-[#a96639] bg-gradient-to-b from-[#d48f5b] to-[#ae6130] px-4 py-2 pr-8 text-center text-[14px] font-black uppercase text-[#fff2d7] shadow-[0_4px_6px_rgba(0,0,0,0.2)] outline-none"
+                    onChange={(event) => updateDraft('exitHomeRule', event.target.value as ExitHomeRule)}
+                    value={draft.exitHomeRule}
+                  >
+                    <option value="FIVE">{text.exitFive}</option>
+                    <option value="EVEN">{text.exitEven}</option>
+                    <option value="SIX">{text.exitSix}</option>
+                  </select>
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] font-black text-[#fff2d7]">▼</span>
                 </div>
               </div>
 
-              <div className="rounded-[20px] border border-[#ddc39e] bg-[#fbf4e7] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                <p className="text-center text-[20px] font-black uppercase tracking-[0.03em] text-[#5c3418] sm:text-[22px]">{text.difficulty}</p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              <div className="border-b-[2px] border-[#e8d4b7] pb-4 pt-1">
+                <p className="mb-3 text-center text-[16px] font-black uppercase tracking-wide text-[#5c3214]">{text.difficulty}</p>
+                <div className="flex w-full overflow-hidden rounded-full border-[3px] border-[#a96639] bg-[#cbaa85] shadow-[0_4px_6px_rgba(0,0,0,0.2)]">
                   {difficultyButtonOrder.map((difficulty) => {
                     const isActive = draft.difficultyLevel === difficulty
                     return (
                       <button
-                        className={`rounded-full border px-5 py-3 text-[20px] font-black uppercase tracking-[0.04em] shadow-[inset_0_1px_0_rgba(255,225,181,0.36)] transition ${
+                        className={`flex-1 py-1.5 text-[14px] font-black uppercase transition-colors ${
                           isActive
-                            ? 'border-[#c49c3a] bg-gradient-to-b from-[#ffd86a] to-[#e7ae39] text-[#5a3416]'
-                            : 'border-[#aa693b] bg-gradient-to-r from-[#bc7a46] to-[#91542d] text-[#fff0d2]'
+                            ? 'bg-gradient-to-b from-[#f5d480] to-[#eab044] text-[#5c3214] shadow-inner'
+                            : 'bg-[#cbaa85] text-[#5c3214]/60 hover:bg-[#d5b896]'
                         }`}
                         key={difficulty}
                         onClick={() => updateDraft('difficultyLevel', difficulty)}
@@ -382,64 +392,63 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
                 </div>
               </div>
 
-              <div className="rounded-[18px] border border-[#ddc39e] bg-[#fbf4e7] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_300px] sm:items-center">
-                  <p className="text-[18px] font-black uppercase tracking-[0.03em] text-[#56311a] sm:text-[22px]">{text.safeShop}</p>
-                  <button
-                    className="flex w-full items-center justify-between rounded-full border border-[#aa693b] bg-gradient-to-r from-[#bc7a46] to-[#91542d] px-4 py-2.5 text-left shadow-[inset_0_1px_0_rgba(255,225,181,0.36)]"
-                    onClick={() => updateDraft('shopEnabledOnSafeSquares', !draft.shopEnabledOnSafeSquares)}
-                    type="button"
-                  >
-                    <span className="text-[18px] font-black uppercase tracking-[0.04em] text-[#f9e4bf] sm:text-[20px]">&nbsp;</span>
-                    <span
-                      className={`rounded-full border px-6 py-2 text-[16px] font-black uppercase tracking-[0.05em] shadow-[inset_0_1px_0_rgba(223,255,198,0.84)] sm:text-[18px] ${
-                        draft.shopEnabledOnSafeSquares
-                          ? 'border-[#4ca62b] bg-gradient-to-b from-[#81e94a] to-[#56c930] text-[#235611]'
-                          : 'border-[#8f5a34] bg-gradient-to-b from-[#efe5d3] to-[#d4c0a0] text-[#71411e]'
-                      }`}
-                    >
-                      {draft.shopEnabledOnSafeSquares ? text.enabled : text.disabled}
-                    </span>
-                  </button>
+              <div className="flex items-center justify-between pt-1">
+                <div>
+                  <p className="text-[16px] font-black uppercase text-[#5c3214]">{text.safeShop}</p>
+                  <p className="text-[11px] font-bold uppercase text-[#88624b]">TIENDA HABILITADA EN<br />CASILLAS SEGURAS</p>
                 </div>
-              </div>
-
-              <div className="grid gap-2 sm:grid-cols-2">
-                {contractRuleItems.map((item) => (
-                  <RuleChip key={item.key} label={item.key} value={item.value} />
-                ))}
+                <button
+                  className={`relative flex h-[44px] w-[176px] items-center rounded-full border-[3px] p-[4px] shadow-[inset_0_3px_6px_rgba(0,0,0,0.2)] transition-colors ${
+                    draft.shopEnabledOnSafeSquares
+                      ? 'border-[#3d8f38] bg-gradient-to-b from-[#71d659] to-[#45aa34]'
+                      : 'border-[#a96639] bg-[#e8d1b1]'
+                  }`}
+                  onClick={() => updateDraft('shopEnabledOnSafeSquares', !draft.shopEnabledOnSafeSquares)}
+                  type="button"
+                >
+                  <div className={`flex w-full items-center ${draft.shopEnabledOnSafeSquares ? 'justify-between' : 'justify-between flex-row-reverse'}`}>
+                    <span className={`px-2 text-[11px] font-black tracking-wide ${draft.shopEnabledOnSafeSquares ? 'text-white' : 'text-[#88624b]'}`}>
+                      {draft.shopEnabledOnSafeSquares ? 'HABILITADO' : 'DESHABILITADO'}
+                    </span>
+                    <div
+                      className={`h-[30px] w-[30px] flex-shrink-0 rounded-full border-[2px] ${
+                        draft.shopEnabledOnSafeSquares
+                          ? 'border-[#f2deba] bg-[#fff2d7] shadow-[-2px_0_4px_rgba(0,0,0,0.2)]'
+                          : 'border-[#a96639] bg-gradient-to-b from-[#f2deba] to-[#d1ac7f] shadow-[2px_0_4px_rgba(0,0,0,0.2)]'
+                      }`}
+                    />
+                  </div>
+                </button>
               </div>
             </div>
           </article>
         </div>
 
         {statusMessage ? (
-          <div className="mx-auto mt-4 max-w-[880px] rounded-[16px] border border-[#d6b184] bg-[#f8ecd0] px-4 py-3 text-center text-base font-bold text-[#58311a] shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+          <div className="mx-auto mt-4 max-w-[880px] rounded-[16px] border-[2px] border-[#cbaa85] bg-[#f7ecd6] px-4 py-3 text-center text-[16px] font-black text-[#5c3214] shadow-inner">
             {statusMessage}
           </div>
         ) : null}
 
-        <div className="relative z-10 mt-6 flex flex-wrap items-center justify-center gap-4">
+        <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
           <button
-            className="min-w-[280px] rounded-full border-[3px] border-[#2f7b1f] bg-gradient-to-b from-[#80ea4d] to-[#4cb92a] px-8 py-3 font-display text-[34px] uppercase tracking-[0.03em] text-[#234e15] shadow-[inset_0_2px_0_rgba(223,255,198,0.9),0_7px_0_rgba(38,109,26,0.95)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60 sm:text-[40px]"
+            className="w-[260px] rounded-full border-[4px] border-[#3d8f38] bg-gradient-to-b from-[#71d659] via-[#54be3d] to-[#39a322] px-4 py-3 font-display text-[26px] uppercase tracking-wide text-white shadow-[0_8px_0_#2b6627,0_12px_20px_rgba(0,0,0,0.4),inset_0_3px_0_rgba(255,255,255,0.5)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isSaving}
             onClick={() => void onSave()}
             type="button"
+            style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}
           >
-            {isSaving ? text.saving : text.save}
+            {isSaving ? text.saving : 'GUARDAR CAMBIOS'}
           </button>
 
           <button
-            className="min-w-[230px] rounded-full border-[3px] border-[#8d939d] bg-gradient-to-b from-[#eff1f6] to-[#aeb5c0] px-8 py-3 font-display text-[34px] uppercase tracking-[0.03em] text-[#38404d] shadow-[inset_0_2px_0_rgba(255,255,255,0.92),0_7px_0_rgba(112,119,130,0.95)] transition hover:brightness-105"
+            className="w-[220px] rounded-full border-[4px] border-[#697a8d] bg-gradient-to-b from-[#bdc6d2] via-[#9eaab8] to-[#808f9f] px-4 py-3 font-display text-[26px] uppercase tracking-wide text-white shadow-[0_8px_0_#4d5a6a,0_12px_20px_rgba(0,0,0,0.4),inset_0_3px_0_rgba(255,255,255,0.5)] transition hover:brightness-110"
             onClick={handleCancel}
             type="button"
+            style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}
           >
             {text.cancel}
           </button>
-        </div>
-
-        <div className="relative z-10 mt-4 text-center text-xs font-black uppercase tracking-[0.14em] text-[#9c7247]">
-          CONFIG #{selectedConfigId}
         </div>
       </div>
     </section>
