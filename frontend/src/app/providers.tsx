@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
-import { mainnet, sepolia, type Chain } from '@starknet-react/chains'
+import { devnet, mainnet, sepolia, type Chain } from '@starknet-react/chains'
 import { StarknetConfig, cartridge, jsonRpcProvider } from '@starknet-react/core'
 import { appEnv } from '../config/env'
 import { controllerConnector } from '../lib/starknet/controller-connector'
 
-const supportedChains = [mainnet, sepolia]
+const supportedChains = appEnv.defaultNetwork === 'katana' ? [devnet, sepolia, mainnet] : [mainnet, sepolia]
 
 const provider = jsonRpcProvider({
   rpc: (chain: Chain) => {
@@ -12,11 +12,20 @@ const provider = jsonRpcProvider({
       return { nodeUrl: appEnv.mainnetRpcUrl }
     }
 
+    if (appEnv.defaultNetwork === 'katana' && chain.id === devnet.id) {
+      return { nodeUrl: appEnv.katanaRpcUrl }
+    }
+
     return { nodeUrl: appEnv.sepoliaRpcUrl }
   },
 })
 
-const defaultChainId = appEnv.defaultNetwork === 'mainnet' ? mainnet.id : sepolia.id
+const defaultChainId =
+  appEnv.defaultNetwork === 'mainnet'
+    ? mainnet.id
+    : appEnv.defaultNetwork === 'katana'
+      ? devnet.id
+      : sepolia.id
 
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
