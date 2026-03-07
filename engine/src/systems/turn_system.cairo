@@ -24,7 +24,7 @@ pub mod turn_system {
         HARD_DIFFICULTY_REWARD_COINS, HOME_LANE_LEN, MAIN_TRACK_LEN, MAX_SEATS,
         MEDIUM_DIFFICULTY_REWARD_COINS, TOKENS_PER_PLAYER, TRACK_STEPS_TO_HOME_ENTRY,
         bonus_type, difficulty_level,
-        game_status, move_type, token_state, turn_phase,
+        egs_link_status, game_status, move_type, token_state, turn_phase,
         EASY_DIFFICULTY_REWARD_COINS,
     };
     use crate::events::{
@@ -33,10 +33,12 @@ pub mod turn_system {
         TokenReachedHome, TurnEnded, TurnStarted,
     };
     use crate::models::{
-        BoardSquare, BonusState, DiceState, EgsSessionBinding, Game, GamePlayer, GameRuntimeConfig,
-        GameSeat, PendingQuestion, QuestionSet, SquareOccupancy, Token, TurnState,
+        BoardSquare, BonusState, DiceState, Game, GamePlayer, GameRuntimeConfig, GameSeat,
+        PendingQuestion, QuestionSet, SquareOccupancy, Token, TurnState,
     };
-    use crate::systems::egs_system::egs_system::{compute_egs_score, maybe_sync_adapter};
+    use crate::systems::egs_system::egs_system::{
+        assert_bound_token_playable, sync_bound_player_state, sync_bound_players_terminal,
+    };
     use crate::types::{AnswerPayload, LegalMove, MoveInput, MovePlan, MoveStep};
     use dojo::event::EventStorage;
     use dojo::model::ModelStorage;
@@ -57,6 +59,7 @@ pub mod turn_system {
             let game: Game = world.read_model(game_id);
             assert(game.status == game_status::IN_PROGRESS, 'not_live');
             assert(game.active_player == caller, 'not_active');
+            assert_bound_token_playable(ref world, game_id, caller);
 
             let mut turn: TurnState = world.read_model(game_id);
             assert(turn.phase == turn_phase::ROLL_AND_QUESTION, 'phase');
@@ -140,6 +143,7 @@ pub mod turn_system {
             let mut game: Game = world.read_model(game_id);
             assert(game.status == game_status::IN_PROGRESS, 'not_live');
             assert(game.active_player == caller, 'not_active');
+            assert_bound_token_playable(ref world, game_id, caller);
 
             let mut turn: TurnState = world.read_model(game_id);
             assert(turn.phase == turn_phase::ANSWER_PENDING, 'phase');
@@ -182,6 +186,7 @@ pub mod turn_system {
             let mut game: Game = world.read_model(game_id);
             assert(game.status == game_status::IN_PROGRESS, 'not_live');
             assert(game.active_player == caller, 'not_active');
+            assert_bound_token_playable(ref world, game_id, caller);
 
             let mut turn: TurnState = world.read_model(game_id);
             assert(turn.phase == turn_phase::MOVE_PENDING, 'phase');
@@ -201,7 +206,9 @@ pub mod turn_system {
 
                 world.write_model(@game);
                 world.write_model(@turn);
-                sync_egs_game_over_for_all(ref world, game.game_id);
+                sync_bound_players_terminal(
+                    ref world, game.game_id, winner, egs_link_status::FINISHED,
+                );
                 world.emit_event(@GameWon { game_id: game.game_id, winner, turn_index: game.turn_index });
                 return;
             }
@@ -217,6 +224,7 @@ pub mod turn_system {
             let mut game: Game = world.read_model(game_id);
             assert(game.status == game_status::IN_PROGRESS, 'not_live');
             assert(game.active_player == caller, 'not_active');
+            assert_bound_token_playable(ref world, game_id, caller);
 
             let mut turn: TurnState = world.read_model(game_id);
             let runtime: GameRuntimeConfig = world.read_model(game_id);
@@ -251,6 +259,7 @@ pub mod turn_system {
             let mut game: Game = world.read_model(game_id);
             assert(game.status == game_status::IN_PROGRESS, 'not_live');
             assert(game.active_player == caller, 'not_active');
+            assert_bound_token_playable(ref world, game_id, caller);
 
             let mut turn: TurnState = world.read_model(game_id);
             assert(turn.phase == turn_phase::ANSWER_PENDING, 'phase');
@@ -312,7 +321,9 @@ pub mod turn_system {
 
                 world.write_model(@game);
                 world.write_model(@turn);
-                sync_egs_game_over_for_all(ref world, game.game_id);
+                sync_bound_players_terminal(
+                    ref world, game.game_id, winner, egs_link_status::FINISHED,
+                );
                 world.emit_event(@GameWon { game_id: game.game_id, winner, turn_index: game.turn_index });
                 return;
             }
@@ -328,6 +339,7 @@ pub mod turn_system {
             let mut game: Game = world.read_model(game_id);
             assert(game.status == game_status::IN_PROGRESS, 'not_live');
             assert(game.active_player == caller, 'not_active');
+            assert_bound_token_playable(ref world, game_id, caller);
 
             let mut turn: TurnState = world.read_model(game_id);
             assert(turn.phase == turn_phase::SHOP_PENDING, 'phase');
@@ -409,7 +421,14 @@ pub mod turn_system {
 
         turn.question_answered = true;
         turn.question_correct = correct;
-        sync_egs_player_state(ref world, game.game_id, caller, false);
+        sync_bound_player_state(
+            ref world,
+            game.game_id,
+            caller,
+            false,
+            false,
+            egs_link_status::ACTIVE,
+        );
         world.emit_event(@AnswerResolved { game_id: game.game_id, player: caller, correct, reward });
         correct
     }
@@ -469,7 +488,14 @@ pub mod turn_system {
         world.write_model(@dice_state);
         world.write_model(@bonus_state);
         world.write_model(@turn);
-        sync_egs_player_state(ref world, game.game_id, caller, false);
+        sync_bound_player_state(
+            ref world,
+            game.game_id,
+            caller,
+            false,
+            false,
+            egs_link_status::ACTIVE,
+        );
     }
 
     fn end_turn_internal(
@@ -1702,40 +1728,6 @@ pub mod turn_system {
         }
 
         poseidon_hash_span(array![sibling, current].span())
-    }
-
-    fn sync_egs_player_state(
-        ref world: dojo::world::WorldStorage, game_id: u64, player: ContractAddress,
-        game_over: bool,
-    ) {
-        let mut binding: EgsSessionBinding = world.read_model((game_id, player));
-        if binding.token_id == 0 {
-            return;
-        }
-
-        let player_state: GamePlayer = world.read_model((game_id, player));
-        let bonus_state: BonusState = world.read_model((game_id, player));
-        binding.score = compute_egs_score(player_state, bonus_state);
-        binding.game_over = game_over;
-
-        world.write_model(@binding);
-        maybe_sync_adapter(ref world, binding);
-    }
-
-    fn sync_egs_game_over_for_all(ref world: dojo::world::WorldStorage, game_id: u64) {
-        let mut seat: u8 = 0;
-        loop {
-            if seat >= MAX_SEATS {
-                break;
-            }
-
-            let game_seat: GameSeat = world.read_model((game_id, seat));
-            if game_seat.occupied {
-                sync_egs_player_state(ref world, game_id, game_seat.player, true);
-            }
-
-            seat += 1;
-        }
     }
 
     fn zero_address() -> ContractAddress {

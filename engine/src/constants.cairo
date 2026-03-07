@@ -67,6 +67,13 @@ pub mod bonus_type {
     pub const BONUS_20: u8 = 20;
 }
 
+pub mod egs_link_status {
+    pub const NONE: u8 = 0;
+    pub const ACTIVE: u8 = 1;
+    pub const FINISHED: u8 = 2;
+    pub const CANCELLED: u8 = 3;
+}
+
 pub const TOKENS_PER_PLAYER: u8 = 4;
 pub const MIN_PLAYERS: u8 = 2;
 pub const MAX_SEATS: u8 = 4;

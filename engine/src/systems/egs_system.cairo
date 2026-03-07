@@ -4,17 +4,22 @@ pub trait IEgsSystem<T> {
 }
 
 #[starknet::interface]
-pub trait IEgsAdapter<T> {
-    fn sync_session(ref self: T, token_id: felt252, score: u64, game_over: bool);
+pub trait IMinigameToken<T> {
+    fn is_playable(self: @T, token_id: felt252) -> bool;
+    fn assert_is_playable(self: @T, token_id: felt252);
+    fn settings_id(self: @T, token_id: felt252) -> u32;
 }
 
 #[dojo::contract]
 pub mod egs_system {
-    use crate::constants::EGS_CONFIG_SINGLETON_ID;
-    use crate::models::{BonusState, EgsConfig, EgsSessionBinding, Game, GamePlayer};
+    use crate::constants::{EGS_CONFIG_SINGLETON_ID, MAX_SEATS, egs_link_status};
+    use crate::models::{
+        BonusState, EgsConfig, EgsSessionBinding, EgsTokenGameLink, Game, GameConfig, GamePlayer,
+        GameSeat,
+    };
     use dojo::model::ModelStorage;
     use starknet::{ContractAddress, get_caller_address};
-    use super::{IEgsAdapterDispatcher, IEgsAdapterDispatcherTrait, IEgsSystem};
+    use super::{IEgsSystem, IMinigameTokenDispatcher, IMinigameTokenDispatcherTrait};
 
     #[abi(embed_v0)]
     impl EgsSystemImpl of IEgsSystem<ContractState> {
@@ -33,18 +38,31 @@ pub mod egs_system {
             let existing: EgsSessionBinding = world.read_model((game_id, caller));
             assert(existing.token_id == 0, 'already_bound');
 
+            let token_link: EgsTokenGameLink = world.read_model(token_id);
+            assert(token_link.token_id == 0, 'token_bound');
+
+            let config: EgsConfig = world.read_model(EGS_CONFIG_SINGLETON_ID);
+            assert_token_contract_ready(config);
+
+            let token = token_dispatcher(config);
+            token.assert_is_playable(token_id);
+            assert(token.settings_id(token_id).into() == game.config_id, 'config_mismatch');
+
             let bonus: BonusState = world.read_model((game_id, caller));
             let score = compute_egs_score(player, bonus);
             let binding = EgsSessionBinding {
                 game_id,
                 player: caller,
                 token_id,
+                config_id: game.config_id,
                 score,
                 game_over: false,
+                won: false,
+                lifecycle_status: egs_link_status::ACTIVE,
             };
 
             world.write_model(@binding);
-            maybe_sync_adapter(ref world, binding);
+            write_token_link(ref world, binding);
         }
     }
 
@@ -63,14 +81,99 @@ pub mod egs_system {
         goal_score + coin_score + bonus_10_score + bonus_20_score
     }
 
-    pub fn maybe_sync_adapter(ref world: dojo::world::WorldStorage, binding: EgsSessionBinding) {
-        let config: EgsConfig = world.read_model(EGS_CONFIG_SINGLETON_ID);
-        if !config.enabled || config.adapter_address == zero_address() {
+    pub fn assert_bound_token_playable(
+        ref world: dojo::world::WorldStorage, game_id: u64, player: ContractAddress,
+    ) {
+        let binding: EgsSessionBinding = world.read_model((game_id, player));
+        if binding.token_id == 0 {
             return;
         }
 
-        let adapter = IEgsAdapterDispatcher { contract_address: config.adapter_address };
-        adapter.sync_session(binding.token_id, binding.score, binding.game_over);
+        let config: EgsConfig = world.read_model(EGS_CONFIG_SINGLETON_ID);
+        assert_token_contract_ready(config);
+        token_dispatcher(config).assert_is_playable(binding.token_id);
+    }
+
+    pub fn sync_bound_player_state(
+        ref world: dojo::world::WorldStorage,
+        game_id: u64,
+        player: ContractAddress,
+        game_over: bool,
+        won: bool,
+        lifecycle_status: u8,
+    ) {
+        let mut binding: EgsSessionBinding = world.read_model((game_id, player));
+        if binding.token_id == 0 {
+            return;
+        }
+
+        let player_state: GamePlayer = world.read_model((game_id, player));
+        let bonus_state: BonusState = world.read_model((game_id, player));
+        binding.score = compute_egs_score(player_state, bonus_state);
+        binding.game_over = game_over;
+        binding.won = won;
+        binding.lifecycle_status = lifecycle_status;
+
+        world.write_model(@binding);
+        write_token_link(ref world, binding);
+    }
+
+    pub fn sync_bound_players_terminal(
+        ref world: dojo::world::WorldStorage,
+        game_id: u64,
+        winner: ContractAddress,
+        lifecycle_status: u8,
+    ) {
+        let mut seat: u8 = 0;
+        loop {
+            if seat >= MAX_SEATS {
+                break;
+            }
+
+            let game_seat: GameSeat = world.read_model((game_id, seat));
+            if game_seat.occupied {
+                sync_bound_player_state(
+                    ref world,
+                    game_id,
+                    game_seat.player,
+                    true,
+                    game_seat.player == winner,
+                    lifecycle_status,
+                );
+            }
+
+            seat += 1;
+        }
+    }
+
+    pub fn maybe_publish_settings(ref _world: dojo::world::WorldStorage, _config: GameConfig) {
+    }
+
+    pub fn maybe_disable_settings(ref _world: dojo::world::WorldStorage, _config_id: u64) {
+    }
+
+    fn write_token_link(ref world: dojo::world::WorldStorage, binding: EgsSessionBinding) {
+        world.write_model(
+            @EgsTokenGameLink {
+                token_id: binding.token_id,
+                game_id: binding.game_id,
+                player: binding.player,
+                config_id: binding.config_id,
+                score: binding.score,
+                game_over: binding.game_over,
+                won: binding.won,
+                lifecycle_status: binding.lifecycle_status,
+            },
+        );
+    }
+
+    fn token_dispatcher(config: EgsConfig) -> IMinigameTokenDispatcher {
+        IMinigameTokenDispatcher { contract_address: config.token_address }
+    }
+
+    fn assert_token_contract_ready(config: EgsConfig) {
+        assert(config.enabled, 'egs_disabled');
+        assert(config.token_address != zero_address(), 'token_missing');
     }
 
     fn zero_address() -> ContractAddress {

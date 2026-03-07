@@ -18,6 +18,7 @@ pub mod config_system {
         GLOBAL_STATE_SINGLETON_ID, MAIN_TRACK_LEN, config_status, difficulty_level, square_type,
     };
     use crate::models::{BoardSquare, GameConfig, GlobalState};
+    use crate::systems::egs_system::egs_system::{maybe_disable_settings, maybe_publish_settings};
     use crate::types::{BoardSquarePayload, GameConfigPayload};
     use dojo::model::ModelStorage;
     use starknet::{get_block_timestamp, get_caller_address};
@@ -90,6 +91,7 @@ pub mod config_system {
             config.status = config_status::LOCKED;
             config.updated_at = now;
             world.write_model(@config);
+            maybe_publish_settings(ref world, config);
         }
 
         fn disable_game_config(ref self: ContractState, config_id: u64) {
@@ -104,6 +106,7 @@ pub mod config_system {
             config.status = config_status::DISABLED;
             config.updated_at = now;
             world.write_model(@config);
+            maybe_disable_settings(ref world, config_id);
         }
 
         fn clone_game_config(

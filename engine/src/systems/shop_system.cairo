@@ -11,6 +11,7 @@ pub mod shop_system {
     use crate::constants::{DEFAULT_MAX_SHOP_PURCHASES_PER_TURN, game_status, item_effect_type, turn_phase};
     use crate::events::{ItemPurchased, ItemUsed};
     use crate::models::{Game, GamePlayer, ItemDef, PlayerItem, Token, TurnState};
+    use crate::systems::egs_system::egs_system::{assert_bound_token_playable, sync_bound_player_state};
     use crate::types::{BuyItemPayload, UseItemPayload};
     use dojo::event::EventStorage;
     use dojo::model::ModelStorage;
@@ -26,6 +27,7 @@ pub mod shop_system {
             let game: Game = world.read_model(game_id);
             assert(game.status == game_status::IN_PROGRESS, 'not_live');
             assert(game.active_player == caller, 'not_active');
+            assert_bound_token_playable(ref world, game_id, caller);
 
             let mut turn: TurnState = world.read_model(game_id);
             assert(turn.phase == turn_phase::SHOP_PENDING, 'phase');
@@ -63,6 +65,14 @@ pub mod shop_system {
             world.write_model(@player);
             world.write_model(@inventory);
             world.write_model(@turn);
+            sync_bound_player_state(
+                ref world,
+                game_id,
+                caller,
+                false,
+                false,
+                crate::constants::egs_link_status::ACTIVE,
+            );
 
             world.emit_event(@ItemPurchased {
                 game_id,
@@ -78,6 +88,7 @@ pub mod shop_system {
 
             let game: Game = world.read_model(payload.game_id);
             assert(game.status == game_status::IN_PROGRESS, 'not_live');
+            assert_bound_token_playable(ref world, payload.game_id, caller);
 
             let mut inventory: PlayerItem =
                 world.read_model((payload.game_id, caller, payload.item_id));
@@ -112,6 +123,14 @@ pub mod shop_system {
             }
 
             world.write_model(@inventory);
+            sync_bound_player_state(
+                ref world,
+                payload.game_id,
+                caller,
+                false,
+                false,
+                crate::constants::egs_link_status::ACTIVE,
+            );
             world.emit_event(@ItemUsed {
                 game_id: payload.game_id,
                 player: caller,

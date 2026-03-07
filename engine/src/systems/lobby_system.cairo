@@ -21,6 +21,9 @@ pub mod lobby_system {
         BonusState, DiceState, Game, GameConfig, GamePlayer, GameRuntimeConfig, GameSeat,
         GlobalState, LobbyCodeIndex, PublicLobbyIndex, Token, TurnState,
     };
+    use crate::systems::egs_system::egs_system::{
+        assert_bound_token_playable, sync_bound_player_state,
+    };
     use dojo::event::EventStorage;
     use dojo::model::ModelStorage;
     use starknet::{ContractAddress, get_block_timestamp, get_caller_address};
@@ -113,6 +116,7 @@ pub mod lobby_system {
 
             let mut player: GamePlayer = world.read_model((game_id, caller));
             assert(player.is_active, 'not_in_lobby');
+            assert_bound_token_playable(ref world, game_id, caller);
 
             player.is_ready = ready;
             world.write_model(@player);
@@ -176,6 +180,14 @@ pub mod lobby_system {
 
             world.write_model(@player);
             world.write_model(@seat);
+            sync_bound_player_state(
+                ref world,
+                game_id,
+                caller,
+                true,
+                false,
+                crate::constants::egs_link_status::CANCELLED,
+            );
 
             if game.player_count == 0 {
                 game.status = game_status::CANCELLED;
@@ -287,6 +299,7 @@ pub mod lobby_system {
         let config: GameConfig = world.read_model(game.config_id);
         assert(config.config_id == game.config_id, 'cfg_missing');
         assert(config.status != config_status::DISABLED, 'cfg_disabled');
+        assert_all_bound_tokens_playable(ref world, game.game_id);
 
         let runtime_config = GameRuntimeConfig {
             game_id: game.game_id,
@@ -451,6 +464,22 @@ pub mod lobby_system {
 
     fn assert_all_players_ready(ref world: dojo::world::WorldStorage, game_id: u64) {
         assert(all_active_players_ready(ref world, game_id), 'player_not_ready');
+    }
+
+    fn assert_all_bound_tokens_playable(ref world: dojo::world::WorldStorage, game_id: u64) {
+        let mut seat: u8 = 0;
+        loop {
+            if seat >= MAX_SEATS {
+                break;
+            }
+
+            let game_seat: GameSeat = world.read_model((game_id, seat));
+            if game_seat.occupied {
+                assert_bound_token_playable(ref world, game_id, game_seat.player);
+            }
+
+            seat += 1;
+        }
     }
 
     fn initialize_tokens_for_game(ref world: dojo::world::WorldStorage, game_id: u64) {

@@ -263,6 +263,9 @@ pub struct EgsConfig {
     #[key]
     pub singleton_id: u8,
     pub adapter_address: ContractAddress,
+    pub token_address: ContractAddress,
+    pub settings_address: ContractAddress,
+    pub objectives_address: ContractAddress,
     pub enabled: bool,
 }
 
@@ -274,6 +277,23 @@ pub struct EgsSessionBinding {
     #[key]
     pub player: ContractAddress,
     pub token_id: felt252,
+    pub config_id: u64,
     pub score: u64,
     pub game_over: bool,
+    pub won: bool,
+    pub lifecycle_status: u8,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct EgsTokenGameLink {
+    #[key]
+    pub token_id: felt252,
+    pub game_id: u64,
+    pub player: ContractAddress,
+    pub config_id: u64,
+    pub score: u64,
+    pub game_over: bool,
+    pub won: bool,
+    pub lifecycle_status: u8,
 }
