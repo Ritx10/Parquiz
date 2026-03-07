@@ -3,8 +3,11 @@ import { useSearchParams } from 'react-router-dom'
 import { Board3D } from '../components/game/board3d'
 import FinalRankingScreen from '../components/game/FinalRankingScreen'
 import { GameAvatar } from '../components/game/game-avatar'
+import { GameDie } from '../components/game/game-die'
 import { LogDrawer } from '../components/game/log-drawer'
 import { TriviaQuestionModal } from '../components/game/trivia-question-modal'
+import { getBoardThemeDefinition, getBoardThemeSurfacePalette } from '../lib/board-themes'
+import { assignDistinctDiceSkins, type DiceSkinId } from '../lib/dice-cosmetics'
 import { getPlayerVisualThemeByColor } from '../lib/player-color-themes'
 import { usePlayerProfileActions } from '../lib/use-player-profile'
 import type { TokenSkinId } from '../lib/token-cosmetics'
@@ -727,13 +730,25 @@ type PlayerHudCardProps = {
 
 function PlayerHudCard({ player, isTurn }: PlayerHudCardProps) {
   const language = useAppSettingsStore((state) => state.language)
+  const selectedBoardThemeId = useAppSettingsStore((state) => state.selectedBoardThemeId)
   const ui = matchCopyByLanguage[language]
+  const surfacePalette = getBoardThemeSurfacePalette(selectedBoardThemeId)
   const theme = getPlayerVisualThemeByColor(player.color, player.visualSkinId)
 
   return (
-    <article className="w-[132px] rounded-2xl border border-white/20 bg-[#082944]/78 px-3 py-2 text-center text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+    <article
+      className="w-[132px] rounded-2xl border px-3 py-2 text-center shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm"
+      style={{
+        background: surfacePalette.hudCardBackground,
+        borderColor: surfacePalette.hudCardBorder,
+        color: surfacePalette.hudCardText,
+      }}
+    >
       <div className={`mx-auto mb-2 h-1.5 w-full rounded-full ${theme.stripClass}`} />
-      <span className="mx-auto mb-2 inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border-2 border-white/45 bg-[#fff4dc] shadow-[0_4px_10px_rgba(0,0,0,0.2)]">
+      <span
+        className="mx-auto mb-2 inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border-2 border-white/45 shadow-[0_4px_10px_rgba(0,0,0,0.2)]"
+        style={{ background: surfacePalette.hudAvatarBackground }}
+      >
         <GameAvatar
           alt={player.name}
           avatar={player.avatar}
@@ -743,7 +758,14 @@ function PlayerHudCard({ player, isTurn }: PlayerHudCardProps) {
       </span>
       <p className="truncate font-display text-lg leading-none">{player.name}</p>
 
-      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide">
+      <div
+        className="mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-wide"
+        style={{
+          background: surfacePalette.hudPillBackground,
+          borderColor: surfacePalette.hudPillBorder,
+          color: surfacePalette.hudPillText,
+        }}
+      >
         <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full ${theme.hudAccentClass}`}>
           D
         </span>
@@ -766,72 +788,17 @@ function PlayerHudCard({ player, isTurn }: PlayerHudCardProps) {
 
 type DiceFaceValue = 1 | 2 | 3 | 4 | 5 | 6
 
-const dicePipLayout: Record<DiceFaceValue, Array<{ left: string; top: string }>> = {
-  1: [{ left: '50%', top: '50%' }],
-  2: [
-    { left: '28%', top: '28%' },
-    { left: '72%', top: '72%' },
-  ],
-  3: [
-    { left: '28%', top: '28%' },
-    { left: '50%', top: '50%' },
-    { left: '72%', top: '72%' },
-  ],
-  4: [
-    { left: '28%', top: '28%' },
-    { left: '72%', top: '28%' },
-    { left: '28%', top: '72%' },
-    { left: '72%', top: '72%' },
-  ],
-  5: [
-    { left: '28%', top: '28%' },
-    { left: '72%', top: '28%' },
-    { left: '50%', top: '50%' },
-    { left: '28%', top: '72%' },
-    { left: '72%', top: '72%' },
-  ],
-  6: [
-    { left: '28%', top: '24%' },
-    { left: '72%', top: '24%' },
-    { left: '28%', top: '50%' },
-    { left: '72%', top: '50%' },
-    { left: '28%', top: '76%' },
-    { left: '72%', top: '76%' },
-  ],
-}
-
-const normalizeDiceFace = (value: null | number, fallback: DiceFaceValue): DiceFaceValue => {
-  if (!value || value < 1 || value > 6) {
-    return fallback
-  }
-
-  return value as DiceFaceValue
-}
-
-function HudDie({ value, rolling }: { value: null | number; rolling: boolean }) {
-  const face = normalizeDiceFace(value, 1)
+function HudDie({ skinId, value, rolling }: { skinId: DiceSkinId; value: null | number; rolling: boolean }) {
 
   return (
-    <span
-      className={`relative inline-flex h-11 w-11 items-center justify-center rounded-[11px] border border-[#aeb9ca] bg-gradient-to-b from-[#fefefe] to-[#dce6f4] shadow-[0_5px_0_rgba(53,74,107,0.45)] ${rolling ? 'animate-spin' : ''}`}
-    >
-      {dicePipLayout[face].map((pip, index) => (
-        <span
-          className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#1e3553]"
-          key={`${face}-${index}`}
-          style={{
-            left: pip.left,
-            top: pip.top,
-          }}
-        />
-      ))}
-    </span>
+    <GameDie className="h-11 w-11" rolling={rolling} skinId={skinId} value={value} />
   )
 }
 
 type TurnDiceLauncherProps = {
   isActive: boolean
   canRoll: boolean
+  diceSkinId: DiceSkinId
   rolling: boolean
   dieA: null | number
   dieB: null | number
@@ -842,6 +809,7 @@ type TurnDiceLauncherProps = {
 function TurnDiceLauncher({
   isActive,
   canRoll,
+  diceSkinId,
   rolling,
   dieA,
   dieB,
@@ -849,7 +817,9 @@ function TurnDiceLauncher({
   onRoll,
 }: TurnDiceLauncherProps) {
   const language = useAppSettingsStore((state) => state.language)
+  const selectedBoardThemeId = useAppSettingsStore((state) => state.selectedBoardThemeId)
   const ui = matchCopyByLanguage[language]
+  const surfacePalette = getBoardThemeSurfacePalette(selectedBoardThemeId)
   const isEnabled = isActive && canRoll && !rolling
 
   return (
@@ -857,20 +827,32 @@ function TurnDiceLauncher({
       <button
         className={`pointer-events-auto flex items-center gap-2 rounded-2xl border px-2 py-2 transition-all ${
           isEnabled
-            ? 'border-[#7cd5ff] bg-[#0d3358]/88 shadow-[0_0_0_3px_rgba(124,213,255,0.35)] hover:-translate-y-0.5'
+            ? 'hover:-translate-y-0.5'
             : isActive
-              ? 'cursor-not-allowed border-[#5e738f] bg-[#0d3358]/55 opacity-80'
-              : 'cursor-not-allowed border-white/12 bg-[#0d3358]/45 opacity-60'
+              ? 'cursor-not-allowed opacity-80'
+              : 'cursor-not-allowed opacity-60'
         } ${rolling && isActive ? 'animate-pulse' : ''}`}
         disabled={!isEnabled}
         onClick={onRoll}
+        style={{
+          background: isEnabled ? surfacePalette.diceLauncherActiveBackground : surfacePalette.diceLauncherIdleBackground,
+          borderColor: surfacePalette.diceLauncherBorder,
+          boxShadow: isEnabled ? surfacePalette.diceLauncherRing : 'none',
+        }}
         type="button"
       >
-        <HudDie rolling={rolling && isActive} value={rolling && isActive ? preview.dieA : dieA} />
-        <HudDie rolling={rolling && isActive} value={rolling && isActive ? preview.dieB : dieB} />
+        <HudDie rolling={rolling && isActive} skinId={diceSkinId} value={rolling && isActive ? preview.dieA : dieA} />
+        <HudDie rolling={rolling && isActive} skinId={diceSkinId} value={rolling && isActive ? preview.dieB : dieB} />
       </button>
 
-      <span className="rounded-full border border-white/20 bg-black/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#dbf4ff]">
+      <span
+        className="rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide"
+        style={{
+          background: surfacePalette.hudPillBackground,
+          borderColor: surfacePalette.hudPillBorder,
+          color: surfacePalette.diceLauncherText,
+        }}
+      >
         {rolling && isActive
           ? ui.rolling
           : isActive
@@ -887,6 +869,7 @@ type PlayerHudSlotProps = {
   player?: MatchPlayer
   turnPlayerId: string
   canRoll: boolean
+  diceSkinId: DiceSkinId
   rolling: boolean
   dieA: null | number
   dieB: null | number
@@ -898,6 +881,7 @@ function PlayerHudSlot({
   player,
   turnPlayerId,
   canRoll,
+  diceSkinId,
   rolling,
   dieA,
   dieB,
@@ -915,6 +899,7 @@ function PlayerHudSlot({
       <PlayerHudCard isTurn={isTurn} player={player} />
       <TurnDiceLauncher
         canRoll={canRoll}
+        diceSkinId={diceSkinId}
         dieA={dieA}
         dieB={dieB}
         isActive={isTurn}
@@ -1008,6 +993,8 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   const { awardCoins } = usePlayerProfileActions()
   const language = useAppSettingsStore((state) => state.language)
   const questionDifficulty = useAppSettingsStore((state) => state.questionDifficulty)
+  const selectedBoardThemeId = useAppSettingsStore((state) => state.selectedBoardThemeId)
+  const selectedDiceSkinId = useAppSettingsStore((state) => state.selectedDiceSkinId)
   const selectedTokenSkinId = useAppSettingsStore((state) => state.selectedTokenSkinId)
   const gameState = useReadonlyGameState()
   const isAiPracticeMode = searchParams.get('mode') === 'ai'
@@ -1015,6 +1002,8 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   const humanDisplayName = username || 'PARQUIZ_PLAYER_77'
   const ui = matchCopyByLanguage[language]
   const activeTriviaDifficulty: TriviaDifficulty = isAiPracticeMode ? practiceDifficulty : questionDifficulty
+  const boardTheme = getBoardThemeDefinition(selectedBoardThemeId)
+  const surfacePalette = getBoardThemeSurfacePalette(selectedBoardThemeId)
 
   const activeSessionState = useMemo(
     () => (isAiPracticeMode ? withAiPracticeState(gameState, practiceDifficulty, humanDisplayName, language) : gameState),
@@ -1149,6 +1138,15 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
       return acc
     }, {})
   }, [players])
+  const diceSkinByPlayerId = useMemo(() => {
+    return assignDistinctDiceSkins(
+      players.map((player) => ({
+        playerId: player.id,
+        color: player.color,
+        preferredSkinId: player.id === humanPlayerId ? selectedDiceSkinId : undefined,
+      })),
+    )
+  }, [humanPlayerId, players, selectedDiceSkinId])
 
   const currentTurnTokens = useMemo(
     () => tokens.filter((token) => token.ownerId === currentTurnPlayerId),
@@ -2783,13 +2781,29 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   return (
     <section
       className="min-h-screen bg-cover bg-center bg-no-repeat px-3 py-4 sm:px-4 sm:py-6"
-      style={{ backgroundImage: "url('/home-background.jpg')" }}
+      style={{ backgroundColor: boardTheme.backgroundColor, backgroundImage: boardTheme.backgroundImage }}
     >
       <div className="mx-auto w-full max-w-[1480px]">
-        <article className="game-panel mx-auto bg-gradient-to-b from-[#efcd9a] via-[#e6bf86] to-[#d6a86d] p-3 xl:p-4">
-          <div className="mb-3 flex items-center justify-between rounded-2xl border border-[#4e2f14] bg-gradient-to-r from-[#845223] via-[#9b632e] to-[#7b4b1e] px-3 py-2 shadow-wood">
-            <p className="font-display text-xl uppercase tracking-[0.08em] text-[#fff0c7]">{ui.boardTitle}</p>
-            <span className="rounded-full border border-[#7a4e12] bg-gradient-to-b from-[#f8d772] to-[#e4b23a] px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#603d0b]">
+        <article
+          className="game-panel mx-auto p-3 xl:p-4"
+          style={{ backgroundImage: surfacePalette.mainPanelBackground, borderColor: surfacePalette.mainPanelBorder }}
+        >
+          <div
+            className="mb-3 flex items-center justify-between rounded-2xl border px-3 py-2 shadow-wood"
+            style={{
+              backgroundImage: surfacePalette.headerBackground,
+              borderColor: surfacePalette.headerBorder,
+            }}
+          >
+            <p className="font-display text-xl uppercase tracking-[0.08em]" style={{ color: surfacePalette.headerText }}>{ui.boardTitle}</p>
+            <span
+              className="rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em]"
+              style={{
+                backgroundImage: surfacePalette.badgeBackground,
+                borderColor: surfacePalette.badgeBorder,
+                color: surfacePalette.badgeText,
+              }}
+            >
               {ui.activeBridge}
             </span>
           </div>
@@ -2808,6 +2822,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
               players={players}
               safeSquares={[...activeSessionState.safeSquares]}
               selectedTokenId={selectedTokenId}
+              surfacePalette={surfacePalette}
               tokenDiceChoices={boardTokenDiceChoices}
               tokenHints={tooltipByTokenId}
               tokens={tokens}
@@ -2817,6 +2832,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
             <div className="pointer-events-none absolute inset-x-0 top-2 flex items-start justify-between px-2 lg:hidden">
               <PlayerHudSlot
                 canRoll={canRollAction}
+                diceSkinId={playersByColor.green ? diceSkinByPlayerId[playersByColor.green.id] : selectedDiceSkinId}
                 dieA={dice.dieA}
                 dieB={dice.dieB}
                 onRoll={triggerHudDiceRoll}
@@ -2827,6 +2843,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
               />
               <PlayerHudSlot
                 canRoll={canRollAction}
+                diceSkinId={playersByColor.red ? diceSkinByPlayerId[playersByColor.red.id] : selectedDiceSkinId}
                 dieA={dice.dieA}
                 dieB={dice.dieB}
                 onRoll={triggerHudDiceRoll}
@@ -2840,6 +2857,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
             <div className="pointer-events-none absolute inset-x-0 bottom-2 flex items-end justify-between px-2 lg:hidden">
               <PlayerHudSlot
                 canRoll={canRollAction}
+                diceSkinId={playersByColor.yellow ? diceSkinByPlayerId[playersByColor.yellow.id] : selectedDiceSkinId}
                 dieA={dice.dieA}
                 dieB={dice.dieB}
                 onRoll={triggerHudDiceRoll}
@@ -2850,6 +2868,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
               />
               <PlayerHudSlot
                 canRoll={canRollAction}
+                diceSkinId={playersByColor.blue ? diceSkinByPlayerId[playersByColor.blue.id] : selectedDiceSkinId}
                 dieA={dice.dieA}
                 dieB={dice.dieB}
                 onRoll={triggerHudDiceRoll}
@@ -2864,6 +2883,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
               <div className="absolute left-4 top-[17%] -translate-y-1/2">
                 <PlayerHudSlot
                   canRoll={canRollAction}
+                  diceSkinId={playersByColor.green ? diceSkinByPlayerId[playersByColor.green.id] : selectedDiceSkinId}
                   dieA={dice.dieA}
                   dieB={dice.dieB}
                   onRoll={triggerHudDiceRoll}
@@ -2877,6 +2897,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
               <div className="absolute right-4 top-[17%] -translate-y-1/2">
                 <PlayerHudSlot
                   canRoll={canRollAction}
+                  diceSkinId={playersByColor.red ? diceSkinByPlayerId[playersByColor.red.id] : selectedDiceSkinId}
                   dieA={dice.dieA}
                   dieB={dice.dieB}
                   onRoll={triggerHudDiceRoll}
@@ -2890,6 +2911,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
               <div className="absolute bottom-[17%] left-4 translate-y-1/2">
                 <PlayerHudSlot
                   canRoll={canRollAction}
+                  diceSkinId={playersByColor.yellow ? diceSkinByPlayerId[playersByColor.yellow.id] : selectedDiceSkinId}
                   dieA={dice.dieA}
                   dieB={dice.dieB}
                   onRoll={triggerHudDiceRoll}
@@ -2903,6 +2925,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
               <div className="absolute bottom-[17%] right-4 translate-y-1/2">
                 <PlayerHudSlot
                   canRoll={canRollAction}
+                  diceSkinId={playersByColor.blue ? diceSkinByPlayerId[playersByColor.blue.id] : selectedDiceSkinId}
                   dieA={dice.dieA}
                   dieB={dice.dieB}
                   onRoll={triggerHudDiceRoll}

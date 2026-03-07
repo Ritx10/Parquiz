@@ -1,3 +1,4 @@
+import type { BoardThemeSurfacePalette } from '../../lib/board-themes'
 import { getPlayerVisualThemeByColor } from '../../lib/player-color-themes'
 import type { TokenSkinId } from '../../lib/token-cosmetics'
 import type { MatchToken, MoveResource, PlayerColor } from './match-types'
@@ -374,6 +375,10 @@ type Board3DProps = {
   onTokenDiceChoiceHover?: (tokenId: string, choiceId: MoveResource | null) => void
   onTokenDiceChoiceSelect?: (tokenId: string, choiceId: MoveResource) => void
   onTokenClick?: (tokenId: string) => void
+  surfacePalette?: Pick<
+    BoardThemeSurfacePalette,
+    'boardGridOverlay' | 'boardInnerBackground' | 'boardOuterBackground' | 'boardOuterBorder' | 'neutralTrackFill'
+  >
   visualSkinByColor?: Partial<Record<PlayerColor, TokenSkinId>>
 }
 
@@ -393,6 +398,7 @@ export function Board3D({
   onTokenDiceChoiceHover,
   onTokenDiceChoiceSelect,
   onTokenClick,
+  surfacePalette,
   visualSkinByColor = {},
 }: Board3DProps) {
   const playersById = players.reduce<Record<string, { avatar: string; name: string }>>((acc, player) => {
@@ -551,10 +557,10 @@ export function Board3D({
 
   return (
     <div
-      className="pointer-events-none relative aspect-square w-full overflow-visible rounded-[24px] border-[7px] border-[#b98652] p-1 shadow-board"
+      className="pointer-events-none relative aspect-square w-full overflow-visible rounded-[24px] border-[7px] p-1 shadow-board"
       style={{
-        backgroundImage:
-          'repeating-linear-gradient(0deg, rgba(126,84,45,0.18) 0, rgba(126,84,45,0.18) 2px, rgba(229,194,146,0.2) 2px, rgba(229,194,146,0.2) 4px), linear-gradient(120deg, #e7c68f 0%, #d8af77 26%, #f2d8ac 56%, #cca06a 100%)',
+        backgroundImage: surfacePalette?.boardOuterBackground,
+        borderColor: surfacePalette?.boardOuterBorder,
       }}
     >
       <div
@@ -562,9 +568,8 @@ export function Board3D({
         style={{
           gridTemplateColumns: `repeat(${fineGridSize}, minmax(0, 1fr))`,
           gridTemplateRows: `repeat(${fineGridSize}, minmax(0, 1fr))`,
-          backgroundColor: '#f7e6c8',
-          backgroundImage:
-            'linear-gradient(to right, rgba(40, 25, 12, 0.42) 1px, transparent 1px), linear-gradient(to bottom, rgba(40, 25, 12, 0.42) 1px, transparent 1px), repeating-linear-gradient(0deg, rgba(128, 80, 45, 0.08) 0, rgba(128, 80, 45, 0.08) 2px, rgba(239, 208, 170, 0.08) 2px, rgba(239, 208, 170, 0.08) 4px)',
+          backgroundColor: surfacePalette?.boardInnerBackground,
+          backgroundImage: surfacePalette?.boardGridOverlay,
           backgroundSize:
             `calc(100% / ${fineGridSize}) calc(100% / ${fineGridSize}), calc(100% / ${fineGridSize}) calc(100% / ${fineGridSize}), auto`,
           backgroundPosition: '0 0, 0 0, 0 0',
@@ -591,12 +596,15 @@ export function Board3D({
 
           return (
             <Tile
-              className={startColor ? themeForColor(startColor).laneFillClass : 'bg-[#fff8e6]'}
+              className={startColor ? themeForColor(startColor).laneFillClass : ''}
               isHighlighted={highlightedSet.has(cell.number)}
               isSafe={safeSet.has(cell.number)}
               key={`track-${cell.number}`}
               number={cell.number}
-              style={cellPlacement(cell.row, cell.col)}
+              style={{
+                ...cellPlacement(cell.row, cell.col),
+                backgroundColor: startColor ? undefined : surfacePalette?.neutralTrackFill,
+              }}
             />
           )
         })}

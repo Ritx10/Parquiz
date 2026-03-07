@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GameAvatar } from '../components/game/game-avatar'
+import { GameDie } from '../components/game/game-die'
+import { boardThemeCatalog, type BoardThemeId } from '../lib/board-themes'
 import { TokenChip } from '../components/game/token-chip'
+import { diceSkinCatalog, type DiceSkinId } from '../lib/dice-cosmetics'
 import { getPlayerVisualTheme } from '../lib/player-color-themes'
 import { tokenSkinCatalog, type TokenSkinId } from '../lib/token-cosmetics'
 import { getPlayerSkinSrc, playerSkins } from '../lib/player-skins'
@@ -37,12 +40,17 @@ type LobbyEntry = {
 type ShopTab = 'avatars' | 'tokens' | 'dice' | 'themes'
 
 type ShopItem = {
+  boardThemeId?: BoardThemeId
+  diceSkinId?: DiceSkinId
   id: string
   icon?: string
+  isBoardThemeItem?: boolean
+  isDiceItem?: boolean
   isStarterSkin?: boolean
   isSkinItem?: boolean
   isTokenItem?: boolean
   mediaSrc?: string
+  previewImageSrc?: string
   name?: string
   subtitle?: string
   price: number
@@ -114,24 +122,30 @@ const shopItemsByTab: Record<ShopTab, ShopItem[]> = {
     })),
   ],
   dice: [
-    { id: 'dice-wood', icon: '🎲', price: 250, toneClass: 'from-[#f5ecdf] to-[#e2d3bf]' },
-    { id: 'dice-neon', icon: '🎲', price: 400, toneClass: 'from-[#e7f1ff] to-[#c8ddff]' },
-    { id: 'dice-galaxy', icon: '🎲', price: 650, toneClass: 'from-[#eee6ff] to-[#d3c6f9]' },
-    { id: 'dice-candy', icon: '🎲', price: 350, toneClass: 'from-[#ffeaf2] to-[#ffd0e2]' },
-    { id: 'dice-lucky', icon: '🍀', price: 800, toneClass: 'from-[#e9ffe7] to-[#c8f1c4]' },
-    { id: 'dice-gold', icon: '🏅', price: 1000, toneClass: 'from-[#fff4d5] to-[#eac87d]' },
-    { id: 'dice-lightning', icon: '⚡', price: 900, toneClass: 'from-[#fff5d5] to-[#f5de9c]' },
-    { id: 'dice-crown', icon: '👑', price: 1400, toneClass: 'from-[#fff1d7] to-[#edcf92]' },
+    ...diceSkinCatalog.map((skin) => ({
+      id: `dice-${skin.id}`,
+      isDiceItem: true,
+      name: skin.name,
+      price: skin.price,
+      rarityLabel: skin.rarityLabel,
+      subtitle: skin.subtitle,
+      diceSkinId: skin.id,
+      toneClass: skin.previewToneClass,
+    })),
   ],
   themes: [
-    { id: 'theme-classic', icon: '🏁', price: 300, toneClass: 'from-[#f7eddf] to-[#e4d4c2]' },
-    { id: 'theme-rainbow', icon: '🌈', price: 550, toneClass: 'from-[#edf8ff] to-[#d2eeff]' },
-    { id: 'theme-castle', icon: '🏰', price: 900, toneClass: 'from-[#eee9ff] to-[#d8d0fa]' },
-    { id: 'theme-jungle', icon: '🌴', price: 800, toneClass: 'from-[#efffe9] to-[#cdeebf]' },
-    { id: 'theme-desert', icon: '🏜️', price: 700, toneClass: 'from-[#fff0df] to-[#f5d0aa]' },
-    { id: 'theme-night', icon: '🌙', price: 850, toneClass: 'from-[#e9ebff] to-[#cfd5fa]' },
-    { id: 'theme-volcano', icon: '🌋', price: 950, toneClass: 'from-[#ffe8dd] to-[#f9c2ad]' },
-    { id: 'theme-legend', icon: '🪄', price: 1500, toneClass: 'from-[#fff2d9] to-[#efd29f]' },
+    ...boardThemeCatalog.map((theme) => ({
+      id: theme.id,
+      icon: theme.icon,
+      isBoardThemeItem: true,
+      name: theme.name,
+      price: theme.price,
+      previewImageSrc: theme.previewImageSrc,
+      rarityLabel: theme.rarityLabel,
+      subtitle: theme.subtitle,
+      boardThemeId: theme.id,
+      toneClass: theme.previewToneClass,
+    })),
   ],
 }
 
@@ -287,17 +301,27 @@ export function HomeView() {
   const setAiDifficulty = useAppSettingsStore((state) => state.setAiDifficulty)
   const setQuestionDifficulty = useAppSettingsStore((state) => state.setQuestionDifficulty)
   const language = useAppSettingsStore((state) => state.language)
+  const ownedBoardThemeIds = useAppSettingsStore((state) => state.ownedBoardThemeIds)
+  const ownedDiceSkinIds = useAppSettingsStore((state) => state.ownedDiceSkinIds)
   const ownedTokenSkinIds = useAppSettingsStore((state) => state.ownedTokenSkinIds)
+  const selectedBoardThemeId = useAppSettingsStore((state) => state.selectedBoardThemeId)
+  const selectedDiceSkinId = useAppSettingsStore((state) => state.selectedDiceSkinId)
   const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
   const selectedTokenSkinId = useAppSettingsStore((state) => state.selectedTokenSkinId)
+  const setSelectedBoardThemeId = useAppSettingsStore((state) => state.setSelectedBoardThemeId)
+  const setSelectedDiceSkinId = useAppSettingsStore((state) => state.setSelectedDiceSkinId)
   const setSelectedSkinId = useAppSettingsStore((state) => state.setSelectedSkinId)
   const setSelectedTokenSkinId = useAppSettingsStore((state) => state.setSelectedTokenSkinId)
+  const unlockBoardTheme = useAppSettingsStore((state) => state.unlockBoardTheme)
+  const unlockDiceSkin = useAppSettingsStore((state) => state.unlockDiceSkin)
   const unlockTokenSkin = useAppSettingsStore((state) => state.unlockTokenSkin)
   const { username } = useControllerWallet()
   const playerProfile = usePlayerProfile()
   const ui = homeCopyByLanguage[language]
   const selectedSkinSrc = getPlayerSkinSrc(selectedSkinId)
   const selectedTokenTheme = getPlayerVisualTheme(selectedTokenSkinId)
+  const ownedBoardThemeSet = new Set(ownedBoardThemeIds)
+  const ownedDiceSkinSet = new Set(ownedDiceSkinIds)
   const ownedTokenSkinSet = new Set(ownedTokenSkinIds)
   const displayUsername = playerProfile.username || username || 'PARQUIZ_PLAYER_77'
   const levelLabel = `${ui.levelLabel} ${playerProfile.level}`
@@ -686,14 +710,36 @@ export function HomeView() {
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {shopItems.map((item) => (
                       (() => {
+                        const isOwnedBoardTheme = Boolean(item.boardThemeId && ownedBoardThemeSet.has(item.boardThemeId))
+                        const isEquippedBoardTheme = Boolean(item.boardThemeId && item.boardThemeId === selectedBoardThemeId)
                         const isEquippedSkin = item.isSkinItem && item.id === selectedSkinId
+                        const isOwnedDice = Boolean(item.diceSkinId && ownedDiceSkinSet.has(item.diceSkinId))
+                        const isEquippedDice = Boolean(item.diceSkinId && item.diceSkinId === selectedDiceSkinId)
                         const isOwnedToken = Boolean(item.tokenSkinId && ownedTokenSkinSet.has(item.tokenSkinId))
                         const isEquippedToken = Boolean(item.tokenSkinId && item.tokenSkinId === selectedTokenSkinId)
-                        const isEquippedItem = isEquippedSkin || isEquippedToken
+                        const isEquippedItem = isEquippedBoardTheme || isEquippedSkin || isEquippedDice || isEquippedToken
 
                         const handleItemAction = () => {
+                          if (item.boardThemeId) {
+                            if (!isOwnedBoardTheme) {
+                              unlockBoardTheme(item.boardThemeId)
+                            }
+
+                            setSelectedBoardThemeId(item.boardThemeId)
+                            return
+                          }
+
                           if (item.isSkinItem) {
                             setSelectedSkinId(item.id)
+                            return
+                          }
+
+                          if (item.diceSkinId) {
+                            if (!isOwnedDice) {
+                              unlockDiceSkin(item.diceSkinId)
+                            }
+
+                            setSelectedDiceSkinId(item.diceSkinId)
                             return
                           }
 
@@ -712,6 +758,18 @@ export function HomeView() {
                           ? isEquippedSkin
                             ? ui.equippedItem
                             : ui.equipItem
+                          : item.boardThemeId
+                            ? !isOwnedBoardTheme
+                              ? ui.buyItem
+                              : isEquippedBoardTheme
+                                ? ui.equippedItem
+                                : ui.equipItem
+                          : item.diceSkinId
+                            ? !isOwnedDice
+                              ? ui.buyItem
+                              : isEquippedDice
+                                ? ui.equippedItem
+                                : ui.equipItem
                           : !item.tokenSkinId
                             ? null
                             : !isOwnedToken
@@ -732,16 +790,30 @@ export function HomeView() {
                         <div className={`relative flex h-28 items-center justify-center rounded-[16px] bg-gradient-to-b ${item.toneClass} text-[70px] sm:text-[76px]`}>
                           {item.mediaSrc ? (
                             <GameAvatar alt={item.name || item.id} avatar={item.mediaSrc} imageClassName="h-full w-full object-contain p-2" />
+                          ) : item.boardThemeId ? (
+                            <div className={`relative flex h-full w-full items-center justify-center overflow-hidden rounded-[16px] bg-gradient-to-b ${item.toneClass}`}>
+                              {item.previewImageSrc ? (
+                                <img
+                                  alt={item.name || item.id}
+                                  className="absolute inset-0 h-full w-full object-cover"
+                                  src={item.previewImageSrc}
+                                />
+                              ) : null}
+                              <div className="absolute inset-0 bg-white/10" />
+                              <div className="absolute inset-[8%] rounded-[18px] border border-white/20 bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.32)]" />
+                            </div>
+                          ) : item.diceSkinId ? (
+                            <GameDie className="h-20 w-20 sm:h-24 sm:w-24" skinId={item.diceSkinId} value={5} />
                           ) : item.tokenSkinId ? (
                             <TokenChip className="h-20 w-20 border-[4px] sm:h-24 sm:w-24" skinId={item.tokenSkinId} variant="shop" />
                           ) : (
                             item.icon
                           )}
 
-                          {isEquippedToken ? (
+                          {isEquippedBoardTheme || isEquippedDice || isEquippedToken ? (
                             <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border border-[#2f7a20] bg-gradient-to-b from-[#7ce05f] to-[#3fa326] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] text-white shadow-[0_0_16px_rgba(88,181,56,0.4)]">
                               <span>✓</span>
-                              {ui.tokenEquippedBadge}
+                              {ui.equippedItem}
                             </span>
                           ) : null}
                         </div>
@@ -754,6 +826,14 @@ export function HomeView() {
                               {item.isSkinItem ? (
                                 <span className="rounded-full border border-[#b98236] bg-gradient-to-b from-[#ffe28f] to-[#f3b949] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-[#5f3817]">
                                   {item.isStarterSkin ? ui.starterSkin : ui.premiumSkin}
+                                </span>
+                              ) : item.isBoardThemeItem && item.rarityLabel ? (
+                                <span className="rounded-full border border-[#b98236] bg-gradient-to-b from-[#ffe28f] to-[#f3b949] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-[#5f3817]">
+                                  {item.rarityLabel}
+                                </span>
+                              ) : item.isDiceItem && item.rarityLabel ? (
+                                <span className="rounded-full border border-[#b98236] bg-gradient-to-b from-[#ffe28f] to-[#f3b949] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-[#5f3817]">
+                                  {item.rarityLabel}
                                 </span>
                               ) : item.isTokenItem && item.rarityLabel ? (
                                 <span className="rounded-full border border-[#b98236] bg-gradient-to-b from-[#ffe28f] to-[#f3b949] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-[#5f3817]">
