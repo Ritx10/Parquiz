@@ -177,6 +177,17 @@ export type DojoGameConfigModel = {
   updated_at: bigint
 }
 
+export type DojoEgsTokenGameLinkModel = {
+  token_id: bigint
+  game_id: bigint
+  player: string
+  config_id: bigint
+  score: bigint
+  game_over: boolean
+  won: boolean
+  lifecycle_status: number
+}
+
 export type DojoDiceRolledEvent = {
   game_id: bigint
   turn_index: number

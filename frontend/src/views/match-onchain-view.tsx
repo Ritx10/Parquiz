@@ -1,8 +1,22 @@
 import { useAccount } from '@starknet-react/core'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { applyMove, computeLegalMoves, endTurn, forceSkipTurn, rollTwoDiceAndDrawQuestion, skipShop, submitAnswer } from '../api'
-import { readDojoGameSnapshot, subscribeDojoGame, type DojoGameSnapshot } from '../api/dojo-state'
+import {
+  applyMove,
+  bindEgsToken,
+  computeLegalMoves,
+  endTurn,
+  forceSkipTurn,
+  rollTwoDiceAndDrawQuestion,
+  skipShop,
+  submitAnswer,
+} from '../api'
+import {
+  readDojoGameSnapshot,
+  readEgsTokenGameLink,
+  subscribeDojoGame,
+  type DojoGameSnapshot,
+} from '../api/dojo-state'
 import type { DojoTrackedEvent, LegalMoveApi, MoveType } from '../api/types'
 import { Board3D } from '../components/game/board3d'
 import { LogDrawer } from '../components/game/log-drawer'
@@ -53,7 +67,7 @@ const moveTypeLabel: Record<MoveType, string> = {
   5: 'EXIT_HOME',
 }
 
-const parseGameId = (value: string): bigint | null => {
+const parseBigNumberish = (value: string): bigint | null => {
   const normalized = value.trim()
 
   if (normalized.length === 0) {
@@ -282,7 +296,11 @@ export function MatchOnchainView() {
   const { address, isConnected } = useControllerWallet()
 
   const [gameIdInput, setGameIdInput] = useState(searchParams.get('gameId') || '')
+  const [tokenIdInput, setTokenIdInput] = useState(searchParams.get('tokenId') || '')
   const [snapshot, setSnapshot] = useState<DojoGameSnapshot | null>(null)
+  const [linkedTokenGameId, setLinkedTokenGameId] = useState<bigint | null>(null)
+  const [linkedTokenStatus, setLinkedTokenStatus] = useState<null | string>(null)
+  const [isResolvingTokenLink, setIsResolvingTokenLink] = useState(false)
   const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(false)
   const [snapshotError, setSnapshotError] = useState<null | string>(null)
   const [legalMoves, setLegalMoves] = useState<LegalMoveApi[]>([])
@@ -304,9 +322,78 @@ export function MatchOnchainView() {
 
   useEffect(() => {
     setGameIdInput(searchParams.get('gameId') || '')
+    setTokenIdInput(searchParams.get('tokenId') || '')
   }, [searchParams])
 
-  const activeGameId = useMemo(() => parseGameId(gameIdInput), [gameIdInput])
+  const requestedGameId = useMemo(() => parseBigNumberish(gameIdInput), [gameIdInput])
+  const activeTokenId = useMemo(() => parseBigNumberish(tokenIdInput), [tokenIdInput])
+  const activeGameId = requestedGameId ?? linkedTokenGameId
+
+  const applySearchParams = useCallback(
+    (next: { gameId?: string; tokenId?: string }) => {
+      const params = new URLSearchParams()
+
+      if (next.gameId && next.gameId.trim().length > 0) {
+        params.set('gameId', next.gameId.trim())
+      }
+
+      if (next.tokenId && next.tokenId.trim().length > 0) {
+        params.set('tokenId', next.tokenId.trim())
+      }
+
+      setSearchParams(params)
+    },
+    [setSearchParams],
+  )
+
+  useEffect(() => {
+    if (!isDojoConfigured || activeTokenId === null) {
+      setLinkedTokenGameId(null)
+      setLinkedTokenStatus(null)
+      setIsResolvingTokenLink(false)
+      return
+    }
+
+    let cancelled = false
+
+    const loadTokenLink = async () => {
+      setIsResolvingTokenLink(true)
+
+      try {
+        const link = await readEgsTokenGameLink(activeTokenId)
+
+        if (cancelled) {
+          return
+        }
+
+        if (!link) {
+          setLinkedTokenGameId(null)
+          setLinkedTokenStatus('Token sin partida vinculada todavia.')
+          return
+        }
+
+        setLinkedTokenGameId(link.game_id)
+        setLinkedTokenStatus(
+          `Token vinculado a game_id ${link.game_id.toString()} · score ${link.score.toString()} · status ${link.lifecycle_status}`,
+        )
+      } catch (error) {
+        if (!cancelled) {
+          setLinkedTokenGameId(null)
+          setLinkedTokenStatus(mapErrorToUserMessage(error))
+        }
+      } finally {
+        if (!cancelled) {
+          setIsResolvingTokenLink(false)
+        }
+      }
+    }
+
+    void loadTokenLink()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeTokenId])
 
   const refreshSnapshot = useCallback(async () => {
     if (!activeGameId || !isDojoConfigured) {
@@ -642,6 +729,16 @@ export function MatchOnchainView() {
 
         await account.waitForTransaction(submittedHash)
         await refreshSnapshot()
+
+        if (activeTokenId !== null) {
+          const link = await readEgsTokenGameLink(activeTokenId)
+          setLinkedTokenGameId(link?.game_id ?? null)
+          setLinkedTokenStatus(
+            link
+              ? `Token vinculado a game_id ${link.game_id.toString()} · score ${link.score.toString()} · status ${link.lifecycle_status}`
+              : 'Token sin partida vinculada todavia.',
+          )
+        }
       } catch (error) {
         setActionError(mapErrorToUserMessage(error))
       } finally {
@@ -649,7 +746,7 @@ export function MatchOnchainView() {
         setIsAwaitingOnchainSync(false)
       }
     },
-    [account, activeGameId, refreshSnapshot],
+    [account, activeGameId, activeTokenId, refreshSnapshot],
   )
 
   const onRoll = useCallback(() => {
@@ -751,6 +848,15 @@ export function MatchOnchainView() {
     void runTransaction('Force skip turn', () => forceSkipTurn(account, activeGameId))
   }, [account, activeGameId, runTransaction])
 
+  const onBindToken = useCallback(() => {
+    if (!account || !activeGameId || activeTokenId === null) {
+      setActionError('Carga un token_id y un game_id validos para vincular la entrada EGS.')
+      return
+    }
+
+    void runTransaction('Bind EGS token', () => bindEgsToken(account, activeGameId, activeTokenId))
+  }, [account, activeGameId, activeTokenId, runTransaction])
+
   const nowSecs = Math.floor(Date.now() / 1000)
   const deadline = Number(snapshot?.turn_state?.deadline || 0n)
   const deadlineExpired = deadline > 0 && nowSecs > deadline
@@ -789,7 +895,7 @@ export function MatchOnchainView() {
           <p className="font-display text-2xl uppercase tracking-wide">Sesion on-chain</p>
         </div>
 
-        <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_auto_auto]">
+        <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
           <input
             className="rounded-xl border border-[#c9a85a] bg-white px-3 py-2 text-sm font-bold text-board-night"
             onChange={(event) => setGameIdInput(event.target.value)}
@@ -797,12 +903,19 @@ export function MatchOnchainView() {
             value={gameIdInput}
           />
 
+          <input
+            className="rounded-xl border border-[#c9a85a] bg-white px-3 py-2 text-sm font-bold text-board-night"
+            onChange={(event) => setTokenIdInput(event.target.value)}
+            placeholder="token_id EGS (decimal o 0x...)"
+            value={tokenIdInput}
+          />
+
           <button
-            className="action-button-primary max-w-[200px]"
-            onClick={() => setSearchParams(gameIdInput.trim().length > 0 ? { gameId: gameIdInput.trim() } : {})}
+            className="action-button-primary max-w-[220px]"
+            onClick={() => applySearchParams({ gameId: gameIdInput, tokenId: tokenIdInput })}
             type="button"
           >
-            Cargar partida
+            Cargar sesion
           </button>
 
           <Link className="action-button-secondary max-w-[200px]" to="/board-mock">
@@ -822,10 +935,28 @@ export function MatchOnchainView() {
           </p>
         ) : null}
 
-        {activeGameId === null && gameIdInput.trim().length > 0 ? (
+        {requestedGameId === null && gameIdInput.trim().length > 0 ? (
           <p className="mt-3 rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
             `game_id` invalido. Usa decimal o hexadecimal 0x.
           </p>
+        ) : null}
+
+        {activeTokenId === null && tokenIdInput.trim().length > 0 ? (
+          <p className="mt-3 rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
+            `token_id` invalido. Usa decimal o hexadecimal 0x.
+          </p>
+        ) : null}
+
+        {activeTokenId !== null ? (
+          <p className="mt-3 rounded-xl border border-[#1c5da6] bg-[#e8f3ff] px-3 py-2 text-sm font-bold text-[#174b80]">
+            {isResolvingTokenLink ? 'Buscando token EGS...' : linkedTokenStatus || 'Token EGS cargado.'}
+          </p>
+        ) : null}
+
+        {activeTokenId !== null && activeGameId !== null && linkedTokenGameId === null ? (
+          <button className="action-button-primary mt-3 max-w-[260px]" onClick={onBindToken} type="button">
+            Vincular token a esta partida
+          </button>
         ) : null}
 
         {snapshotError ? (

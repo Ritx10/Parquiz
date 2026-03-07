@@ -5,6 +5,7 @@ import { appEnv } from '../config/env'
 import type {
   DojoBoardSquareModel,
   DojoBonusStateModel,
+  DojoEgsTokenGameLinkModel,
   DojoGameConfigModel,
   DojoGameModel,
   DojoGamePlayerModel,
@@ -401,6 +402,17 @@ const normalizeGameConfigModel = (raw: RawModel): DojoGameConfigModel => ({
   updated_at: toBigInt(raw.updated_at),
 })
 
+const normalizeEgsTokenGameLinkModel = (raw: RawModel): DojoEgsTokenGameLinkModel => ({
+  token_id: toBigInt(raw.token_id),
+  game_id: toBigInt(raw.game_id),
+  player: normalizeAddress(raw.player),
+  config_id: toBigInt(raw.config_id),
+  score: toBigInt(raw.score),
+  game_over: toBoolean(raw.game_over),
+  won: toBoolean(raw.won),
+  lifecycle_status: toNumber(raw.lifecycle_status),
+})
+
 const normalizeTrackedEvent = (
   eventName: OnchainEventModelName,
   raw: RawModel,
@@ -606,6 +618,18 @@ export const readLatestGameIdByPlayer = async (playerAddress: string): Promise<b
     .sort((left, right) => Number(right.game_id - left.game_id))[0]
 
   return latest?.game_id ?? null
+}
+
+export const readEgsTokenGameLink = async (tokenId: bigint): Promise<DojoEgsTokenGameLinkModel | null> => {
+  const client = await getToriiClient()
+  const row = await fetchModelByKeys(client, 'EgsTokenGameLink', [tokenId])
+
+  if (!row) {
+    return null
+  }
+
+  const link = normalizeEgsTokenGameLinkModel(row)
+  return link.game_id > 0n ? link : null
 }
 
 export const subscribeDojoGame = async (params: SubscribeDojoGameParams): Promise<() => void> => {

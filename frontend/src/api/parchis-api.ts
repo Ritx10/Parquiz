@@ -87,6 +87,7 @@ const configSystem = () => requireAddress('config system', appEnv.configSystemAd
 const lobbySystem = () => requireAddress('lobby system', appEnv.lobbySystemAddress)
 const turnSystem = () => requireAddress('turn system', appEnv.turnSystemAddress)
 const shopSystem = () => requireAddress('shop system', appEnv.shopSystemAddress)
+const egsSystem = () => requireAddress('EGS system', appEnv.egsSystemAddress)
 
 export const createGameConfig = async (
   account: AccountInterface,
@@ -160,6 +161,14 @@ export const leaveLobby = async (account: AccountInterface, gameId: FeltLike) =>
     contractAddress: lobbySystem(),
     entrypoint: 'leave_lobby',
     calldata: CallData.compile({ game_id: asBigInt(gameId) }),
+  })
+}
+
+export const bindEgsToken = async (account: AccountInterface, gameId: FeltLike, tokenId: FeltLike) => {
+  return executeCall(account, {
+    contractAddress: egsSystem(),
+    entrypoint: 'bind_egs_token',
+    calldata: CallData.compile({ game_id: asBigInt(gameId), token_id: asBigInt(tokenId) }),
   })
 }
 

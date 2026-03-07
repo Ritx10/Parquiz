@@ -139,6 +139,14 @@ const adminEntrypoints = [
   },
 ] as const
 
+const egsEntrypoints = [
+  {
+    label: 'Bind EGS Token',
+    entrypoint: 'bind_egs_token',
+    description: 'Links a playable tournament token to one on-chain Parquiz match',
+  },
+] as const
+
 const asMethods = <T extends ReadonlyArray<{ label: string; entrypoint: string; description: string }>>(
   entrypoints: T,
 ) =>
@@ -189,6 +197,13 @@ if (appEnv.adminSystemAddress) {
   contracts[appEnv.adminSystemAddress] = {
     description: 'Parchis Trivia admin system permissions',
     methods: asMethods(adminEntrypoints),
+  }
+}
+
+if (appEnv.egsSystemAddress) {
+  contracts[appEnv.egsSystemAddress] = {
+    description: 'Parchis Trivia EGS token binding permissions',
+    methods: asMethods(egsEntrypoints),
   }
 }
 

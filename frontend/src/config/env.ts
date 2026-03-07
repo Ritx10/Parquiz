@@ -59,6 +59,8 @@ export const appEnv = {
   turnSystemAddress: parseAddress(import.meta.env.VITE_TURN_SYSTEM_ADDRESS),
   shopSystemAddress: parseAddress(import.meta.env.VITE_SHOP_SYSTEM_ADDRESS),
   adminSystemAddress: parseAddress(import.meta.env.VITE_ADMIN_SYSTEM_ADDRESS),
+  egsSystemAddress: parseAddress(import.meta.env.VITE_EGS_SYSTEM_ADDRESS),
+  egsTokenDataSystemAddress: parseAddress(import.meta.env.VITE_EGS_TOKEN_DATA_SYSTEM_ADDRESS),
   vrfProviderAddress:
     parseAddress(import.meta.env.VITE_VRF_PROVIDER_ADDRESS) ||
     '0x051fea4450da9d6aee758bdeba88b2f665bcbf549d2c61421aa724e9ac0ced8f',
