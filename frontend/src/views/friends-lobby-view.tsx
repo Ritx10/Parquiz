@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GameAvatar } from '../components/game/game-avatar'
 import { getPlayerSkinSrc } from '../lib/player-skins'
+import { useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import { useAppSettingsStore } from '../store/app-settings-store'
 
 type LobbyParticipant = {
@@ -39,24 +40,25 @@ const generateRoomCode = () => {
 export function FriendsLobbyView() {
   const navigate = useNavigate()
   const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
+  const { username } = useControllerWallet()
   const localAvatar = getPlayerSkinSrc(selectedSkinId) || '🧑'
   const hostPlayer = useMemo<LobbyParticipant>(
     () => ({
       id: 'host-local',
-      name: 'PARQUIZ_PLAYER_77',
+      name: username || 'PARQUIZ_PLAYER_77',
       avatar: localAvatar,
       isHost: true,
     }),
-    [localAvatar],
+    [localAvatar, username],
   )
   const localJoinedPlayer = useMemo<LobbyParticipant>(
     () => ({
       id: 'local-joined',
-      name: 'PARQUIZ_PLAYER_77',
+      name: username || 'PARQUIZ_PLAYER_77',
       avatar: localAvatar,
       isHost: false,
     }),
-    [localAvatar],
+    [localAvatar, username],
   )
   const [createdRoomCode, setCreatedRoomCode] = useState<null | string>(null)
   const [activeRoomCode, setActiveRoomCode] = useState<null | string>(null)

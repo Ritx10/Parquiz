@@ -1,4 +1,5 @@
 import type { MatchToken, MoveResource, PlayerColor } from './match-types'
+import { GameAvatar } from './game-avatar'
 import { Tile } from './tile'
 import { Token } from './token'
 
@@ -386,6 +387,7 @@ function BoardCenter() {
 }
 
 type Board3DProps = {
+  players?: Array<{ avatar: string; color: PlayerColor; id: string; name: string }>
   tokens: MatchToken[]
   blockedSquares?: number[]
   safeSquares?: number[]
@@ -410,6 +412,7 @@ type Board3DProps = {
 }
 
 export function Board3D({
+  players = [],
   tokens,
   blockedSquares,
   safeSquares = defaultSafeSquares,
@@ -425,6 +428,11 @@ export function Board3D({
   onTokenDiceChoiceSelect,
   onTokenClick,
 }: Board3DProps) {
+  const playersById = players.reduce<Record<string, { avatar: string; name: string }>>((acc, player) => {
+    acc[player.id] = { avatar: player.avatar, name: player.name }
+    return acc
+  }, {})
+
   const blockedSet = new Set(blockedSquares || getBlockedSquaresFromTokens(tokens))
   const highlightedSet = new Set(highlightedSquares)
   const movableSet = new Set(movableTokenIds)
@@ -490,11 +498,13 @@ export function Board3D({
     return (
       <div key={token.id}>
         <Token
+          avatar={playersById[token.ownerId]?.avatar}
           isAnimating={animatingSet.has(token.id)}
           isMovable={movableSet.has(token.id)}
           isSelected={selectedTokenId === token.id}
           onClick={(tokenId) => onTokenClick?.(tokenId)}
           onHoverStart={(tokenId) => onTokenHover?.(tokenId)}
+          ownerName={playersById[token.ownerId]?.name}
           style={{
             left: '50%',
             top: '50%',
@@ -625,6 +635,7 @@ export function Board3D({
 
         {homeTokenPlacements.map((placement, homeIndex) => {
           const center = getCellCenter(placement.slot)
+          const owner = playersById[placement.token.ownerId]
 
           return (
             <div
@@ -633,10 +644,15 @@ export function Board3D({
               style={{
                 left: center.left,
                 top: center.top,
-                width: '40px',
-                height: '40px',
+                width: '44px',
+                height: '44px',
               }}
             >
+              {owner?.avatar ? (
+                <span className="pointer-events-none absolute inset-0 rounded-full opacity-[0.001]" aria-hidden="true">
+                  <GameAvatar alt={owner.name} avatar={owner.avatar} imageClassName="h-full w-full object-contain" />
+                </span>
+              ) : null}
               {renderTokenControl(placement.token, placement.slot, { x: 0, y: 0 }, 220 + homeIndex, {
                 tokenOpacity: 0.82,
                 tokenZIndexBoost: 220,

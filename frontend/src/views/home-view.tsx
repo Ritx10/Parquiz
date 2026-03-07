@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GameAvatar } from '../components/game/game-avatar'
 import { getPlayerSkinSrc, playerSkins } from '../lib/player-skins'
+import { useControllerWallet } from '../lib/starknet/use-controller-wallet'
+import { usePlayerProfile } from '../lib/use-player-profile'
 import { GameConfigView } from './game-config-view'
 import { type AiDifficulty, useAppSettingsStore } from '../store/app-settings-store'
 
@@ -159,10 +161,10 @@ const homeCopyByLanguage = {
     closeShop: 'CERRAR TIENDA',
     equipSkin: 'EQUIPAR',
     equippedSkin: 'EQUIPADA',
+    levelLabel: 'Nivel',
+    prestigeLabel: 'Prestigio',
     starterSkin: 'INICIAL',
     premiumSkin: 'CATALOGO',
-    level: 'Nivel 15',
-    prestige: 'Prestigio 2',
   },
   en: {
     shop: 'SHOP',
@@ -190,10 +192,10 @@ const homeCopyByLanguage = {
     closeShop: 'CLOSE SHOP',
     equipSkin: 'EQUIP',
     equippedSkin: 'EQUIPPED',
+    levelLabel: 'Level',
+    prestigeLabel: 'Prestige',
     starterSkin: 'STARTER',
     premiumSkin: 'CATALOG',
-    level: 'Level 15',
-    prestige: 'Prestige 2',
   },
 } as const
 
@@ -281,8 +283,13 @@ export function HomeView() {
   const language = useAppSettingsStore((state) => state.language)
   const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
   const setSelectedSkinId = useAppSettingsStore((state) => state.setSelectedSkinId)
+  const { username } = useControllerWallet()
+  const playerProfile = usePlayerProfile()
   const ui = homeCopyByLanguage[language]
   const selectedSkinSrc = getPlayerSkinSrc(selectedSkinId)
+  const displayUsername = playerProfile.username || username || 'PARQUIZ_PLAYER_77'
+  const levelLabel = `${ui.levelLabel} ${playerProfile.level}`
+  const prestigeLabel = `${ui.prestigeLabel} ${playerProfile.prestige}`
   const shopItems = shopItemsByTab[activeShopTab]
   const coinBalance = 125000
   const coinLabel = coinBalance.toLocaleString('en-US')
@@ -375,7 +382,7 @@ export function HomeView() {
 
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-display text-2xl uppercase leading-none text-[#fff4d4]">
-                    PARQUIZ_PLAYER_77
+                    {displayUsername}
                   </p>
 
                   <div className="mt-1.5 rounded-full border border-[#b07f53] bg-[#3f2341] p-1">
@@ -383,9 +390,9 @@ export function HomeView() {
                   </div>
 
                   <div className="mt-1 flex items-center gap-2 text-[13px] font-black uppercase tracking-wide text-[#ffe7a7]">
-                    <span>{ui.level}</span>
+                    <span>{levelLabel}</span>
                     <span className="text-[#ffca75]">|</span>
-                    <span>{ui.prestige}</span>
+                    <span>{prestigeLabel}</span>
                   </div>
                 </div>
               </div>

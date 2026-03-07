@@ -1,3 +1,4 @@
+import { GameAvatar } from './game-avatar'
 import type { MatchPlayer } from './match-types'
 
 const colorStripClass: Record<MatchPlayer['color'], string> = {
@@ -33,11 +34,21 @@ export function PlayersPanel({ players, turnPlayerId, selfPlayerId }: PlayersPan
               key={player.id}
             >
               <div className="flex items-start justify-between gap-2">
-                <div>
+                <div className="flex min-w-0 items-start gap-2">
+                  <span className="inline-flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#f5deb3] bg-[#fff6df] shadow-[0_2px_6px_rgba(0,0,0,0.18)]">
+                    <GameAvatar
+                      alt={player.name}
+                      avatar={player.avatar}
+                      imageClassName="h-full w-full object-contain p-1"
+                      textClassName="text-sm font-black text-board-night"
+                    />
+                  </span>
+                  <div className="min-w-0">
                   <p className="font-display text-xl leading-none">{player.name}</p>
                   <p className="mt-1 text-[11px] font-bold uppercase tracking-wide text-board-night/70">
                     {player.isHost ? 'Host' : 'Jugador'} {isSelf ? '- TU' : ''}
                   </p>
+                </div>
                 </div>
                 {isTurn ? (
                   <span className="rounded-full border border-[#1c5da6] bg-[#2f86ff] px-2 py-1 text-[10px] font-black uppercase tracking-wide text-white">

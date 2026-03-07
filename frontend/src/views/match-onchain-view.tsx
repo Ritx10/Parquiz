@@ -24,6 +24,8 @@ import { LogDrawer } from '../components/game/log-drawer'
 import type { MatchLogEvent, MatchPlayer, MatchToken, PlayerColor } from '../components/game/match-types'
 import { isDojoConfigured } from '../config/dojo'
 import { appEnv } from '../config/env'
+<<<<<<< HEAD
+import { getPlayerSkinSrc } from '../lib/player-skins'
 import {
   getHydratedQuestion,
   LOCAL_QUESTION_SET_COUNT,
@@ -31,6 +33,7 @@ import {
   LOCAL_QUESTION_SET_ROOT,
 } from '../lib/questions/local-question-bank'
 import { shortenAddress, useControllerWallet } from '../lib/starknet/use-controller-wallet'
+import { useAppSettingsStore } from '../store/app-settings-store'
 
 const TRACK_SQUARE_UI_OFFSET = 4
 const TRACK_LENGTH = 68
@@ -300,7 +303,9 @@ type UiLegalMove = LegalMoveApi & {
 export function MatchOnchainView() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { account } = useAccount()
-  const { address, isConnected } = useControllerWallet()
+  const { address, isConnected, username } = useControllerWallet()
+  const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
+  const selectedSkinSrc = getPlayerSkinSrc(selectedSkinId)
 
   const [gameIdInput, setGameIdInput] = useState(searchParams.get('gameId') || '')
   const [tokenIdInput, setTokenIdInput] = useState(searchParams.get('tokenId') || '')
@@ -507,19 +512,19 @@ export function MatchOnchainView() {
       const color = seatColorMap[player.color] || seatColorMap[player.seat] || 'green'
       const normalizedPlayerAddress = normalizeAddressForCompare(player.player)
       const isSelf = normalizedPlayerAddress === normalizedWalletAddress
-      const baseName = isSelf ? 'Tu jugador' : shortenAddress(player.player)
+      const baseName = isSelf ? username || 'Tu jugador' : shortenAddress(player.player)
 
       return {
         id: player.player,
         name: baseName,
         color,
-        avatar: color.slice(0, 2).toUpperCase(),
+        avatar: isSelf && selectedSkinSrc ? selectedSkinSrc : color.slice(0, 2).toUpperCase(),
         tokensInBase: player.tokens_in_base,
         tokensInGoal: player.tokens_in_goal,
         isHost: player.is_host,
       }
     })
-  }, [snapshot, normalizedWalletAddress])
+  }, [snapshot, normalizedWalletAddress, selectedSkinSrc, username])
 
   const playersByAddress = useMemo(() => {
     return players.reduce<Record<string, MatchPlayer>>((acc, player) => {
@@ -1106,6 +1111,7 @@ export function MatchOnchainView() {
 
                   setSelectedTokenId((current) => (current === tokenId ? null : tokenId))
                 }}
+                players={players}
                 safeSquares={safeSquares}
                 selectedTokenId={selectedTokenId}
                 tokenHints={tokenHints}

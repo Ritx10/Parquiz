@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GameAvatar } from '../components/game/game-avatar'
 import { getPlayerSkinSrc } from '../lib/player-skins'
+import { useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import { useAppSettingsStore } from '../store/app-settings-store'
 
 type MatchmakingStatus = 'connecting' | 'searching' | 'found'
@@ -31,14 +32,15 @@ const rivalPool = [
 export function MatchmakingLobbyView() {
   const navigate = useNavigate()
   const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
+  const { username } = useControllerWallet()
   const localPlayer = useMemo<MatchmakingParticipant>(
     () => ({
       id: 'you-player',
-      name: 'PARQUIZ_PLAYER_77',
+      name: username || 'PARQUIZ_PLAYER_77',
       avatar: getPlayerSkinSrc(selectedSkinId) || 'TU',
       role: 'you',
     }),
-    [selectedSkinId],
+    [selectedSkinId, username],
   )
   const [status, setStatus] = useState<MatchmakingStatus>('connecting')
   const [countdown, setCountdown] = useState<number | null>(null)

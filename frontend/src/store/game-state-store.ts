@@ -3,6 +3,12 @@ import type { ReadonlyGameState } from '../components/game/match-types'
 import { getPlayerSkinSrc } from '../lib/player-skins'
 import { useAppSettingsStore } from './app-settings-store'
 
+const botAvatarByPlayerId: Record<string, string> = {
+  'p-red': '/skins/parquiz/capi-ninja.png',
+  'p-blue': '/skins/parquiz/capi-astronaut.png',
+  'p-yellow': '/skins/parquiz/capi-dino.png',
+}
+
 const gameStateSnapshot: ReadonlyGameState = {
   lobbyId: 'lobby-dojo-12',
   turnPlayerId: 'p-green',
@@ -60,19 +66,18 @@ export function useReadonlyGameState() {
   const selectedSkinSrc = getPlayerSkinSrc(selectedSkinId)
 
   return useMemo(() => {
-    if (!selectedSkinSrc) {
-      return gameStateSnapshot
-    }
-
     return {
       ...gameStateSnapshot,
       players: gameStateSnapshot.players.map((player) =>
         player.id === 'p-green'
           ? {
               ...player,
-              avatar: selectedSkinSrc,
+              avatar: selectedSkinSrc || '/skins/parquiz/capi-princess.png',
             }
-          : player,
+          : {
+              ...player,
+              avatar: botAvatarByPlayerId[player.id] || player.avatar,
+            },
       ),
     }
   }, [selectedSkinSrc])
