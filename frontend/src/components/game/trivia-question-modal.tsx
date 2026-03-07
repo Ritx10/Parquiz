@@ -1,4 +1,5 @@
 import { GameAvatar } from './game-avatar'
+import { ArcadeIcon } from '../ui/arcade-icon'
 import type { MatchPlayer } from './match-types'
 import type { TriviaDifficulty, TriviaQuestion, TriviaQuestionTheme } from '../../lib/trivia-engine'
 
@@ -85,15 +86,15 @@ export function TriviaQuestionModal({
               </div>
 
               <span className="inline-flex items-center gap-2 rounded-full border-[3px] border-[#8a560d] bg-gradient-to-b from-[#ffe889] to-[#f1b833] px-4 py-1.5 text-lg font-black text-[#5b3306] shadow-[inset_0_1px_0_rgba(255,255,255,0.75)] sm:text-2xl">
-                <span>⏱</span>
+                <ArcadeIcon className="h-5 w-5 sm:h-6 sm:w-6" name="timer" />
                 <span>{secondsLeft}</span>
               </span>
             </div>
 
             <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
               <div className="flex items-center gap-3 sm:w-[190px] sm:flex-col sm:justify-center">
-                <div className="flex h-[122px] w-[122px] items-center justify-center rounded-[30px] border-[4px] border-[#f7d68d] bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.72),rgba(255,255,255,0.08)_42%,rgba(0,0,0,0.12)_100%)] text-[72px] shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
-                  {question.icon}
+                <div className="flex h-[122px] w-[122px] items-center justify-center rounded-[30px] border-[4px] border-[#f7d68d] bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.72),rgba(255,255,255,0.08)_42%,rgba(0,0,0,0.12)_100%)] text-[72px] shadow-[0_10px_24px_rgba(0,0,0,0.28)] text-[#fff7df]">
+                  <ArcadeIcon className="h-16 w-16 sm:h-[72px] sm:w-[72px]" name={question.icon} />
                 </div>
 
                 {player ? (

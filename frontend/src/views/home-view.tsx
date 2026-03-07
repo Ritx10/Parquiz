@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GameAvatar } from '../components/game/game-avatar'
+import { ArcadeIcon, type ArcadeIconName } from '../components/ui/arcade-icon'
 import { getPlayerSkinSrc, playerSkins } from '../lib/player-skins'
 import { useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import { usePlayerProfile } from '../lib/use-player-profile'
@@ -35,7 +36,8 @@ type ShopTab = 'avatars' | 'tokens' | 'dice' | 'themes'
 
 type ShopItem = {
   id: string
-  icon?: string
+  icon?: ArcadeIconName
+  iconClassName?: string
   isStarterSkin?: boolean
   isSkinItem?: boolean
   mediaSrc?: string
@@ -57,18 +59,10 @@ const seatGradientClass: Record<LobbySeat['color'], string> = {
   green: 'from-[#9ce88f] to-[#349a5c]',
 }
 
-const medalIcons = [
-  { icon: '★', tone: 'from-[#f4c54e] to-[#d7900f]' },
-  { icon: '⚽', tone: 'from-[#eb78c8] to-[#a53d8b]' },
-  { icon: '✦', tone: 'from-[#79d47c] to-[#26865b]' },
-  { icon: '🎲', tone: 'from-[#6fc8ef] to-[#2f7cb8]' },
-  { icon: '➟', tone: 'from-[#bf85e6] to-[#8249b8]' },
-] as const
-
 const panelIconRows = [
-  ['🪙', '⚽', '🧠', '🎯', '🎵'],
-  ['🪙', '🎉', '🤝', '🧩', '✨'],
-  ['🪙', '📘', '🧠', '⭐', '🎯'],
+  ['coin', 'ball', 'brain', 'target', 'music'],
+  ['coin', 'fireworks', 'handshake', 'puzzle', 'sparkle'],
+  ['coin', 'book', 'brain', 'star', 'target'],
 ] as const
 
 const shopTabs: { id: ShopTab; labelKey: 'shopTabAvatars' | 'shopTabTokens' | 'shopTabDice' | 'shopTabThemes' }[] = [
@@ -103,34 +97,34 @@ const shopItemsByTab: Record<ShopTab, ShopItem[]> = {
     })),
   ],
   tokens: [
-    { id: 'token-ruby', icon: '🔴', price: 300, toneClass: 'from-[#ffe5df] to-[#ffc5b8]' },
-    { id: 'token-sapphire', icon: '🔵', price: 300, toneClass: 'from-[#e3f0ff] to-[#bcd9ff]' },
-    { id: 'token-emerald', icon: '🟢', price: 300, toneClass: 'from-[#e6ffe9] to-[#c0efc8]' },
-    { id: 'token-gold', icon: '🟡', price: 300, toneClass: 'from-[#fff6d9] to-[#f6e09a]' },
-    { id: 'token-fire', icon: '🔥', price: 700, toneClass: 'from-[#ffe9d6] to-[#ffca9d]' },
-    { id: 'token-ice', icon: '❄️', price: 700, toneClass: 'from-[#edf7ff] to-[#cee7fb]' },
-    { id: 'token-jungle', icon: '🌿', price: 900, toneClass: 'from-[#ecffe6] to-[#c8efb8]' },
-    { id: 'token-royal', icon: '👑', price: 1200, toneClass: 'from-[#fff4d7] to-[#f0d18f]' },
+    { id: 'token-ruby', icon: 'token-red', price: 300, toneClass: 'from-[#ffe5df] to-[#ffc5b8]' },
+    { id: 'token-sapphire', icon: 'token-blue', price: 300, toneClass: 'from-[#e3f0ff] to-[#bcd9ff]' },
+    { id: 'token-emerald', icon: 'token-green', price: 300, toneClass: 'from-[#e6ffe9] to-[#c0efc8]' },
+    { id: 'token-gold', icon: 'token-yellow', price: 300, toneClass: 'from-[#fff6d9] to-[#f6e09a]' },
+    { id: 'token-fire', icon: 'fire', iconClassName: 'text-[#c85417]', price: 700, toneClass: 'from-[#ffe9d6] to-[#ffca9d]' },
+    { id: 'token-ice', icon: 'snowflake', iconClassName: 'text-[#4a94d8]', price: 700, toneClass: 'from-[#edf7ff] to-[#cee7fb]' },
+    { id: 'token-jungle', icon: 'leaf', iconClassName: 'text-[#3a9e53]', price: 900, toneClass: 'from-[#ecffe6] to-[#c8efb8]' },
+    { id: 'token-royal', icon: 'crown', iconClassName: 'text-[#af7914]', price: 1200, toneClass: 'from-[#fff4d7] to-[#f0d18f]' },
   ],
   dice: [
-    { id: 'dice-wood', icon: '🎲', price: 250, toneClass: 'from-[#f5ecdf] to-[#e2d3bf]' },
-    { id: 'dice-neon', icon: '🎲', price: 400, toneClass: 'from-[#e7f1ff] to-[#c8ddff]' },
-    { id: 'dice-galaxy', icon: '🎲', price: 650, toneClass: 'from-[#eee6ff] to-[#d3c6f9]' },
-    { id: 'dice-candy', icon: '🎲', price: 350, toneClass: 'from-[#ffeaf2] to-[#ffd0e2]' },
-    { id: 'dice-lucky', icon: '🍀', price: 800, toneClass: 'from-[#e9ffe7] to-[#c8f1c4]' },
-    { id: 'dice-gold', icon: '🏅', price: 1000, toneClass: 'from-[#fff4d5] to-[#eac87d]' },
-    { id: 'dice-lightning', icon: '⚡', price: 900, toneClass: 'from-[#fff5d5] to-[#f5de9c]' },
-    { id: 'dice-crown', icon: '👑', price: 1400, toneClass: 'from-[#fff1d7] to-[#edcf92]' },
+    { id: 'dice-wood', icon: 'dice', iconClassName: 'text-[#8f5a32]', price: 250, toneClass: 'from-[#f5ecdf] to-[#e2d3bf]' },
+    { id: 'dice-neon', icon: 'dice', iconClassName: 'text-[#2c7dd9]', price: 400, toneClass: 'from-[#e7f1ff] to-[#c8ddff]' },
+    { id: 'dice-galaxy', icon: 'dice', iconClassName: 'text-[#715ad2]', price: 650, toneClass: 'from-[#eee6ff] to-[#d3c6f9]' },
+    { id: 'dice-candy', icon: 'dice', iconClassName: 'text-[#d35a9f]', price: 350, toneClass: 'from-[#ffeaf2] to-[#ffd0e2]' },
+    { id: 'dice-lucky', icon: 'clover', iconClassName: 'text-[#449e4c]', price: 800, toneClass: 'from-[#e9ffe7] to-[#c8f1c4]' },
+    { id: 'dice-gold', icon: 'medal', iconClassName: 'text-[#b57a15]', price: 1000, toneClass: 'from-[#fff4d5] to-[#eac87d]' },
+    { id: 'dice-lightning', icon: 'bolt', iconClassName: 'text-[#c88700]', price: 900, toneClass: 'from-[#fff5d5] to-[#f5de9c]' },
+    { id: 'dice-crown', icon: 'crown', iconClassName: 'text-[#b57a15]', price: 1400, toneClass: 'from-[#fff1d7] to-[#edcf92]' },
   ],
   themes: [
-    { id: 'theme-classic', icon: '🏁', price: 300, toneClass: 'from-[#f7eddf] to-[#e4d4c2]' },
-    { id: 'theme-rainbow', icon: '🌈', price: 550, toneClass: 'from-[#edf8ff] to-[#d2eeff]' },
-    { id: 'theme-castle', icon: '🏰', price: 900, toneClass: 'from-[#eee9ff] to-[#d8d0fa]' },
-    { id: 'theme-jungle', icon: '🌴', price: 800, toneClass: 'from-[#efffe9] to-[#cdeebf]' },
-    { id: 'theme-desert', icon: '🏜️', price: 700, toneClass: 'from-[#fff0df] to-[#f5d0aa]' },
-    { id: 'theme-night', icon: '🌙', price: 850, toneClass: 'from-[#e9ebff] to-[#cfd5fa]' },
-    { id: 'theme-volcano', icon: '🌋', price: 950, toneClass: 'from-[#ffe8dd] to-[#f9c2ad]' },
-    { id: 'theme-legend', icon: '🪄', price: 1500, toneClass: 'from-[#fff2d9] to-[#efd29f]' },
+    { id: 'theme-classic', icon: 'flag', iconClassName: 'text-[#80614a]', price: 300, toneClass: 'from-[#f7eddf] to-[#e4d4c2]' },
+    { id: 'theme-rainbow', icon: 'rainbow', iconClassName: 'text-[#4386df]', price: 550, toneClass: 'from-[#edf8ff] to-[#d2eeff]' },
+    { id: 'theme-castle', icon: 'castle', iconClassName: 'text-[#7d67cc]', price: 900, toneClass: 'from-[#eee9ff] to-[#d8d0fa]' },
+    { id: 'theme-jungle', icon: 'palm', iconClassName: 'text-[#4a9658]', price: 800, toneClass: 'from-[#efffe9] to-[#cdeebf]' },
+    { id: 'theme-desert', icon: 'desert', iconClassName: 'text-[#b37b3d]', price: 700, toneClass: 'from-[#fff0df] to-[#f5d0aa]' },
+    { id: 'theme-night', icon: 'moon', iconClassName: 'text-[#6675ce]', price: 850, toneClass: 'from-[#e9ebff] to-[#cfd5fa]' },
+    { id: 'theme-volcano', icon: 'volcano', iconClassName: 'text-[#c15f32]', price: 950, toneClass: 'from-[#ffe8dd] to-[#f9c2ad]' },
+    { id: 'theme-legend', icon: 'wand', iconClassName: 'text-[#b8861f]', price: 1500, toneClass: 'from-[#fff2d9] to-[#efd29f]' },
   ],
 }
 
@@ -353,271 +347,277 @@ export function HomeView() {
 
   return (
     <section
-      className="relative isolate min-h-screen overflow-hidden px-4 pb-8 pt-4 sm:px-6 lg:px-8"
+      className="relative isolate flex min-h-screen flex-col overflow-hidden px-4 pb-8 pt-4 sm:px-6 lg:px-8"
       style={{
         backgroundImage: "url('/home-background.jpg')",
-        backgroundPosition: 'center',
+        backgroundPosition: 'center bottom',
         backgroundRepeat: 'no-repeat',
         backgroundSize: 'cover',
       }}
     >
-      <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(34,18,9,0.2)_0%,rgba(24,12,7,0.28)_46%,rgba(17,9,6,0.42)_100%)]" />
-      <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_24%,rgba(255,241,210,0.3),transparent_56%),radial-gradient(circle_at_50%_108%,rgba(15,8,5,0.58),transparent_60%)]" />
+      {/* Darkening overlay to match lighting */}
+      <span className="pointer-events-none absolute inset-0 bg-[#351e10]/30" />
+      <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,rgba(255,233,193,0.3),transparent_40%),radial-gradient(circle_at_90%_60%,rgba(255,200,100,0.25),transparent_40%)]" />
 
-      <div className="relative z-20 space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <article className="w-full max-w-[470px] rounded-[26px] border border-[#784325] bg-gradient-to-b from-[#a86739] via-[#8f5832] to-[#754827] p-[3px] shadow-[0_10px_24px_rgba(60,31,10,0.36)]">
-            <div className="rounded-[22px] border border-[#c99766]/60 bg-gradient-to-r from-[#6e3d2a] via-[#5e3426] to-[#4f2d22] px-3 py-2.5 text-[#ffe6bf]">
-              <div className="flex items-center gap-3">
-                <span
-                  className={`inline-flex h-16 w-16 items-center justify-center rounded-full border-2 border-[#ffefc4] bg-gradient-to-b ${seatGradientClass[me?.color || 'blue']} text-lg font-black text-white shadow-[0_4px_10px_rgba(12,22,43,0.4)]`}
-                >
-                  <GameAvatar
-                    alt="Avatar del jugador"
-                    avatar={selectedSkinSrc || me?.avatar || 'PQ'}
-                    imageClassName="h-full w-full object-contain p-1"
-                    textClassName="text-lg font-black text-white"
-                  />
-                </span>
+      {/* Fake Lamp Glow on the right side */}
+      <div className="pointer-events-none absolute bottom-[10%] right-[2%] hidden h-[400px] w-[300px] lg:block xl:right-[4%]">
+        <span className="absolute left-[50px] top-[100px] h-[200px] w-[200px] rounded-full bg-[#ffda85]/40 blur-[50px]" />
+      </div>
 
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-display text-2xl uppercase leading-none text-[#fff4d4]">
-                    {displayUsername}
-                  </p>
-
-                  <div className="mt-1.5 rounded-full border border-[#b07f53] bg-[#3f2341] p-1">
-                    <div className="h-3 rounded-full bg-gradient-to-r from-[#44d0ff] via-[#66c9ff] to-[#3d79ce]" style={{ width: `${levelProgress}%` }} />
-                  </div>
-
-                  <div className="mt-1 flex items-center gap-2 text-[13px] font-black uppercase tracking-wide text-[#ffe7a7]">
-                    <span>{levelLabel}</span>
-                    <span className="text-[#ffca75]">|</span>
-                    <span>{prestigeLabel}</span>
-                  </div>
-                </div>
+      <div className="relative z-20 mx-auto flex w-full max-w-[1400px] flex-1 flex-col">
+        {/* HEADER */}
+        <header className="flex flex-col items-center justify-between gap-4 xl:flex-row xl:items-start">
+          {/* Left: Player Profile */}
+          <article className="flex h-[76px] items-center rounded-full border-[3px] border-[#a3704b] bg-gradient-to-b from-[#8f5a35] to-[#59341b] pr-6 shadow-[0_10px_20px_rgba(0,0,0,0.5)]">
+            <div className={`relative -ml-2 -my-2 flex h-[90px] w-[90px] items-center justify-center rounded-full border-[4px] border-[#ffdf91] bg-gradient-to-b ${seatGradientClass[me?.color || 'blue']} shadow-[0_6px_12px_rgba(0,0,0,0.4)]`}>
+              <GameAvatar
+                alt="Avatar"
+                avatar={selectedSkinSrc || me?.avatar || 'PQ'}
+                imageClassName="h-full w-full object-contain p-1.5"
+                textClassName="text-2xl font-black text-white"
+              />
+            </div>
+            <div className="ml-3 flex flex-col justify-center">
+              <p className="font-display text-[28px] uppercase leading-none text-[#fff4d4] drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)]">
+                {displayUsername}
+              </p>
+              <div className="mt-1.5 h-3.5 w-48 rounded-full border-2 border-[#432314] bg-[#2a131b] p-0.5">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-[#44d0ff] to-[#3d79ce]"
+                  style={{ width: `${levelProgress}%` }}
+                />
+              </div>
+              <div className="mt-1 flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-[#ffda8e]">
+                <span>{levelLabel}</span>
+                <span className="opacity-50">|</span>
+                <span>{prestigeLabel}</span>
               </div>
             </div>
           </article>
 
-          <div className="flex flex-wrap items-start justify-end gap-2">
-            <div className="rounded-full border border-[#7f4a25] bg-gradient-to-b from-[#784825] to-[#5b331c] px-5 py-1 text-[42px] font-black leading-none text-[#fff7dd] shadow-[0_6px_14px_rgba(54,28,12,0.36)]">
-              {coinLabel} <span className="text-[#ffd34d]">●</span>
+          {/* Center: Logo and Gems */}
+          <div className="flex flex-col items-center xl:mt-[-10px]">
+            <div className="relative flex flex-col items-center rounded-[30px] border-[4px] border-[#8e857e] bg-gradient-to-b from-[#76716e] to-[#474341] px-10 py-3 shadow-[0_12px_24px_rgba(0,0,0,0.6)]">
+              <img alt="ParQuiz" className="h-16 w-auto drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)] sm:h-20" src="/parquiz-logo.png" />
+              
+              <div className="mt-3 flex gap-2.5">
+                {[
+                  { icon: 'star', bg: 'from-[#ffda75] to-[#c68919]', border: 'border-[#915e12]' },
+                  { icon: 'puzzle', bg: 'from-[#e483d3] to-[#8d2777]', border: 'border-[#611651]' },
+                  { icon: 'brain', bg: 'from-[#65b2f2] to-[#22579b]', border: 'border-[#143666]' },
+                  { icon: 'leaf', bg: 'from-[#82db61] to-[#2c771f]', border: 'border-[#184a10]' },
+                  { icon: 'wand', bg: 'from-[#b074e8] to-[#5b2496]', border: 'border-[#3f156b]' },
+                ].map((gem, i) => (
+                  <span key={i} className={`flex h-11 w-11 items-center justify-center rounded-full border-[3px] ${gem.border} bg-gradient-to-b ${gem.bg} shadow-[inset_0_2px_4px_rgba(255,255,255,0.4),0_4px_8px_rgba(0,0,0,0.4)]`}>
+                    <ArcadeIcon name={gem.icon as ArcadeIconName} className="h-6 w-6 text-white drop-shadow-md" />
+                  </span>
+                ))}
+              </div>
             </div>
 
-            <button
-              className="rounded-[20px] border border-[#7f4a25] bg-gradient-to-b from-[#ffea95] via-[#f4c049] to-[#cb8621] px-5 py-2 font-display text-2xl uppercase text-[#5d320f] shadow-[inset_0_2px_0_rgba(255,244,181,0.85),0_8px_16px_rgba(83,45,12,0.35)]"
-              onClick={openShopPanel}
-              type="button"
-            >
-              {ui.shop}
-            </button>
+            <div className="relative -mt-5 rounded-full border-[3px] border-[#a47b52] bg-gradient-to-b from-[#fce4ba] via-[#e2be84] to-[#c29656] px-12 py-1.5 shadow-[0_8px_16px_rgba(0,0,0,0.5)]">
+              <p className="font-display text-[22px] uppercase text-[#5a3116] drop-shadow-[0_1px_0_rgba(255,255,255,0.6)]">
+                {ui.center}
+              </p>
+            </div>
+          </div>
 
-            <div className="flex flex-col items-center gap-1">
+          {/* Right: Coins, Shop, Settings */}
+          <div className="flex items-start gap-4">
+            <div className="flex h-[60px] items-center gap-2 rounded-full border-[3px] border-[#915e38] bg-gradient-to-b from-[#5c3116] to-[#3a1a09] pl-6 pr-2 shadow-[0_8px_16px_rgba(0,0,0,0.5)] mt-2">
+              <span className="font-display text-[32px] leading-none text-[#ffebba] drop-shadow-md">{coinLabel}</span>
+              <ArcadeIcon className="h-10 w-10 text-[#f7cc4c]" name="coin" />
+            </div>
+
+            <div className="flex flex-col items-center gap-1.5">
               <button
-                className="rounded-full border border-[#8e5b32] bg-gradient-to-b from-[#f2f4f8] to-[#b8b9bd] p-4 text-3xl shadow-[inset_0_2px_0_rgba(255,255,255,0.85),0_8px_14px_rgba(42,37,30,0.35)] transition hover:-translate-y-0.5"
-                onClick={openConfigPanel}
-                title="Abrir configuracion"
+                className="flex h-[76px] w-[76px] items-center justify-center rounded-[20px] border-[3px] border-[#c0904a] bg-gradient-to-b from-[#ffeaba] to-[#d69f45] shadow-[0_8px_16px_rgba(0,0,0,0.5)] transition hover:brightness-110"
+                onClick={openShopPanel}
+                title={ui.shop}
                 type="button"
               >
-                ⚙
+                <ArcadeIcon className="h-10 w-10 text-[#7d481b]" name="store" />
               </button>
-              <span className="text-[12px] font-black uppercase tracking-wide text-white">{ui.settings}</span>
+              <span className="font-display text-[15px] uppercase text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
+                {ui.shop}
+              </span>
+            </div>
+
+            <div className="flex flex-col items-center gap-1.5">
+              <button
+                className="flex h-[76px] w-[76px] items-center justify-center rounded-full border-[3px] border-[#a1a1a1] bg-gradient-to-b from-[#e8e8e8] to-[#8f8f8f] shadow-[0_8px_16px_rgba(0,0,0,0.5)] transition hover:brightness-110"
+                onClick={openConfigPanel}
+                title={ui.settings}
+                type="button"
+              >
+                <ArcadeIcon className="h-9 w-9 text-[#4a4a4a]" name="settings" />
+              </button>
+              <span className="font-display text-[15px] uppercase text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
+                {ui.settings}
+              </span>
             </div>
           </div>
-        </div>
+        </header>
 
-        <div className="mx-auto max-w-5xl">
-          <div className="flex items-center justify-center gap-2 sm:gap-3">
-            {medalIcons.map((medal) => (
-              <span
-                className={`inline-flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#ffe9bf] bg-gradient-to-b ${medal.tone} text-xl text-white shadow-[0_4px_10px_rgba(40,22,8,0.28)] sm:h-12 sm:w-12`}
-                key={medal.icon}
-              >
-                {medal.icon}
-              </span>
-            ))}
-          </div>
-
-          <div className="mx-auto mt-1 w-fit rounded-[22px] border border-[#8d532d] bg-gradient-to-b from-[#b77844] via-[#915731] to-[#6d4327] px-6 py-2 shadow-[inset_0_2px_0_rgba(255,216,172,0.55),0_8px_16px_rgba(64,33,12,0.34)]">
-            <img alt="ParQuiz" className="h-14 w-auto drop-shadow-[0_4px_10px_rgba(23,14,8,0.45)] sm:h-16" src="/parquiz-logo.png" />
-          </div>
-
-          <div className="mx-auto -mt-2 w-fit rounded-full border border-[#6f3f1f] bg-gradient-to-b from-[#8f5532] to-[#5d341d] px-8 py-1 text-center font-display text-2xl uppercase tracking-wide text-[#ffe8bd] shadow-[0_6px_14px_rgba(58,28,10,0.3)]">
-            {ui.center}
-          </div>
-        </div>
-
-        <div className="relative mx-auto max-w-6xl rounded-[34px] border-[4px] border-[#744225] bg-gradient-to-b from-[#a86a3d] via-[#8d5936] to-[#6a4228] p-2.5 shadow-[inset_0_4px_0_rgba(255,212,156,0.5),0_14px_30px_rgba(57,28,9,0.36)] sm:p-4">
-          <span className="pointer-events-none absolute inset-x-6 top-2 h-8 rounded-full bg-white/12 blur-sm" />
-
-          <div className="grid gap-3 lg:grid-cols-3">
-            <article className="rounded-[24px] border-2 border-[#7d4a2b] bg-gradient-to-b from-[#fff7ea] to-[#f3e8d6] shadow-[0_6px_14px_rgba(42,23,10,0.26)]">
-              <header className="rounded-t-[22px] border-b border-[#9a5f40] bg-gradient-to-r from-[#8c46bc] via-[#a14fce] to-[#7c6ae1] px-4 py-3 text-center">
-                <h3 className="font-display text-[25px] uppercase leading-none text-white drop-shadow-[0_2px_0_rgba(42,19,64,0.5)] sm:text-[34px]">
-                  {ui.playOnline}
-                </h3>
-              </header>
-
-              <div className="space-y-3 p-4">
-                <div className="flex items-center justify-center gap-3 text-4xl">
-                  <span className="inline-flex h-16 w-16 items-center justify-center rounded-full border-2 border-[#7a4da3] bg-gradient-to-b from-[#f9d4ff] to-[#be82dd] shadow-inner">
-                    🧑
-                  </span>
-                  <span className="font-display text-[30px] text-[#6d338f] sm:text-[42px]">VS</span>
-                  <span className="inline-flex h-16 w-16 items-center justify-center rounded-full border-2 border-[#347dbb] bg-gradient-to-b from-[#c7f4ff] to-[#7bd0f2] shadow-inner">
-                    🌍
-                  </span>
-                </div>
-
-                <p className="text-center text-[20px] font-black leading-tight text-[#302013] sm:text-[28px]">
-                  {ui.onlineDescription}
-                </p>
-
-                <button
-                  className="w-full rounded-full border border-[#2a6719] bg-gradient-to-b from-[#73df58] to-[#3f9f22] px-3 py-2 font-display text-[24px] uppercase tracking-wide text-white shadow-[inset_0_2px_0_rgba(210,255,195,0.8),0_6px_0_rgba(38,95,22,0.9)] sm:text-[34px]"
-                  onClick={onOnlinePlay}
-                  type="button"
-                >
-                  {ui.playNow}
-                </button>
-
-                <div className="flex justify-center gap-1.5 pt-1 text-lg">
-                  {panelIconRows[0].map((icon) => (
-                    <span
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#8e623a] bg-[#f9edcb]"
-                      key={icon}
-                    >
-                      {icon}
+        {/* CENTER PANEL */}
+        <main className="mx-auto mt-10 w-full max-w-[1240px] flex-1">
+          <div className="rounded-[36px] border-[5px] border-[#5e371c] bg-gradient-to-b from-[#c08655] to-[#8b552d] p-3 shadow-[0_20px_40px_rgba(0,0,0,0.6)]">
+            <div className="grid gap-3 rounded-[26px] border-[4px] border-[#7d4a2b] bg-[#4a2712] p-3 lg:grid-cols-3">
+              
+              {/* CARD 1: JUGAR ONLINE */}
+              <article className="flex flex-col rounded-[22px] border-4 border-[#a3704b] bg-[#fbf1dc] shadow-[0_8px_16px_rgba(0,0,0,0.4)]">
+                <header className="rounded-t-[16px] border-b-4 border-[#855130] bg-gradient-to-b from-[#cd9e71] to-[#b17947] p-4 text-center shadow-[inset_0_2px_4px_rgba(255,255,255,0.3)]">
+                  <h3 className="font-display text-[30px] uppercase leading-none text-[#4a2711] drop-shadow-[0_1px_1px_rgba(255,255,255,0.4)]">
+                    {ui.playOnline}
+                  </h3>
+                </header>
+                <div className="flex flex-1 flex-col items-center px-6 py-8">
+                  <div className="flex items-center justify-center gap-4">
+                    <span className="flex h-[80px] w-[80px] items-center justify-center rounded-full border-4 border-[#9a5839] bg-gradient-to-b from-[#e6b47f] to-[#b45737] shadow-[0_6px_12px_rgba(0,0,0,0.3)]">
+                      <ArcadeIcon className="h-10 w-10 text-white" name="user" />
                     </span>
-                  ))}
-                </div>
-              </div>
-            </article>
-
-            <article className="rounded-[24px] border-2 border-[#7d4a2b] bg-gradient-to-b from-[#fff7ea] to-[#f3e8d6] shadow-[0_6px_14px_rgba(42,23,10,0.26)]">
-              <header className="rounded-t-[22px] border-b border-[#a36b44] bg-gradient-to-r from-[#e18d46] via-[#f0a354] to-[#d27a32] px-4 py-3 text-center">
-                <h3 className="font-display text-[25px] uppercase leading-none text-white drop-shadow-[0_2px_0_rgba(76,39,11,0.5)] sm:text-[34px]">
-                  {ui.friendsMode}
-                </h3>
-              </header>
-
-              <div className="space-y-3 p-4">
-                <div className="rounded-2xl border border-[#d09f71] bg-gradient-to-b from-[#fff2dc] to-[#f3debe] p-3">
-                  <div className="flex items-center justify-center gap-2 text-[34px]">
-                    <span className="inline-flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#9c5f38] bg-gradient-to-b from-[#ffd2bf] to-[#ee936f] shadow-[0_4px_8px_rgba(18,18,18,0.2)]">
-                      👩
-                    </span>
-                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#9c5f38] bg-[#ffe7bf] text-xl">
-                      🤝
-                    </span>
-                    <span className="inline-flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#9c5f38] bg-gradient-to-b from-[#d2e6ff] to-[#87b8ef] shadow-[0_4px_8px_rgba(18,18,18,0.2)]">
-                      👨
-                    </span>
-                    <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-[#9c5f38] bg-gradient-to-b from-[#dafcc8] to-[#8ad16a] shadow-[0_4px_8px_rgba(18,18,18,0.2)]">
-                      🌐
+                    <span className="font-display text-[40px] text-[#8c5738]">VS</span>
+                    <span className="flex h-[80px] w-[80px] items-center justify-center rounded-full border-4 border-[#3274a8] bg-gradient-to-b from-[#b5edff] to-[#2f7bbc] shadow-[0_6px_12px_rgba(0,0,0,0.3)]">
+                      <ArcadeIcon className="h-10 w-10 text-white" name="globe" />
                     </span>
                   </div>
-                </div>
-
-                <p className="text-center text-[20px] font-black leading-tight text-[#302013] sm:text-[27px]">
-                  {ui.friendsDescription}
-                </p>
-
-                <button
-                  className="w-full rounded-full border border-[#2a6719] bg-gradient-to-b from-[#73df58] to-[#3f9f22] px-3 py-2 font-display text-[22px] uppercase tracking-wide text-white shadow-[inset_0_2px_0_rgba(210,255,195,0.8),0_6px_0_rgba(38,95,22,0.9)] sm:text-[32px]"
-                  onClick={onInviteJoin}
-                  type="button"
-                >
-                  {me?.ready ? ui.ready : ui.inviteJoin}
-                </button>
-
-                <div className="flex justify-center gap-1.5 pt-1 text-lg">
-                  {panelIconRows[1].map((icon) => (
-                    <span
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#8e623a] bg-[#f9edcb]"
-                      key={icon}
+                  <p className="mt-8 text-center text-[22px] font-black leading-tight text-[#4a3424]">
+                    {ui.onlineDescription}
+                  </p>
+                  <div className="mt-auto pt-8 w-full">
+                    <button
+                      className="w-full rounded-full border-b-[6px] border-[#1e5215] bg-gradient-to-b from-[#7bc05b] to-[#3a7c24] py-3 font-display text-[36px] uppercase leading-none text-white shadow-[0_8px_16px_rgba(0,0,0,0.4)] transition hover:translate-y-1 hover:border-b-[2px] hover:shadow-[0_4px_8px_rgba(0,0,0,0.4)] active:border-b-0 active:translate-y-2"
+                      onClick={onOnlinePlay}
+                      type="button"
                     >
-                      {icon}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </article>
-
-            <article className="rounded-[24px] border-2 border-[#7d4a2b] bg-gradient-to-b from-[#fff7ea] to-[#f3e8d6] shadow-[0_6px_14px_rgba(42,23,10,0.26)]">
-              <header className="rounded-t-[22px] border-b border-[#2e5f9b] bg-gradient-to-r from-[#2f8cd6] via-[#3799e7] to-[#2f7ec4] px-4 py-3 text-center">
-                <h3 className="font-display text-[25px] uppercase leading-none text-white drop-shadow-[0_2px_0_rgba(19,45,79,0.52)] sm:text-[34px]">
-                  {ui.aiPractice}
-                </h3>
-              </header>
-
-              <div className="space-y-3 p-4">
-                <div className="flex items-center justify-center gap-3 text-4xl">
-                  <span className="inline-flex h-16 w-16 items-center justify-center rounded-full border-2 border-[#2f74aa] bg-gradient-to-b from-[#d3f2ff] to-[#75bbe3] shadow-inner">
-                    🧑
-                  </span>
-                  <span className="inline-flex h-16 w-16 items-center justify-center rounded-full border-2 border-[#2f74aa] bg-gradient-to-b from-[#e6ecff] to-[#97b7ff] shadow-inner">
-                    🧠
-                  </span>
-                </div>
-
-                <p className="text-center text-[20px] font-black leading-tight text-[#302013] sm:text-[27px]">
-                  {ui.aiDescription}
-                </p>
-
-                <button
-                  className="w-full rounded-full border border-[#2a6719] bg-gradient-to-b from-[#73df58] to-[#3f9f22] px-3 py-2 font-display text-[24px] uppercase tracking-wide text-white shadow-[inset_0_2px_0_rgba(210,255,195,0.8),0_6px_0_rgba(38,95,22,0.9)] sm:text-[34px]"
-                  onClick={onPracticeWithAi}
-                  type="button"
-                >
-                  {ui.practiceNow}
-                </button>
-
-                <div className="rounded-full border border-[#c9a877] bg-[#f7e5cd] p-1">
-                  <div className="grid grid-cols-3 gap-1">
-                    {difficultyOptions.map((option) => {
-                      const isActive = aiDifficulty === option.id
-
-                      return (
-                        <button
-                          className={`rounded-full border px-2 py-1 text-center text-[13px] font-black uppercase tracking-wide transition-all sm:text-[15px] ${
-                            isActive
-                              ? 'border-[#b37a2b] bg-gradient-to-b from-[#ffe39d] to-[#efbc59] text-[#5f3817] shadow-[0_0_0_2px_rgba(243,186,78,0.3)]'
-                              : 'border-[#d6b88c] bg-[#f7e9d3] text-[#8a6038] hover:brightness-95'
-                          }`}
-                          key={option.id}
-                          onClick={() => setAiDifficulty(option.id)}
-                          type="button"
-                        >
-                          {ui[option.labelKey]}
-                        </button>
-                      )
-                    })}
+                      {ui.playNow}
+                    </button>
+                    <div className="mt-6 flex justify-center gap-3">
+                      {panelIconRows[0].map((icon) => (
+                        <span key={icon} className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#d1ab80] bg-[#efe1c2] shadow-[inset_0_1px_2px_rgba(255,255,255,0.6)]">
+                          <ArcadeIcon className="h-5 w-5 text-[#89643d]" name={icon as ArcadeIconName} />
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
+              </article>
 
-                <div className="flex justify-center gap-1.5 pt-1 text-lg">
-                  {panelIconRows[2].map((icon) => (
-                    <span
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#8e623a] bg-[#f9edcb]"
-                      key={icon}
-                    >
-                      {icon}
+              {/* CARD 2: CREAR/UNIRSE CON AMIGOS */}
+              <article className="flex flex-col rounded-[22px] border-4 border-[#a3704b] bg-[#fbf1dc] shadow-[0_8px_16px_rgba(0,0,0,0.4)]">
+                <header className="rounded-t-[16px] border-b-4 border-[#855130] bg-gradient-to-b from-[#cd9e71] to-[#b17947] p-4 text-center shadow-[inset_0_2px_4px_rgba(255,255,255,0.3)]">
+                  <h3 className="font-display text-[30px] uppercase leading-none text-[#4a2711] drop-shadow-[0_1px_1px_rgba(255,255,255,0.4)]">
+                    {ui.friendsMode}
+                  </h3>
+                </header>
+                <div className="flex flex-1 flex-col items-center px-6 py-8">
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="flex h-[70px] w-[70px] items-center justify-center rounded-full border-4 border-[#9a5839] bg-gradient-to-b from-[#e6b47f] to-[#b45737] shadow-[0_6px_12px_rgba(0,0,0,0.3)]">
+                      <ArcadeIcon className="h-9 w-9 text-white" name="users" />
                     </span>
-                  ))}
+                    <span className="flex h-[40px] w-[40px] items-center justify-center rounded-full border-2 border-[#b88a55] bg-[#fff4dd] shadow-sm">
+                      <ArcadeIcon className="h-5 w-5 text-[#7c532a]" name="link" />
+                    </span>
+                    <span className="flex h-[70px] w-[70px] items-center justify-center rounded-full border-4 border-[#5e8fc1] bg-gradient-to-b from-[#d6ecff] to-[#4e86c0] shadow-[0_6px_12px_rgba(0,0,0,0.3)]">
+                      <ArcadeIcon className="h-9 w-9 text-white" name="users" />
+                    </span>
+                    <span className="flex h-[60px] w-[60px] items-center justify-center rounded-full border-4 border-[#3274a8] bg-gradient-to-b from-[#b5edff] to-[#2f7bbc] shadow-[0_6px_12px_rgba(0,0,0,0.3)]">
+                      <ArcadeIcon className="h-8 w-8 text-white" name="globe" />
+                    </span>
+                  </div>
+                  <p className="mt-8 text-center text-[22px] font-black leading-tight text-[#4a3424]">
+                    {ui.friendsDescription}
+                  </p>
+                  <div className="mt-auto pt-8 w-full">
+                    <button
+                      className="w-full rounded-full border-b-[6px] border-[#1e5215] bg-gradient-to-b from-[#7bc05b] to-[#3a7c24] py-3 font-display text-[32px] uppercase leading-none text-white shadow-[0_8px_16px_rgba(0,0,0,0.4)] transition hover:translate-y-1 hover:border-b-[2px] hover:shadow-[0_4px_8px_rgba(0,0,0,0.4)] active:border-b-0 active:translate-y-2"
+                      onClick={onInviteJoin}
+                      type="button"
+                    >
+                      {me?.ready ? ui.ready : ui.inviteJoin}
+                    </button>
+                    <div className="mt-6 flex justify-center gap-3">
+                      {panelIconRows[1].map((icon) => (
+                        <span key={icon} className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#d1ab80] bg-[#efe1c2] shadow-[inset_0_1px_2px_rgba(255,255,255,0.6)]">
+                          <ArcadeIcon className="h-5 w-5 text-[#89643d]" name={icon as ArcadeIconName} />
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </article>
-          </div>
-        </div>
+              </article>
 
+              {/* CARD 3: PRACTICA CON AI */}
+              <article className="flex flex-col rounded-[22px] border-4 border-[#a3704b] bg-[#fbf1dc] shadow-[0_8px_16px_rgba(0,0,0,0.4)]">
+                <header className="rounded-t-[16px] border-b-4 border-[#855130] bg-gradient-to-b from-[#cd9e71] to-[#b17947] p-4 text-center shadow-[inset_0_2px_4px_rgba(255,255,255,0.3)]">
+                  <h3 className="font-display text-[30px] uppercase leading-none text-[#4a2711] drop-shadow-[0_1px_1px_rgba(255,255,255,0.4)]">
+                    {ui.aiPractice}
+                  </h3>
+                </header>
+                <div className="flex flex-1 flex-col items-center px-6 py-8">
+                  <div className="flex items-center justify-center gap-4">
+                    <span className="flex h-[80px] w-[80px] items-center justify-center rounded-full border-4 border-[#2f75aa] bg-gradient-to-b from-[#cdeeff] to-[#2f7bbc] shadow-[0_6px_12px_rgba(0,0,0,0.3)]">
+                      <ArcadeIcon className="h-10 w-10 text-white" name="robot" />
+                    </span>
+                    <span className="flex h-[80px] w-[80px] items-center justify-center rounded-full border-4 border-[#356aa6] bg-gradient-to-b from-[#e8edff] to-[#4f72bb] shadow-[0_6px_12px_rgba(0,0,0,0.3)]">
+                      <ArcadeIcon className="h-10 w-10 text-white" name="brain" />
+                    </span>
+                  </div>
+                  <p className="mt-8 text-center text-[22px] font-black leading-tight text-[#4a3424]">
+                    {ui.aiDescription}
+                  </p>
+                  <div className="mt-auto pt-8 w-full">
+                    <button
+                      className="w-full rounded-full border-b-[6px] border-[#1e5215] bg-gradient-to-b from-[#7bc05b] to-[#3a7c24] py-3 font-display text-[36px] uppercase leading-none text-white shadow-[0_8px_16px_rgba(0,0,0,0.4)] transition hover:translate-y-1 hover:border-b-[2px] hover:shadow-[0_4px_8px_rgba(0,0,0,0.4)] active:border-b-0 active:translate-y-2"
+                      onClick={onPracticeWithAi}
+                      type="button"
+                    >
+                      {ui.practiceNow}
+                    </button>
+                    
+                    <div className="mt-4 rounded-full border-2 border-[#d1b185] bg-[#ebd8b4] p-1 shadow-inner">
+                      <div className="grid grid-cols-3 gap-1">
+                        {difficultyOptions.map((option) => {
+                          const isActive = aiDifficulty === option.id;
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              onClick={() => setAiDifficulty(option.id)}
+                              className={`rounded-full py-1.5 text-center text-[13px] font-black uppercase tracking-wide transition-all sm:text-[14px] ${
+                                isActive
+                                  ? 'bg-gradient-to-b from-[#ffe39d] to-[#efbc59] text-[#5f3817] shadow-sm border border-[#bc7f2c]'
+                                  : 'text-[#8a6038] hover:text-[#5a3a1f] border border-transparent'
+                              }`}
+                            >
+                              {ui[option.labelKey]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex justify-center gap-3">
+                      {panelIconRows[2].map((icon) => (
+                        <span key={icon} className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#d1ab80] bg-[#efe1c2] shadow-[inset_0_1px_2px_rgba(255,255,255,0.6)]">
+                          <ArcadeIcon className="h-5 w-5 text-[#89643d]" name={icon as ArcadeIconName} />
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </div>
+        </main>
       </div>
 
+      {/* MODALS */}
       {isShopOpen ? (
         <div className="fixed inset-0 z-[142] flex items-center justify-center p-2 sm:p-5">
           <button
             aria-label={ui.closeShop}
-            className="absolute inset-0 bg-[#150a03]/55 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-[#150a03]/60 backdrop-blur-sm"
             onClick={closeShopPanel}
             type="button"
           />
@@ -625,7 +625,7 @@ export function HomeView() {
           <div className="relative z-10 w-full max-w-[1050px]">
             <div className="relative rounded-[34px] border-[5px] border-[#7b4828] bg-gradient-to-b from-[#bc7c49] via-[#956036] to-[#6f4428] p-2 shadow-[0_24px_48px_rgba(32,16,7,0.56)] sm:p-3">
               <div className="absolute right-5 top-2 rounded-full border-2 border-[#8b5332] bg-gradient-to-b from-[#7b4b2f] to-[#58331f] px-4 py-1.5 text-[26px] font-black tracking-wide text-[#fff2d4] shadow-[inset_0_1px_0_rgba(255,228,178,0.38)]">
-                <span className="mr-2 text-[#ffd24e]">🪙</span>
+                <ArcadeIcon className="mr-2 inline-block h-6 w-6 text-[#ffd24e]" name="coin" />
                 {coinLabel}
               </div>
 
@@ -675,7 +675,7 @@ export function HomeView() {
                           {item.mediaSrc ? (
                             <GameAvatar alt={item.name || item.id} avatar={item.mediaSrc} imageClassName="h-full w-full object-contain p-2" />
                           ) : (
-                            item.icon
+                            item.icon ? <ArcadeIcon className={`h-16 w-16 ${item.iconClassName || 'text-[#6a4324]'}`} name={item.icon} /> : null
                           )}
                         </div>
                         {item.name ? (
@@ -698,7 +698,7 @@ export function HomeView() {
                           </>
                         ) : null}
                         <div className="mt-2 rounded-full border border-[#d2b083] bg-[#e8cfaa] px-3 py-1 text-center font-display text-[34px] leading-none text-[#5a3417] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
-                          <span className="mr-1 text-[#f6be2f]">🪙</span>
+                          <ArcadeIcon className="mr-1 inline-block h-6 w-6 text-[#f6be2f]" name="coin" />
                           {item.price}
                         </div>
                         {item.isSkinItem ? (

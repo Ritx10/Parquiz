@@ -1,6 +1,7 @@
 import { useAccount } from '@starknet-react/core'
 import { useEffect, useMemo, useState } from 'react'
 import { createGameConfig, lockGameConfig, readLatestGameConfigByCreator } from '../api'
+import { ArcadeIcon } from '../components/ui/arcade-icon'
 import { shortenAddress, useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import { useAppSettingsStore } from '../store/app-settings-store'
 
@@ -248,7 +249,7 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
 
             <div className="space-y-5">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-[18px] font-black uppercase text-[#5c3214] sm:text-[20px]">{text.language} 🌐</p>
+                <p className="flex items-center gap-2 text-[18px] font-black uppercase text-[#5c3214] sm:text-[20px]"><ArcadeIcon className="h-5 w-5" name="language" />{text.language}</p>
                 <div className="relative w-full sm:w-[220px]">
                   <select
                     className="w-full appearance-none rounded-full border-[3px] border-[#a96639] bg-gradient-to-b from-[#d48f5b] to-[#ae6130] px-4 py-2 pr-10 text-center text-[16px] font-black uppercase text-[#fff2d7] shadow-[inset_0_2px_0_rgba(255,255,255,0.3),0_4px_6px_rgba(0,0,0,0.2)] outline-none"
@@ -258,13 +259,13 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
                     <option value="es">ESPANOL</option>
                     <option value="en">ENGLISH</option>
                   </select>
-                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[14px] font-black text-[#fff2d7]">▼</span>
+                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[#fff2d7]"><ArcadeIcon className="h-4 w-4" name="chevron-down" /></span>
                 </div>
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-[18px] font-black uppercase text-[#5c3214] sm:text-[20px]">{text.sound} 🔊</p>
+                  <p className="flex items-center gap-2 text-[18px] font-black uppercase text-[#5c3214] sm:text-[20px]"><ArcadeIcon className="h-5 w-5" name="sound" />{text.sound}</p>
                   <p className="text-[11px] font-bold uppercase text-[#88624b]">ACTIVADO / DESACTIVADO</p>
                 </div>
                 <button
@@ -293,7 +294,7 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
 
               <div className="mt-8 border-t-[3px] border-[#cbaa85] pt-6">
                 <h4 className="mb-4 font-display text-[22px] uppercase tracking-wide text-[#5c3214] sm:text-[24px]">
-                  {text.walletTitle} 👛
+                  <span className="inline-flex items-center gap-2"><ArcadeIcon className="h-6 w-6" name="wallet" />{text.walletTitle}</span>
                 </h4>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-4">
@@ -312,7 +313,7 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
                     <span className="text-[15px] font-black uppercase text-[#5c3214]">{text.walletAddress}</span>
                     <div className="flex items-center gap-2 rounded-lg border border-[#d5c2a5] bg-[#eae0c9] px-3 py-1 shadow-inner">
                       <span className="font-mono text-[14px] font-bold text-[#5c3214]">{isConnected ? walletLabel : '-'}</span>
-                      <span className="text-sm text-gray-500">📋</span>
+                      <ArcadeIcon className="h-4 w-4 text-gray-500" name="copy" />
                     </div>
                   </div>
                 </div>
@@ -365,7 +366,7 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
                     <option value="EVEN">{text.exitEven}</option>
                     <option value="SIX">{text.exitSix}</option>
                   </select>
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] font-black text-[#fff2d7]">▼</span>
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#fff2d7]"><ArcadeIcon className="h-4 w-4" name="chevron-down" /></span>
                 </div>
               </div>
 
