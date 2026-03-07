@@ -1,4 +1,5 @@
 import { hash } from 'starknet'
+import type { AppLanguage } from '../../store/app-settings-store'
 
 type LocalQuestionSeed = {
   questionIndex: number
@@ -10,8 +11,15 @@ type LocalQuestionSeed = {
 }
 
 export type HydratedQuestion = LocalQuestionSeed & {
+  displayOptions: [string, string, string, string]
+  displayPrompt: string
   merkleProof: string[]
   merkleDirections: Array<0 | 1>
+}
+
+type LocalizedQuestionCopy = {
+  prompt: string
+  options: [string, string, string, string]
 }
 
 const QUESTION_SEEDS: LocalQuestionSeed[] = [
@@ -113,6 +121,57 @@ const QUESTION_SEEDS: LocalQuestionSeed[] = [
   },
 ]
 
+const QUESTION_COPY_ES: Record<string, LocalizedQuestionCopy> = {
+  '0-0': {
+    prompt: 'Que planeta es conocido como el planeta rojo?',
+    options: ['Marte', 'Venus', 'Jupiter', 'Mercurio'],
+  },
+  '0-1': {
+    prompt: 'Que planeta es llamado el planeta rojo por el oxido de hierro en su superficie?',
+    options: ['Saturno', 'Marte', 'Neptuno', 'Tierra'],
+  },
+  '0-2': {
+    prompt: 'El planeta rojo obtiene su color principalmente de que compuesto mineral oxidado?',
+    options: ['Sulfato de cobre', 'Oxido de hierro', 'Carbonato de magnesio', 'Dioxido de silicio'],
+  },
+  '1-0': {
+    prompt: 'Que gas absorben las plantas de la atmosfera?',
+    options: ['Oxigeno', 'Hidrogeno', 'Dioxido de carbono', 'Nitrogeno'],
+  },
+  '1-1': {
+    prompt: 'La fotosintesis depende de que gas atmosferico absorben las plantas?',
+    options: ['Dioxido de carbono', 'Helio', 'Hidrogeno', 'Argon'],
+  },
+  '1-2': {
+    prompt: 'Que molecula de la atmosfera aporta el carbono para formar glucosa en la fotosintesis?',
+    options: ['Metano', 'Dioxido de carbono', 'Ozono', 'Oxido nitroso'],
+  },
+  '2-0': {
+    prompt: 'Cual es el oceano mas grande de la Tierra?',
+    options: ['Oceano Atlantico', 'Oceano Pacifico', 'Oceano Indico', 'Oceano Artico'],
+  },
+  '2-1': {
+    prompt: 'La cuenca oceanica mas grande y profunda del planeta es cual?',
+    options: ['Oceano Pacifico', 'Oceano Austral', 'Oceano Atlantico', 'Oceano Indico'],
+  },
+  '2-2': {
+    prompt: 'Que oceano contiene la fosa de las Marianas y cubre mas superficie que toda la tierra emergida?',
+    options: ['Oceano Indico', 'Oceano Atlantico', 'Oceano Pacifico', 'Oceano Austral'],
+  },
+  '3-0': {
+    prompt: 'Cuantos continentes hay en la Tierra?',
+    options: ['Cinco', 'Seis', 'Siete', 'Ocho'],
+  },
+  '3-1': {
+    prompt: 'En el modelo geografico estandar ensenado globalmente, en cuantos continentes se divide la Tierra?',
+    options: ['Siete', 'Seis', 'Cinco', 'Ocho'],
+  },
+  '3-2': {
+    prompt: 'Usando la convencion de siete continentes, cuantos continentes se reconocen en la Tierra?',
+    options: ['Seis', 'Siete', 'Ocho', 'Nueve'],
+  },
+}
+
 const normalizeHex = (value: string) => `0x${BigInt(value).toString(16)}`
 
 const hashPair = (left: string, right: string) =>
@@ -192,13 +251,25 @@ export const getHydratedQuestion = (
   questionIndex: number,
   category: number,
   difficulty: number,
+  language: AppLanguage = 'en',
 ): HydratedQuestion | null => {
-  return (
+  const baseQuestion =
     LOCAL_QUESTION_SET.find(
       (question) =>
         question.questionIndex === questionIndex &&
         question.category === category &&
         question.difficulty === difficulty,
     ) ?? null
-  )
+
+  if (!baseQuestion) {
+    return null
+  }
+
+  const localizedCopy = QUESTION_COPY_ES[`${questionIndex}-${difficulty}`]
+
+  return {
+    ...baseQuestion,
+    displayOptions: language === 'es' && localizedCopy ? localizedCopy.options : baseQuestion.options,
+    displayPrompt: language === 'es' && localizedCopy ? localizedCopy.prompt : baseQuestion.prompt,
+  }
 }

@@ -1,4 +1,9 @@
 import { create } from 'zustand'
+import {
+  normalizeOwnedTokenSkinIds,
+  normalizeTokenSkinId,
+  type TokenSkinId,
+} from '../lib/token-cosmetics'
 import { normalizePlayerSkinId } from '../lib/player-skins'
 
 export type AppLanguage = 'es' | 'en'
@@ -11,12 +16,16 @@ type AppSettingsState = {
   questionDifficulty: AiDifficulty
   selectedConfigId: string
   selectedSkinId: null | string
+  selectedTokenSkinId: TokenSkinId
+  ownedTokenSkinIds: TokenSkinId[]
   setLanguage: (language: AppLanguage) => void
   setSoundEnabled: (enabled: boolean) => void
   setAiDifficulty: (difficulty: AiDifficulty) => void
   setQuestionDifficulty: (difficulty: AiDifficulty) => void
   setSelectedConfigId: (configId: string) => void
   setSelectedSkinId: (skinId: null | string) => void
+  setSelectedTokenSkinId: (skinId: TokenSkinId) => void
+  unlockTokenSkin: (skinId: TokenSkinId) => void
   toggleSound: () => void
 }
 
@@ -27,9 +36,35 @@ type StoredSettings = {
   questionDifficulty?: AiDifficulty
   selectedConfigId?: string
   selectedSkinId?: null | string
+  selectedTokenColor?: TokenSkinId
+  selectedTokenSkinId?: TokenSkinId
+  ownedTokenSkinIds?: TokenSkinId[]
 }
 
+type PersistedSettings = Pick<
+  AppSettingsState,
+  | 'aiDifficulty'
+  | 'language'
+  | 'ownedTokenSkinIds'
+  | 'questionDifficulty'
+  | 'selectedConfigId'
+  | 'selectedSkinId'
+  | 'selectedTokenSkinId'
+  | 'soundEnabled'
+>
+
 const STORAGE_KEY = 'parquiz.settings.v1'
+
+const defaultSettings: PersistedSettings = {
+  aiDifficulty: 'medium',
+  language: 'es',
+  ownedTokenSkinIds: normalizeOwnedTokenSkinIds(undefined, 'blue'),
+  questionDifficulty: 'medium',
+  selectedSkinId: null,
+  selectedTokenSkinId: 'blue',
+  soundEnabled: true,
+  selectedConfigId: '1',
+}
 
 const normalizeLanguage = (value: unknown): AppLanguage => (value === 'en' ? 'en' : 'es')
 
@@ -41,83 +76,54 @@ const normalizeAiDifficulty = (value: unknown): AiDifficulty => {
   return 'medium'
 }
 
-const readStoredSettings = (): Pick<
-  AppSettingsState,
-  'aiDifficulty' | 'language' | 'questionDifficulty' | 'selectedConfigId' | 'selectedSkinId' | 'soundEnabled'
-> => {
+const readStoredSettings = (): PersistedSettings => {
   if (typeof window === 'undefined') {
-    return {
-      aiDifficulty: 'medium',
-      language: 'es',
-      questionDifficulty: 'medium',
-      selectedSkinId: null,
-      soundEnabled: true,
-      selectedConfigId: '1',
-    }
+    return defaultSettings
   }
 
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
 
     if (!raw) {
-      return {
-        aiDifficulty: 'medium',
-        language: 'es',
-        questionDifficulty: 'medium',
-        selectedSkinId: null,
-        soundEnabled: true,
-        selectedConfigId: '1',
-      }
+      return defaultSettings
     }
 
     const parsed = JSON.parse(raw) as StoredSettings
+    const selectedTokenSkinId = normalizeTokenSkinId(parsed.selectedTokenSkinId ?? parsed.selectedTokenColor)
 
     return {
       aiDifficulty: normalizeAiDifficulty(parsed.aiDifficulty),
       language: normalizeLanguage(parsed.language),
+      ownedTokenSkinIds: normalizeOwnedTokenSkinIds(parsed.ownedTokenSkinIds, selectedTokenSkinId),
       questionDifficulty: normalizeAiDifficulty(parsed.questionDifficulty),
       selectedSkinId: normalizePlayerSkinId(parsed.selectedSkinId ?? null),
+      selectedTokenSkinId,
       soundEnabled: parsed.soundEnabled ?? true,
       selectedConfigId: parsed.selectedConfigId || '1',
     }
   } catch {
-    return {
-      aiDifficulty: 'medium',
-      language: 'es',
-      questionDifficulty: 'medium',
-      selectedSkinId: null,
-      soundEnabled: true,
-      selectedConfigId: '1',
-    }
+    return defaultSettings
   }
 }
 
-const persistSettings = (settings: {
-  aiDifficulty: AiDifficulty
-  language: AppLanguage
-  questionDifficulty: AiDifficulty
-  selectedSkinId: null | string
-  soundEnabled: boolean
-  selectedConfigId: string
-}) => {
-  if (typeof window === 'undefined') {
-    return
-  }
+const toPersistedSettings = (state: AppSettingsState): PersistedSettings => ({
+  aiDifficulty: state.aiDifficulty,
+  language: state.language,
+  ownedTokenSkinIds: state.ownedTokenSkinIds,
+  questionDifficulty: state.questionDifficulty,
+  selectedConfigId: state.selectedConfigId,
+  selectedSkinId: state.selectedSkinId,
+  selectedTokenSkinId: state.selectedTokenSkinId,
+  soundEnabled: state.soundEnabled,
+})
 
-  try {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-        JSON.stringify({
-          aiDifficulty: settings.aiDifficulty,
-          language: settings.language,
-          questionDifficulty: settings.questionDifficulty,
-          selectedSkinId: settings.selectedSkinId,
-          soundEnabled: settings.soundEnabled,
-          selectedConfigId: settings.selectedConfigId,
-      }),
-    )
-  } catch {
-    // ignore localStorage errors in restricted environments
+const persistSettings = (settings: PersistedSettings) => {
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+    } catch {
+      // ignore localStorage errors in restricted environments
+    }
   }
 
   if (typeof document !== 'undefined') {
@@ -131,86 +137,48 @@ persistSettings(initialSettings)
 export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
   aiDifficulty: initialSettings.aiDifficulty,
   language: initialSettings.language,
+  ownedTokenSkinIds: initialSettings.ownedTokenSkinIds,
   questionDifficulty: initialSettings.questionDifficulty,
   selectedSkinId: initialSettings.selectedSkinId,
+  selectedTokenSkinId: initialSettings.selectedTokenSkinId,
   soundEnabled: initialSettings.soundEnabled,
   selectedConfigId: initialSettings.selectedConfigId,
   setLanguage: (language) => {
     set({ language })
-    persistSettings({
-      aiDifficulty: get().aiDifficulty,
-      language,
-      questionDifficulty: get().questionDifficulty,
-      selectedSkinId: get().selectedSkinId,
-      soundEnabled: get().soundEnabled,
-      selectedConfigId: get().selectedConfigId,
-    })
+    persistSettings(toPersistedSettings(get()))
   },
-  setSoundEnabled: (enabled) => {
-    set({ soundEnabled: enabled })
-    persistSettings({
-      aiDifficulty: get().aiDifficulty,
-      language: get().language,
-      questionDifficulty: get().questionDifficulty,
-      selectedSkinId: get().selectedSkinId,
-      soundEnabled: enabled,
-      selectedConfigId: get().selectedConfigId,
-    })
+  setSoundEnabled: (soundEnabled) => {
+    set({ soundEnabled })
+    persistSettings(toPersistedSettings(get()))
   },
-  setAiDifficulty: (difficulty) => {
-    set({ aiDifficulty: difficulty })
-    persistSettings({
-      aiDifficulty: difficulty,
-      language: get().language,
-      questionDifficulty: get().questionDifficulty,
-      selectedSkinId: get().selectedSkinId,
-      soundEnabled: get().soundEnabled,
-      selectedConfigId: get().selectedConfigId,
-    })
+  setAiDifficulty: (aiDifficulty) => {
+    set({ aiDifficulty })
+    persistSettings(toPersistedSettings(get()))
   },
-  setQuestionDifficulty: (difficulty) => {
-    set({ questionDifficulty: difficulty })
-    persistSettings({
-      aiDifficulty: get().aiDifficulty,
-      language: get().language,
-      questionDifficulty: difficulty,
-      selectedSkinId: get().selectedSkinId,
-      soundEnabled: get().soundEnabled,
-      selectedConfigId: get().selectedConfigId,
-    })
+  setQuestionDifficulty: (questionDifficulty) => {
+    set({ questionDifficulty })
+    persistSettings(toPersistedSettings(get()))
   },
   setSelectedConfigId: (selectedConfigId) => {
     set({ selectedConfigId })
-    persistSettings({
-      aiDifficulty: get().aiDifficulty,
-      language: get().language,
-      questionDifficulty: get().questionDifficulty,
-      selectedSkinId: get().selectedSkinId,
-      soundEnabled: get().soundEnabled,
-      selectedConfigId,
-    })
+    persistSettings(toPersistedSettings(get()))
   },
   setSelectedSkinId: (selectedSkinId) => {
     set({ selectedSkinId })
-    persistSettings({
-      aiDifficulty: get().aiDifficulty,
-      language: get().language,
-      questionDifficulty: get().questionDifficulty,
-      selectedSkinId,
-      soundEnabled: get().soundEnabled,
-      selectedConfigId: get().selectedConfigId,
-    })
+    persistSettings(toPersistedSettings(get()))
+  },
+  setSelectedTokenSkinId: (selectedTokenSkinId) => {
+    const ownedTokenSkinIds = normalizeOwnedTokenSkinIds(get().ownedTokenSkinIds, selectedTokenSkinId)
+    set({ ownedTokenSkinIds, selectedTokenSkinId })
+    persistSettings(toPersistedSettings(get()))
+  },
+  unlockTokenSkin: (skinId) => {
+    const ownedTokenSkinIds = normalizeOwnedTokenSkinIds(get().ownedTokenSkinIds, skinId)
+    set({ ownedTokenSkinIds })
+    persistSettings(toPersistedSettings(get()))
   },
   toggleSound: () => {
-    const nextEnabled = !get().soundEnabled
-    set({ soundEnabled: nextEnabled })
-    persistSettings({
-      aiDifficulty: get().aiDifficulty,
-      language: get().language,
-      questionDifficulty: get().questionDifficulty,
-      selectedSkinId: get().selectedSkinId,
-      soundEnabled: nextEnabled,
-      selectedConfigId: get().selectedConfigId,
-    })
+    set({ soundEnabled: !get().soundEnabled })
+    persistSettings(toPersistedSettings(get()))
   },
 }))

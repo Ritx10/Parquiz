@@ -1,3 +1,5 @@
+import { getPlayerVisualThemeByColor } from '../../lib/player-color-themes'
+import type { TokenSkinId } from '../../lib/token-cosmetics'
 import type { MatchToken, MoveResource, PlayerColor } from './match-types'
 import { GameAvatar } from './game-avatar'
 import { Tile } from './tile'
@@ -14,48 +16,6 @@ type NumberCell = Coord & {
 
 const boardSize = 19
 const fineGridSize = boardSize * 2
-
-const laneClasses: Record<PlayerColor, string> = {
-  red: 'bg-[#de5549]',
-  blue: 'bg-[#58aef2]',
-  yellow: 'bg-[#f4d34d]',
-  green: 'bg-[#61bc74]',
-}
-
-const homePalette: Record<
-  PlayerColor,
-  {
-    ring: string
-    inner: string
-    slot: string
-    slotBorder: string
-  }
-> = {
-  red: {
-    ring: 'bg-[#cf1f32] border-[#6f101c]',
-    inner: 'bg-[#f2e9d2] border-[#83252f]',
-    slot: 'bg-[#f8c8cf]',
-    slotBorder: 'border-[#8a3e45]',
-  },
-  blue: {
-    ring: 'bg-[#2f9ae8] border-[#16508b]',
-    inner: 'bg-[#f2e9d2] border-[#2d6caa]',
-    slot: 'bg-[#cde8fb]',
-    slotBorder: 'border-[#4b7cae]',
-  },
-  yellow: {
-    ring: 'bg-[#e9c42a] border-[#8c6f08]',
-    inner: 'bg-[#f2e9d2] border-[#b18b10]',
-    slot: 'bg-[#fbeeba]',
-    slotBorder: 'border-[#a78320]',
-  },
-  green: {
-    ring: 'bg-[#208a77] border-[#0f4b41]',
-    inner: 'bg-[#f2e9d2] border-[#1d7667]',
-    slot: 'bg-[#cceede]',
-    slotBorder: 'border-[#4f8c7e]',
-  },
-}
 
 const trackCells: NumberCell[] = (() => {
   const cells: NumberCell[] = []
@@ -337,8 +297,8 @@ const arrowClassByPlacement: Record<TooltipPlacement, string> = {
   right: 'right-full top-1/2 -translate-y-1/2 translate-x-[1px] border-b border-l',
 }
 
-function CornerBase({ color }: { color: PlayerColor }) {
-  const palette = homePalette[color]
+function CornerBase({ color, visualSkinId }: { color: PlayerColor; visualSkinId?: TokenSkinId }) {
+  const palette = getPlayerVisualThemeByColor(color, visualSkinId).homePalette
 
   return (
     <div className="relative flex h-full w-full items-center justify-center">
@@ -360,27 +320,32 @@ function CornerBase({ color }: { color: PlayerColor }) {
   )
 }
 
-function BoardCenter() {
+function BoardCenter({ visualSkinByColor = {} }: { visualSkinByColor?: Partial<Record<PlayerColor, TokenSkinId>> }) {
+  const greenTheme = getPlayerVisualThemeByColor('green', visualSkinByColor.green)
+  const redTheme = getPlayerVisualThemeByColor('red', visualSkinByColor.red)
+  const blueTheme = getPlayerVisualThemeByColor('blue', visualSkinByColor.blue)
+  const yellowTheme = getPlayerVisualThemeByColor('yellow', visualSkinByColor.yellow)
+
   return (
     <div
       className="relative z-30 overflow-hidden border-2 border-[#27170a]"
       style={cellPlacement(8, 8, 3, 3)}
     >
       <span
-        className="absolute inset-0 bg-[#208a77]"
-        style={{ clipPath: 'polygon(50% 50%, 0 0, 100% 0)' }}
+        className="absolute inset-0"
+        style={{ backgroundColor: greenTheme.boardCenterColor, clipPath: 'polygon(50% 50%, 0 0, 100% 0)' }}
       />
       <span
-        className="absolute inset-0 bg-[#d74236]"
-        style={{ clipPath: 'polygon(50% 50%, 100% 0, 100% 100%)' }}
+        className="absolute inset-0"
+        style={{ backgroundColor: redTheme.boardCenterColor, clipPath: 'polygon(50% 50%, 100% 0, 100% 100%)' }}
       />
       <span
-        className="absolute inset-0 bg-[#3d96e7]"
-        style={{ clipPath: 'polygon(50% 50%, 100% 100%, 0 100%)' }}
+        className="absolute inset-0"
+        style={{ backgroundColor: blueTheme.boardCenterColor, clipPath: 'polygon(50% 50%, 100% 100%, 0 100%)' }}
       />
       <span
-        className="absolute inset-0 bg-[#efc53a]"
-        style={{ clipPath: 'polygon(50% 50%, 0 100%, 0 0)' }}
+        className="absolute inset-0"
+        style={{ backgroundColor: yellowTheme.boardCenterColor, clipPath: 'polygon(50% 50%, 0 100%, 0 0)' }}
       />
     </div>
   )
@@ -409,6 +374,7 @@ type Board3DProps = {
   onTokenDiceChoiceHover?: (tokenId: string, choiceId: MoveResource | null) => void
   onTokenDiceChoiceSelect?: (tokenId: string, choiceId: MoveResource) => void
   onTokenClick?: (tokenId: string) => void
+  visualSkinByColor?: Partial<Record<PlayerColor, TokenSkinId>>
 }
 
 export function Board3D({
@@ -427,6 +393,7 @@ export function Board3D({
   onTokenDiceChoiceHover,
   onTokenDiceChoiceSelect,
   onTokenClick,
+  visualSkinByColor = {},
 }: Board3DProps) {
   const playersById = players.reduce<Record<string, { avatar: string; name: string }>>((acc, player) => {
     acc[player.id] = { avatar: player.avatar, name: player.name }
@@ -438,6 +405,7 @@ export function Board3D({
   const movableSet = new Set(movableTokenIds)
   const safeSet = new Set(safeSquares)
   const animatingSet = new Set(animatingTokenIds)
+  const themeForColor = (color: PlayerColor) => getPlayerVisualThemeByColor(color, visualSkinByColor[color])
 
   const groupedTokens = Object.values(
     tokens.reduce<Record<string, { cell: Coord; position: number; tokens: MatchToken[] }>>(
@@ -604,26 +572,26 @@ export function Board3D({
       >
         {cornerHomes.map((home) => (
           <div className="z-10" key={home.color} style={cellPlacement(home.rowStart, home.colStart, 7, 7)}>
-            <CornerBase color={home.color} />
+            <CornerBase color={home.color} visualSkinId={visualSkinByColor[home.color]} />
           </div>
         ))}
 
         {laneCells.map((cell) => (
           <Tile
-            className={laneClasses[cell.color]}
+            className={themeForColor(cell.color).laneFillClass}
             key={`lane-${cell.color}-${cell.row}-${cell.col}`}
             style={cellPlacement(cell.row, cell.col)}
           />
         ))}
 
-        <BoardCenter />
+        <BoardCenter visualSkinByColor={visualSkinByColor} />
 
         {trackCells.map((cell) => {
           const startColor = startSquares.get(cell.number)
 
           return (
             <Tile
-              className={startColor ? laneClasses[startColor] : 'bg-[#fff8e6]'}
+              className={startColor ? themeForColor(startColor).laneFillClass : 'bg-[#fff8e6]'}
               isHighlighted={highlightedSet.has(cell.number)}
               isSafe={safeSet.has(cell.number)}
               key={`track-${cell.number}`}

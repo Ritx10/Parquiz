@@ -63,6 +63,7 @@ const gameStateSnapshot: ReadonlyGameState = {
 
 export function useReadonlyGameState() {
   const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
+  const selectedTokenSkinId = useAppSettingsStore((state) => state.selectedTokenSkinId)
   const selectedSkinSrc = getPlayerSkinSrc(selectedSkinId)
 
   return useMemo(() => {
@@ -73,6 +74,7 @@ export function useReadonlyGameState() {
           ? {
               ...player,
               avatar: selectedSkinSrc || '/skins/parquiz/capi-princess.png',
+              visualSkinId: selectedTokenSkinId,
             }
           : {
               ...player,
@@ -80,5 +82,5 @@ export function useReadonlyGameState() {
             },
       ),
     }
-  }, [selectedSkinSrc])
+  }, [selectedSkinSrc, selectedTokenSkinId])
 }

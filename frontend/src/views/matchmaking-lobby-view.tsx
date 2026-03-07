@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GameAvatar } from '../components/game/game-avatar'
+import { getPlayerVisualTheme } from '../lib/player-color-themes'
 import { getPlayerSkinSrc } from '../lib/player-skins'
 import { useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import { useAppSettingsStore } from '../store/app-settings-store'
@@ -32,7 +33,9 @@ const rivalPool = [
 export function MatchmakingLobbyView() {
   const navigate = useNavigate()
   const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
+  const selectedTokenSkinId = useAppSettingsStore((state) => state.selectedTokenSkinId)
   const { username } = useControllerWallet()
+  const selectedTokenTheme = getPlayerVisualTheme(selectedTokenSkinId)
   const localPlayer = useMemo<MatchmakingParticipant>(
     () => ({
       id: 'you-player',
@@ -143,7 +146,7 @@ export function MatchmakingLobbyView() {
                             <span
                               className={`inline-flex h-24 w-24 items-center justify-center rounded-full border-2 text-[40px] shadow-[0_4px_8px_rgba(18,18,18,0.2)] ${
                                 player.role === 'you'
-                                  ? 'border-[#7e4e29] bg-gradient-to-b from-[#9ce88f] to-[#349a5c] text-white'
+                                  ? `border-[#7e4e29] bg-gradient-to-b ${selectedTokenTheme.avatarToneClass} text-white`
                                   : 'border-[#2f74aa] bg-gradient-to-b from-[#8dd7ff] to-[#3d9fe1] text-white'
                               }`}
                             >

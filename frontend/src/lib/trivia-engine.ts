@@ -1,3 +1,5 @@
+import type { AppLanguage } from '../store/app-settings-store'
+
 export type TriviaDifficulty = 'easy' | 'medium' | 'hard'
 
 export type TriviaQuestionTheme = 'blue' | 'green' | 'orange' | 'pink'
@@ -22,6 +24,8 @@ type TriviaSeed = {
   prompt: string
   theme: TriviaQuestionTheme
 }
+
+type TriviaPoolByLanguage = Record<AppLanguage, Record<TriviaDifficulty, TriviaSeed[]>>
 
 export const triviaSecondsByDifficulty: Record<TriviaDifficulty, number> = {
   easy: 20,
@@ -139,14 +143,64 @@ const hardSeeds: TriviaSeed[] = [
   { id: 'hard-history-renaissance', difficulty: 'hard', category: 'Historia', icon: '🏛️', theme: 'orange', prompt: 'En que pais comenzo el Renacimiento europeo?', options: ['Italia', 'Francia', 'Alemania', 'Portugal'] },
 ]
 
-const questionPoolByDifficulty: Record<TriviaDifficulty, TriviaSeed[]> = {
-  easy: easySeeds,
-  medium: mediumSeeds,
-  hard: hardSeeds,
+const easySeedsEn: TriviaSeed[] = [
+  { id: 'en-easy-capital-argentina', difficulty: 'easy', category: 'Geography', icon: '🗺️', theme: 'blue', prompt: 'What is the capital of Argentina?', options: ['Buenos Aires', 'Cordoba', 'Lima', 'Bogota'] },
+  { id: 'en-easy-capital-france', difficulty: 'easy', category: 'Geography', icon: '🗺️', theme: 'blue', prompt: 'What is the capital of France?', options: ['Paris', 'Rome', 'Lisbon', 'Berlin'] },
+  { id: 'en-easy-planet-largest', difficulty: 'easy', category: 'Space', icon: '🪐', theme: 'pink', prompt: 'Which is the largest planet in the solar system?', options: ['Jupiter', 'Mars', 'Saturn', 'Uranus'] },
+  { id: 'en-easy-planet-red', difficulty: 'easy', category: 'Space', icon: '🪐', theme: 'pink', prompt: 'Which planet is known as the red planet?', options: ['Mars', 'Venus', 'Neptune', 'Mercury'] },
+  { id: 'en-easy-science-water', difficulty: 'easy', category: 'Science', icon: '🔬', theme: 'green', prompt: 'What is the chemical formula for water?', options: ['H2O', 'CO2', 'O2', 'NaCl'] },
+  { id: 'en-easy-science-rainbow', difficulty: 'easy', category: 'Science', icon: '🔬', theme: 'green', prompt: 'What color do you get by mixing blue and yellow?', options: ['Green', 'Red', 'Purple', 'Orange'] },
+  { id: 'en-easy-animal-fastest', difficulty: 'easy', category: 'Nature', icon: '🐾', theme: 'orange', prompt: 'What is the fastest land animal?', options: ['Cheetah', 'Lion', 'Horse', 'Wolf'] },
+  { id: 'en-easy-sport-basket', difficulty: 'easy', category: 'Sports', icon: '🏀', theme: 'orange', prompt: 'In which sport do players score using a hoop?', options: ['Basketball', 'Baseball', 'Tennis', 'Golf'] },
+  { id: 'en-easy-math-triangle', difficulty: 'easy', category: 'Logic', icon: '🧠', theme: 'green', prompt: 'How many sides does a triangle have?', options: ['3', '4', '5', '6'] },
+  { id: 'en-easy-math-dozen', difficulty: 'easy', category: 'Logic', icon: '🧠', theme: 'green', prompt: 'How many units are in a dozen?', options: ['12', '10', '6', '20'] },
+]
+
+const mediumSeedsEn: TriviaSeed[] = [
+  { id: 'en-medium-history-moon', difficulty: 'medium', category: 'History', icon: '📜', theme: 'orange', prompt: 'In what year did humans first land on the Moon?', options: ['1969', '1959', '1975', '1981'] },
+  { id: 'en-medium-history-printing', difficulty: 'medium', category: 'History', icon: '📜', theme: 'orange', prompt: 'Who is associated with the movable-type printing press in Europe?', options: ['Johannes Gutenberg', 'Isaac Newton', 'Leonardo da Vinci', 'Galileo Galilei'] },
+  { id: 'en-medium-history-french-revolution', difficulty: 'medium', category: 'History', icon: '📜', theme: 'orange', prompt: 'In which country did the French Revolution begin?', options: ['France', 'Italy', 'Austria', 'Belgium'] },
+  { id: 'en-medium-geography-amazon', difficulty: 'medium', category: 'Geography', icon: '🌎', theme: 'blue', prompt: 'Which is the largest river by volume in the world?', options: ['Amazon', 'Nile', 'Ebro', 'Yangtze'] },
+  { id: 'en-medium-geography-everest', difficulty: 'medium', category: 'Geography', icon: '🌎', theme: 'blue', prompt: 'What is the highest mountain in the world?', options: ['Everest', 'Aconcagua', 'K2', 'Kilimanjaro'] },
+  { id: 'en-medium-science-sodium', difficulty: 'medium', category: 'Science', icon: '⚗️', theme: 'green', prompt: 'What is the chemical symbol for sodium?', options: ['Na', 'So', 'Sn', 'Sd'] },
+  { id: 'en-medium-science-dna', difficulty: 'medium', category: 'Science', icon: '⚗️', theme: 'green', prompt: 'Which molecule stores genetic information?', options: ['DNA', 'ATP', 'RNA', 'Chlorophyll'] },
+  { id: 'en-medium-literature-quixote', difficulty: 'medium', category: 'Culture', icon: '📚', theme: 'pink', prompt: 'Who wrote Don Quixote?', options: ['Miguel de Cervantes', 'Gabriel Garcia Marquez', 'Pablo Neruda', 'Lope de Vega'] },
+  { id: 'en-medium-literature-monalisa', difficulty: 'medium', category: 'Culture', icon: '📚', theme: 'pink', prompt: 'Who painted the Mona Lisa?', options: ['Leonardo da Vinci', 'Pablo Picasso', 'Vincent van Gogh', 'Claude Monet'] },
+  { id: 'en-medium-literature-romeo', difficulty: 'medium', category: 'Culture', icon: '📚', theme: 'pink', prompt: 'Who wrote Romeo and Juliet?', options: ['William Shakespeare', 'Charles Dickens', 'Moliere', 'Jules Verne'] },
+]
+
+const hardSeedsEn: TriviaSeed[] = [
+  { id: 'en-hard-math-prime', difficulty: 'hard', category: 'Mathematics', icon: '🧮', theme: 'green', prompt: 'Which of these numbers is prime?', options: ['29', '21', '27', '33'] },
+  { id: 'en-hard-math-pi', difficulty: 'hard', category: 'Mathematics', icon: '🧮', theme: 'green', prompt: 'Which constant represents the ratio between a circle\'s circumference and diameter?', options: ['Pi', 'Euler', 'Phi', 'Sigma'] },
+  { id: 'en-hard-math-angle', difficulty: 'hard', category: 'Mathematics', icon: '🧮', theme: 'green', prompt: 'How much do the interior angles of a triangle add up to?', options: ['180 degrees', '90 degrees', '270 degrees', '360 degrees'] },
+  { id: 'en-hard-computing-html', difficulty: 'hard', category: 'Technology', icon: '💻', theme: 'blue', prompt: 'Which language is used to structure web content?', options: ['HTML', 'CSS', 'SQL', 'Photoshop'] },
+  { id: 'en-hard-computing-css', difficulty: 'hard', category: 'Technology', icon: '💻', theme: 'blue', prompt: 'Which technology is mainly used for visual styling on a web page?', options: ['CSS', 'Python', 'Git', 'Docker'] },
+  { id: 'en-hard-astronomy-galaxy', difficulty: 'hard', category: 'Space', icon: '🌌', theme: 'pink', prompt: 'In which galaxy is the solar system located?', options: ['Milky Way', 'Andromeda', 'Sombrero', 'Magellanic Clouds'] },
+  { id: 'en-hard-astronomy-blackhole', difficulty: 'hard', category: 'Space', icon: '🌌', theme: 'pink', prompt: 'What do we call a region in space whose gravity is so intense that even light cannot escape?', options: ['Black hole', 'Nebula', 'Comet', 'Supernova'] },
+  { id: 'en-hard-biology-cell', difficulty: 'hard', category: 'Biology', icon: '🧬', theme: 'green', prompt: 'What is the basic unit of living beings?', options: ['Cell', 'Atom', 'Tissue', 'Organ'] },
+  { id: 'en-hard-culture-odyssey', difficulty: 'hard', category: 'Culture', icon: '🏛️', theme: 'orange', prompt: 'Who is traditionally credited as the author of The Odyssey?', options: ['Homer', 'Plato', 'Aristotle', 'Socrates'] },
+  { id: 'en-hard-history-wall', difficulty: 'hard', category: 'History', icon: '🏛️', theme: 'orange', prompt: 'In what year did the Berlin Wall fall?', options: ['1989', '1979', '1995', '1961'] },
+]
+
+const questionPoolsByLanguage: TriviaPoolByLanguage = {
+  es: {
+    easy: easySeeds,
+    medium: mediumSeeds,
+    hard: hardSeeds,
+  },
+  en: {
+    easy: easySeedsEn,
+    medium: mediumSeedsEn,
+    hard: hardSeedsEn,
+  },
 }
 
-export const drawTriviaQuestion = (difficulty: TriviaDifficulty, usedQuestionIds: ReadonlySet<string>) => {
-  const pool = questionPoolByDifficulty[difficulty]
+export const drawTriviaQuestion = (
+  difficulty: TriviaDifficulty,
+  usedQuestionIds: ReadonlySet<string>,
+  language: AppLanguage = 'es',
+) => {
+  const pool = questionPoolsByLanguage[language][difficulty]
   const available = pool.filter((question) => !usedQuestionIds.has(question.id))
   const source = available.length > 0 ? available : pool
   const seed = source[Math.floor(Math.random() * source.length)]

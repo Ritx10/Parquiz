@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GameAvatar } from '../components/game/game-avatar'
+import { getPlayerVisualTheme } from '../lib/player-color-themes'
 import { getPlayerSkinSrc } from '../lib/player-skins'
 import { useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import { useAppSettingsStore } from '../store/app-settings-store'
@@ -40,8 +41,10 @@ const generateRoomCode = () => {
 export function FriendsLobbyView() {
   const navigate = useNavigate()
   const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
+  const selectedTokenSkinId = useAppSettingsStore((state) => state.selectedTokenSkinId)
   const { username } = useControllerWallet()
   const localAvatar = getPlayerSkinSrc(selectedSkinId) || '🧑'
+  const selectedTokenTheme = getPlayerVisualTheme(selectedTokenSkinId)
   const hostPlayer = useMemo<LobbyParticipant>(
     () => ({
       id: 'host-local',
@@ -227,7 +230,7 @@ export function FriendsLobbyView() {
                     >
                       {player ? (
                         <>
-                          <span className="inline-flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#8e5b32] bg-gradient-to-b from-[#fff2dc] to-[#efcda0] text-3xl shadow-[0_3px_8px_rgba(37,22,10,0.2)]">
+                          <span className={`inline-flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#8e5b32] text-3xl shadow-[0_3px_8px_rgba(37,22,10,0.2)] ${player.id === 'host-local' || player.id === 'local-joined' ? `bg-gradient-to-b ${selectedTokenTheme.avatarToneClass}` : 'bg-gradient-to-b from-[#fff2dc] to-[#efcda0]'}`}>
                             <GameAvatar
                               alt={player.name}
                               avatar={player.avatar}

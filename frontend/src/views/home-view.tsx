@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GameAvatar } from '../components/game/game-avatar'
+import { TokenChip } from '../components/game/token-chip'
+import { getPlayerVisualTheme } from '../lib/player-color-themes'
+import { tokenSkinCatalog, type TokenSkinId } from '../lib/token-cosmetics'
 import { getPlayerSkinSrc, playerSkins } from '../lib/player-skins'
 import { useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import { usePlayerProfile } from '../lib/use-player-profile'
@@ -38,23 +41,19 @@ type ShopItem = {
   icon?: string
   isStarterSkin?: boolean
   isSkinItem?: boolean
+  isTokenItem?: boolean
   mediaSrc?: string
   name?: string
   subtitle?: string
   price: number
+  rarityLabel?: string
+  tokenSkinId?: TokenSkinId
   toneClass: string
 }
 
 type DifficultyOption = {
   id: AiDifficulty
   labelKey: 'difficultyEasy' | 'difficultyMedium' | 'difficultyHard'
-}
-
-const seatGradientClass: Record<LobbySeat['color'], string> = {
-  red: 'from-[#f88272] to-[#cb3d2f]',
-  blue: 'from-[#89d7ff] to-[#3a92dd]',
-  yellow: 'from-[#ffe58b] to-[#d4a518]',
-  green: 'from-[#9ce88f] to-[#349a5c]',
 }
 
 const medalIcons = [
@@ -103,14 +102,16 @@ const shopItemsByTab: Record<ShopTab, ShopItem[]> = {
     })),
   ],
   tokens: [
-    { id: 'token-ruby', icon: '🔴', price: 300, toneClass: 'from-[#ffe5df] to-[#ffc5b8]' },
-    { id: 'token-sapphire', icon: '🔵', price: 300, toneClass: 'from-[#e3f0ff] to-[#bcd9ff]' },
-    { id: 'token-emerald', icon: '🟢', price: 300, toneClass: 'from-[#e6ffe9] to-[#c0efc8]' },
-    { id: 'token-gold', icon: '🟡', price: 300, toneClass: 'from-[#fff6d9] to-[#f6e09a]' },
-    { id: 'token-fire', icon: '🔥', price: 700, toneClass: 'from-[#ffe9d6] to-[#ffca9d]' },
-    { id: 'token-ice', icon: '❄️', price: 700, toneClass: 'from-[#edf7ff] to-[#cee7fb]' },
-    { id: 'token-jungle', icon: '🌿', price: 900, toneClass: 'from-[#ecffe6] to-[#c8efb8]' },
-    { id: 'token-royal', icon: '👑', price: 1200, toneClass: 'from-[#fff4d7] to-[#f0d18f]' },
+    ...tokenSkinCatalog.map((skin) => ({
+      id: `token-${skin.id}`,
+      isTokenItem: true,
+      name: skin.name,
+      price: skin.price,
+      rarityLabel: skin.rarityLabel,
+      subtitle: skin.rarityLabel === 'Especial' ? 'Edicion especial' : 'Ficha equipable',
+      tokenSkinId: skin.id,
+      toneClass: skin.previewToneClass,
+    })),
   ],
   dice: [
     { id: 'dice-wood', icon: '🎲', price: 250, toneClass: 'from-[#f5ecdf] to-[#e2d3bf]' },
@@ -159,12 +160,14 @@ const homeCopyByLanguage = {
     shopTabDice: 'DADOS',
     shopTabThemes: 'TEMAS',
     closeShop: 'CERRAR TIENDA',
-    equipSkin: 'EQUIPAR',
-    equippedSkin: 'EQUIPADA',
+    buyItem: 'COMPRAR',
+    equipItem: 'EQUIPAR',
+    equippedItem: 'EQUIPADA',
     levelLabel: 'Nivel',
     prestigeLabel: 'Prestigio',
     starterSkin: 'INICIAL',
     premiumSkin: 'CATALOGO',
+    tokenEquippedBadge: 'EQUIPADA',
   },
   en: {
     shop: 'SHOP',
@@ -190,12 +193,14 @@ const homeCopyByLanguage = {
     shopTabDice: 'DICE',
     shopTabThemes: 'THEMES',
     closeShop: 'CLOSE SHOP',
-    equipSkin: 'EQUIP',
-    equippedSkin: 'EQUIPPED',
+    buyItem: 'BUY',
+    equipItem: 'EQUIP',
+    equippedItem: 'EQUIPPED',
     levelLabel: 'Level',
     prestigeLabel: 'Prestige',
     starterSkin: 'STARTER',
     premiumSkin: 'CATALOG',
+    tokenEquippedBadge: 'EQUIPPED',
   },
 } as const
 
@@ -281,12 +286,18 @@ export function HomeView() {
   const aiDifficulty = useAppSettingsStore((state) => state.aiDifficulty)
   const setAiDifficulty = useAppSettingsStore((state) => state.setAiDifficulty)
   const language = useAppSettingsStore((state) => state.language)
+  const ownedTokenSkinIds = useAppSettingsStore((state) => state.ownedTokenSkinIds)
   const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
+  const selectedTokenSkinId = useAppSettingsStore((state) => state.selectedTokenSkinId)
   const setSelectedSkinId = useAppSettingsStore((state) => state.setSelectedSkinId)
+  const setSelectedTokenSkinId = useAppSettingsStore((state) => state.setSelectedTokenSkinId)
+  const unlockTokenSkin = useAppSettingsStore((state) => state.unlockTokenSkin)
   const { username } = useControllerWallet()
   const playerProfile = usePlayerProfile()
   const ui = homeCopyByLanguage[language]
   const selectedSkinSrc = getPlayerSkinSrc(selectedSkinId)
+  const selectedTokenTheme = getPlayerVisualTheme(selectedTokenSkinId)
+  const ownedTokenSkinSet = new Set(ownedTokenSkinIds)
   const displayUsername = playerProfile.username || username || 'PARQUIZ_PLAYER_77'
   const levelLabel = `${ui.levelLabel} ${playerProfile.level}`
   const prestigeLabel = `${ui.prestigeLabel} ${playerProfile.prestige}`
@@ -370,7 +381,7 @@ export function HomeView() {
             <div className="rounded-[22px] border border-[#c99766]/60 bg-gradient-to-r from-[#6e3d2a] via-[#5e3426] to-[#4f2d22] px-3 py-2.5 text-[#ffe6bf]">
               <div className="flex items-center gap-3">
                 <span
-                  className={`inline-flex h-16 w-16 items-center justify-center rounded-full border-2 border-[#ffefc4] bg-gradient-to-b ${seatGradientClass[me?.color || 'blue']} text-lg font-black text-white shadow-[0_4px_10px_rgba(12,22,43,0.4)]`}
+                  className={`inline-flex h-16 w-16 items-center justify-center rounded-full border-2 border-[#ffefc4] bg-gradient-to-b ${selectedTokenTheme.avatarToneClass} text-lg font-black text-white shadow-[0_4px_10px_rgba(12,22,43,0.4)]`}
                 >
                   <GameAvatar
                     alt="Avatar del jugador"
@@ -661,22 +672,63 @@ export function HomeView() {
                     {shopItems.map((item) => (
                       (() => {
                         const isEquippedSkin = item.isSkinItem && item.id === selectedSkinId
+                        const isOwnedToken = Boolean(item.tokenSkinId && ownedTokenSkinSet.has(item.tokenSkinId))
+                        const isEquippedToken = Boolean(item.tokenSkinId && item.tokenSkinId === selectedTokenSkinId)
+                        const isEquippedItem = isEquippedSkin || isEquippedToken
+
+                        const handleItemAction = () => {
+                          if (item.isSkinItem) {
+                            setSelectedSkinId(item.id)
+                            return
+                          }
+
+                          if (!item.tokenSkinId) {
+                            return
+                          }
+
+                          if (!isOwnedToken) {
+                            unlockTokenSkin(item.tokenSkinId)
+                          }
+
+                          setSelectedTokenSkinId(item.tokenSkinId)
+                        }
+
+                        const actionLabel = item.isSkinItem
+                          ? isEquippedSkin
+                            ? ui.equippedItem
+                            : ui.equipItem
+                          : !item.tokenSkinId
+                            ? null
+                            : !isOwnedToken
+                              ? ui.buyItem
+                              : isEquippedToken
+                                ? ui.equippedItem
+                                : ui.equipItem
 
                         return (
                       <article
                         className={`rounded-[20px] border-2 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)] ${
-                          isEquippedSkin
+                          isEquippedItem
                             ? 'border-[#e0b54f] bg-gradient-to-b from-[#fff7d6] to-[#f2dda5] shadow-[0_0_0_3px_rgba(247,202,88,0.28)]'
                             : 'border-[#d7b889] bg-gradient-to-b from-[#fff8e8] to-[#f3dfba]'
                         }`}
                         key={item.id}
                       >
-                        <div className={`flex h-28 items-center justify-center rounded-[16px] bg-gradient-to-b ${item.toneClass} text-[70px] sm:text-[76px]`}>
+                        <div className={`relative flex h-28 items-center justify-center rounded-[16px] bg-gradient-to-b ${item.toneClass} text-[70px] sm:text-[76px]`}>
                           {item.mediaSrc ? (
                             <GameAvatar alt={item.name || item.id} avatar={item.mediaSrc} imageClassName="h-full w-full object-contain p-2" />
+                          ) : item.tokenSkinId ? (
+                            <TokenChip className="h-20 w-20 border-[4px] sm:h-24 sm:w-24" skinId={item.tokenSkinId} variant="shop" />
                           ) : (
                             item.icon
                           )}
+
+                          {isEquippedToken ? (
+                            <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border border-[#2f7a20] bg-gradient-to-b from-[#7ce05f] to-[#3fa326] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] text-white shadow-[0_0_16px_rgba(88,181,56,0.4)]">
+                              <span>✓</span>
+                              {ui.tokenEquippedBadge}
+                            </span>
+                          ) : null}
                         </div>
                         {item.name ? (
                           <>
@@ -687,6 +739,10 @@ export function HomeView() {
                               {item.isSkinItem ? (
                                 <span className="rounded-full border border-[#b98236] bg-gradient-to-b from-[#ffe28f] to-[#f3b949] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-[#5f3817]">
                                   {item.isStarterSkin ? ui.starterSkin : ui.premiumSkin}
+                                </span>
+                              ) : item.isTokenItem && item.rarityLabel ? (
+                                <span className="rounded-full border border-[#b98236] bg-gradient-to-b from-[#ffe28f] to-[#f3b949] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-[#5f3817]">
+                                  {item.rarityLabel}
                                 </span>
                               ) : null}
                             </div>
@@ -701,17 +757,17 @@ export function HomeView() {
                           <span className="mr-1 text-[#f6be2f]">🪙</span>
                           {item.price}
                         </div>
-                        {item.isSkinItem ? (
+                        {actionLabel ? (
                           <button
                             className={`mt-2 w-full rounded-full border px-3 py-1.5 font-display text-lg uppercase tracking-wide transition ${
-                              isEquippedSkin
+                              isEquippedItem
                                 ? 'border-[#2a6719] bg-gradient-to-b from-[#73df58] to-[#3f9f22] text-white shadow-[inset_0_2px_0_rgba(210,255,195,0.8),0_4px_0_rgba(38,95,22,0.85)]'
                                 : 'border-[#8f562f] bg-gradient-to-b from-[#a46539] to-[#7a4727] text-[#f7ddad] shadow-[inset_0_1px_0_rgba(255,225,189,0.45),0_4px_0_rgba(102,58,29,0.88)] hover:brightness-105'
                             }`}
-                            onClick={() => setSelectedSkinId(item.id)}
+                            onClick={handleItemAction}
                             type="button"
                           >
-                            {isEquippedSkin ? ui.equippedSkin : ui.equipSkin}
+                            {actionLabel}
                           </button>
                         ) : null}
                       </article>

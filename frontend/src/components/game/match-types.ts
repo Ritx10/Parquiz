@@ -1,3 +1,5 @@
+import type { TokenSkinId } from '../../lib/token-cosmetics'
+
 export type PlayerColor = 'red' | 'blue' | 'yellow' | 'green'
 
 export type MoveResource = 'dieA' | 'dieB' | 'sum' | 'bonus'
@@ -7,6 +9,7 @@ export type MatchPlayer = {
   name: string
   color: PlayerColor
   avatar: string
+  visualSkinId?: TokenSkinId
   tokensInBase: number
   tokensInGoal: number
   isHost?: boolean
@@ -17,6 +20,7 @@ export type MatchToken = {
   label: string
   ownerId: string
   color: PlayerColor
+  cosmeticId?: TokenSkinId
   position: number
 }
 

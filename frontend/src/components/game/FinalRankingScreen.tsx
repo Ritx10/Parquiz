@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { GameAvatar } from './game-avatar';
-import { getPlayerSkinSrc } from '../../lib/player-skins';
+import { getPlayerVisualThemeByColor } from '../../lib/player-color-themes';
+import type { TokenSkinId } from '../../lib/token-cosmetics';
 import { useAppSettingsStore } from '../../store/app-settings-store';
 
 type PlayerColor = 'red' | 'green' | 'blue' | 'yellow';
@@ -13,14 +15,15 @@ interface RankingEntry {
   place: PodiumPlace;
   reward: number;
   color: PlayerColor;
-  title: string;
+  title?: string;
+  visualSkinId?: TokenSkinId;
 }
 
 const defaultRanking = [
-  { id: "P1", name: "P1", place: 1, reward: 1000, color: "red", title: "GANADOR", avatar: 'P1' },
-  { id: "P2", name: "P2", place: 2, reward: 500, color: "green", title: "2° LUGAR", avatar: 'P2' },
-  { id: "P4", name: "P4", place: 3, reward: 250, color: "blue", title: "3° LUGAR", avatar: 'P4' },
-  { id: "P3", name: "P3", place: 4, reward: 100, color: "yellow", title: "4° LUGAR", avatar: 'P3' }
+  { id: "P1", name: "P1", place: 1, reward: 1000, color: "red", avatar: 'P1' },
+  { id: "P2", name: "P2", place: 2, reward: 500, color: "green", avatar: 'P2' },
+  { id: "P4", name: "P4", place: 3, reward: 250, color: "blue", avatar: 'P4' },
+  { id: "P3", name: "P3", place: 4, reward: 100, color: "yellow", avatar: 'P3' }
 ] as const satisfies RankingEntry[];
 
 const avatarToneByColor: Record<PlayerColor, string> = {
@@ -51,12 +54,44 @@ const placeRibbonClassNew: Record<PodiumPlace, string> = {
   4: 'bg-[#F1C40F] border-[#D68910]',
 };
 
-const placeOrdinalLabel: Record<PodiumPlace, string> = {
-  1: '1º',
-  2: '2º',
-  3: '3º',
-  4: '4º',
-};
+const rankingCopyByLanguage = {
+  es: {
+    coins: 'MONEDAS',
+    finalRanking: 'CLASIFICACIÓN FINAL',
+    placeOrdinalLabel: {
+      1: '1º',
+      2: '2º',
+      3: '3º',
+      4: '4º',
+    } as Record<PodiumPlace, string>,
+    placeTitleByPlace: {
+      1: 'GANADOR',
+      2: '2° LUGAR',
+      3: '3° LUGAR',
+      4: '4° LUGAR',
+    } as Record<PodiumPlace, string>,
+    scoreDetails: 'VER PUNTUACIÓN DETALLADA',
+    backHome: 'VOLVER AL MENÚ PRINCIPAL',
+  },
+  en: {
+    coins: 'COINS',
+    finalRanking: 'FINAL RANKING',
+    placeOrdinalLabel: {
+      1: '1ST',
+      2: '2ND',
+      3: '3RD',
+      4: '4TH',
+    } as Record<PodiumPlace, string>,
+    placeTitleByPlace: {
+      1: 'WINNER',
+      2: '2ND PLACE',
+      3: '3RD PLACE',
+      4: '4TH PLACE',
+    } as Record<PodiumPlace, string>,
+    scoreDetails: 'VIEW DETAILED SCORE',
+    backHome: 'BACK TO MAIN MENU',
+  },
+} as const;
 
 const placeMedalRibbons = (place: PodiumPlace) => {
   const common = "w-[18px] h-[54px] rounded-b-sm border-x-2 border-b-2 shadow-sm origin-top";
@@ -86,10 +121,15 @@ const placeMedalRibbons = (place: PodiumPlace) => {
   );
 }
 
-export default function FinalRankingScreen() {
+type FinalRankingScreenProps = {
+  placements?: RankingEntry[];
+}
+
+export default function FinalRankingScreen({ placements }: FinalRankingScreenProps) {
   const [show, setShow] = useState(false);
-  const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId);
-  const selectedSkinSrc = getPlayerSkinSrc(selectedSkinId);
+  const navigate = useNavigate();
+  const language = useAppSettingsStore((state) => state.language);
+  const ui = rankingCopyByLanguage[language];
 
   useEffect(() => {
     // Pequeño delay para asegurar que el montaje haya sucedido antes de aplicar las clases de show
@@ -97,14 +137,7 @@ export default function FinalRankingScreen() {
     return () => clearTimeout(t);
   }, []);
 
-  const ranking = defaultRanking.map((entry) =>
-    entry.place === 1 && selectedSkinSrc
-      ? {
-          ...entry,
-          avatar: selectedSkinSrc,
-        }
-      : entry,
-  );
+  const ranking = placements && placements.length > 0 ? placements : [...defaultRanking];
 
   const podiumPlacementByPlace = ranking.reduce((acc, entry) => {
     acc[entry.place] = entry;
@@ -148,7 +181,7 @@ export default function FinalRankingScreen() {
         
         <div className="relative z-10 rounded-[20px] border-[6px] border-[#6D381B] bg-gradient-to-b from-[#E2A26D] via-[#C98453] to-[#B36F40] px-[50px] py-[12px] shadow-[inset_0_4px_4px_rgba(255,255,255,0.3),0_10px_0_#874B2A]">
           <h1 className="font-display text-[44px] uppercase tracking-wide text-[#FFF8E7] sm:text-[54px]" style={{textShadow: '0 4px 0 #6D381B, 0 6px 12px rgba(0,0,0,0.5)', WebkitTextStroke: '2px #6D381B'}}>
-            CLASIFICACIÓN FINAL
+            {ui.finalRanking}
           </h1>
         </div>
       </div>
@@ -158,6 +191,7 @@ export default function FinalRankingScreen() {
         {[2, 1, 3, 4].map((placeOrder, index) => {
           const placement = podiumPlacementByPlace[placeOrder as PodiumPlace];
           if (!placement) return null;
+          const placementTitle = placement.title || ui.placeTitleByPlace[placement.place];
 
           return (
             <article
@@ -171,7 +205,7 @@ export default function FinalRankingScreen() {
                  )}
                  
                     <div className={`relative rounded-full border-[6px] ${placeRibbonClassNew[placement.place]} shadow-[0_10px_20px_rgba(0,0,0,0.3)] ${placeOrder === 1 ? 'h-[135px] w-[135px]' : 'h-[105px] w-[105px]'}`}>
-                    <div className={`flex h-full w-full items-center justify-center rounded-full border-[3px] border-[#FFF8E7] text-4xl font-black text-white/80 bg-gradient-to-b ${avatarToneByColor[placement.color]} shadow-inner overflow-hidden`}>
+                    <div className={`flex h-full w-full items-center justify-center rounded-full border-[3px] border-[#FFF8E7] text-4xl font-black text-white/80 bg-gradient-to-b ${getPlayerVisualThemeByColor(placement.color, placement.visualSkinId).avatarToneClass || avatarToneByColor[placement.color]} shadow-inner overflow-hidden`}>
                       <GameAvatar
                         alt={placement.name}
                         avatar={placement.avatar}
@@ -181,9 +215,9 @@ export default function FinalRankingScreen() {
                     </div>
                  </div>
                  
-                 <div className={`relative z-30 -mt-3 rounded-[12px] border-[3px] ${placeRibbonClassNew[placement.place]} px-3 py-1.5 text-center text-[13px] font-black uppercase tracking-wider text-white shadow-[0_5px_10px_rgba(0,0,0,0.4),inset_0_2px_0_rgba(255,255,255,0.4)]`}>
-                   {placement.name} - {placement.title}
-                 </div>
+                  <div className={`relative z-30 -mt-3 rounded-[12px] border-[3px] ${placeRibbonClassNew[placement.place]} px-3 py-1.5 text-center text-[13px] font-black uppercase tracking-wider text-white shadow-[0_5px_10px_rgba(0,0,0,0.4),inset_0_2px_0_rgba(255,255,255,0.4)]`}>
+                    {placement.name} - {placementTitle}
+                  </div>
               </div>
               
               <div className={`relative w-full rounded-t-[10px] border-x-[5px] border-t-[5px] border-[#8C522B] bg-gradient-to-b from-[#C48455] to-[#A0643B] shadow-[inset_0_8px_0_rgba(255,255,255,0.2)] ${placePodiumHeightClassNew[placement.place]} flex flex-col items-center pt-[20px]`}>
@@ -197,13 +231,13 @@ export default function FinalRankingScreen() {
                        boxShadow: `0 6px 10px rgba(0,0,0,0.3), inset 0 3px 0 ${placeMedalColors[placement.place].border}`,
                      }}
                    >
-                     <span className="font-display text-[32px] text-[#5A3219] drop-shadow-[0_1px_0_rgba(255,255,255,0.6)]">{placeOrdinalLabel[placement.place]}</span>
+                      <span className="font-display text-[32px] text-[#5A3219] drop-shadow-[0_1px_0_rgba(255,255,255,0.6)]">{ui.placeOrdinalLabel[placement.place]}</span>
                    </div>
                  </div>
                  
                  <div className="mt-auto mb-6 flex flex-col items-center drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]">
                    <span className="font-display text-[42px] leading-none text-[#FFF5DE]">{placement.reward}</span>
-                   <span className="text-[16px] font-black uppercase tracking-wider text-[#FFD7A0]">MONEDAS</span>
+                    <span className="text-[16px] font-black uppercase tracking-wider text-[#FFD7A0]">{ui.coins}</span>
                  </div>
               </div>
             </article>
@@ -251,11 +285,11 @@ export default function FinalRankingScreen() {
       <div className={`absolute bottom-[4%] w-full flex flex-col sm:flex-row justify-center items-center gap-4 sm:gap-6 z-[260] px-4 transition-transform duration-700 ease-out delay-[1000ms] ${show ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'}`}>
         <button
           className="w-full max-w-[340px] rounded-[30px] border-[5px] border-[#1D4ED8] bg-gradient-to-b from-[#60A5FA] via-[#3B82F6] to-[#2563EB] px-4 py-4 font-display text-[22px] uppercase tracking-wider text-white shadow-[0_10px_0_#1E3A8A,0_15px_20px_rgba(0,0,0,0.4),inset_0_4px_0_rgba(255,255,255,0.4)] transition hover:brightness-110 active:translate-y-[6px] active:shadow-[0_4px_0_#1E3A8A,0_5px_10px_rgba(0,0,0,0.4),inset_0_4px_0_rgba(255,255,255,0.4)]"
-          onClick={() => console.log('volver al menu')}
+          onClick={() => navigate('/', { replace: true })}
           type="button"
           style={{ textShadow: '0 2px 4px rgba(0,0,0,0.4)' }}
         >
-          VOLVER AL MENÚ PRINCIPAL
+          {ui.backHome}
         </button>
         <button
           className="w-full max-w-[340px] rounded-[30px] border-[5px] border-[#C2410C] bg-gradient-to-b from-[#FDBA74] via-[#F97316] to-[#EA580C] px-4 py-4 font-display text-[22px] uppercase tracking-wider text-white shadow-[0_10px_0_#9A3412,0_15px_20px_rgba(0,0,0,0.4),inset_0_4px_0_rgba(255,255,255,0.4)] transition hover:brightness-110 active:translate-y-[6px] active:shadow-[0_4px_0_#9A3412,0_5px_10px_rgba(0,0,0,0.4),inset_0_4px_0_rgba(255,255,255,0.4)]"
@@ -263,7 +297,7 @@ export default function FinalRankingScreen() {
           type="button"
           style={{ textShadow: '0 2px 4px rgba(0,0,0,0.4)' }}
         >
-          VER PUNTUACIÓN DETALLADA
+          {ui.scoreDetails}
         </button>
       </div>
       

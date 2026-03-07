@@ -1,6 +1,7 @@
 import { GameAvatar } from './game-avatar'
 import type { MatchPlayer } from './match-types'
 import type { TriviaDifficulty, TriviaQuestion, TriviaQuestionTheme } from '../../lib/trivia-engine'
+import { useAppSettingsStore } from '../../store/app-settings-store'
 
 type TriviaAnswerState = 'correct' | 'incorrect' | 'idle' | 'timeout'
 
@@ -29,17 +30,50 @@ const optionToneByIndex = [
   'from-[#ff6a5c] to-[#d53328]',
 ] as const
 
-const difficultyLabel: Record<TriviaDifficulty, string> = {
-  easy: 'Facil',
-  medium: 'Media',
-  hard: 'Dificil',
-}
-
-const feedbackCopy: Record<Exclude<TriviaAnswerState, 'idle'>, string> = {
-  correct: 'Respuesta correcta. Puedes mover tus fichas.',
-  incorrect: 'Respuesta incorrecta. El turno pasa al siguiente jugador.',
-  timeout: 'Se agoto el tiempo. El turno pasa al siguiente jugador.',
-}
+const triviaModalCopyByLanguage = {
+  es: {
+    aiAnswering: 'Bot respondiendo',
+    currentTurn: 'Turno actual',
+    difficultyLabel: {
+      easy: 'Facil',
+      medium: 'Media',
+      hard: 'Dificil',
+    } as Record<TriviaDifficulty, string>,
+    feedbackCopy: {
+      correct: 'Respuesta correcta. Puedes mover tus fichas.',
+      incorrect: 'Respuesta incorrecta. El turno pasa al siguiente jugador.',
+      timeout: 'Se agoto el tiempo. El turno pasa al siguiente jugador.',
+    } as Record<Exclude<TriviaAnswerState, 'idle'>, string>,
+    optionLabel: 'Opcion',
+    playerPrompt: 'Acierta para mover. Si fallas, pierdes el turno.',
+    resultLabel: {
+      correct: 'Correcto',
+      incorrect: 'Incorrecto',
+      timeout: 'Tiempo agotado',
+    } as Record<Exclude<TriviaAnswerState, 'idle'>, string>,
+  },
+  en: {
+    aiAnswering: 'Bot answering',
+    currentTurn: 'Current turn',
+    difficultyLabel: {
+      easy: 'Easy',
+      medium: 'Medium',
+      hard: 'Hard',
+    } as Record<TriviaDifficulty, string>,
+    feedbackCopy: {
+      correct: 'Correct answer. You can move your tokens.',
+      incorrect: 'Wrong answer. The turn passes to the next player.',
+      timeout: 'Time is up. The turn passes to the next player.',
+    } as Record<Exclude<TriviaAnswerState, 'idle'>, string>,
+    optionLabel: 'Option',
+    playerPrompt: 'Answer correctly to move. If you fail, you lose the turn.',
+    resultLabel: {
+      correct: 'Correct',
+      incorrect: 'Incorrect',
+      timeout: 'Time up',
+    } as Record<Exclude<TriviaAnswerState, 'idle'>, string>,
+  },
+} as const
 
 export function TriviaQuestionModal({
   answerState,
@@ -51,6 +85,8 @@ export function TriviaQuestionModal({
   secondsLeft,
   selectedOption,
 }: TriviaQuestionModalProps) {
+  const language = useAppSettingsStore((state) => state.language)
+  const ui = triviaModalCopyByLanguage[language]
   const answersLocked = answerState !== 'idle' || isAiTurn
 
   return (
@@ -80,7 +116,7 @@ export function TriviaQuestionModal({
                   {question.category}
                 </span>
                 <span className="rounded-full border-2 border-[#ffefb1] bg-[#5d2f0f]/70 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#ffe88a]">
-                  {difficultyLabel[difficulty]}
+                  {ui.difficultyLabel[difficulty]}
                 </span>
               </div>
 
@@ -108,7 +144,7 @@ export function TriviaQuestionModal({
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-[10px] font-black uppercase tracking-[0.18em] text-[#ffeeb6]">
-                        {isAiTurn ? 'Bot respondiendo' : 'Turno actual'}
+                        {isAiTurn ? ui.aiAnswering : ui.currentTurn}
                       </p>
                       <p className="truncate font-display text-xl leading-none text-white">{player.name}</p>
                     </div>
@@ -121,7 +157,7 @@ export function TriviaQuestionModal({
                   {question.prompt}
                 </p>
                 <p className="mt-3 text-center text-[11px] font-black uppercase tracking-[0.22em] text-[#d8edff] sm:text-[12px]">
-                  {isAiTurn ? 'La IA debe acertar para mover sus pasos.' : 'Acierta para mover. Si fallas, pierdes el turno.'}
+                  {isAiTurn ? ui.playerPrompt : ui.playerPrompt}
                 </p>
               </div>
             </div>
@@ -149,7 +185,7 @@ export function TriviaQuestionModal({
                   onClick={() => onSelectOption(index)}
                   type="button"
                 >
-                  <span className="block text-[11px] font-black uppercase tracking-[0.2em] opacity-90">Opcion {index + 1}</span>
+                  <span className="block text-[11px] font-black uppercase tracking-[0.2em] opacity-90">{ui.optionLabel} {index + 1}</span>
                   <span className="mt-1 block font-display text-[28px] leading-tight sm:text-[34px]">{option}</span>
                 </button>
               )
@@ -163,9 +199,9 @@ export function TriviaQuestionModal({
                 : 'border-[#b04736] bg-gradient-to-b from-[#ffe0d6] to-[#ffb098] text-[#6a1d12]'
             }`}>
               <p className="font-display text-[28px] uppercase leading-none sm:text-[34px]">
-                {answerState === 'correct' ? 'Correcto' : answerState === 'timeout' ? 'Tiempo agotado' : 'Incorrecto'}
+                {ui.resultLabel[answerState]}
               </p>
-              <p className="mt-1 text-sm font-black uppercase tracking-[0.12em]">{feedbackCopy[answerState]}</p>
+              <p className="mt-1 text-sm font-black uppercase tracking-[0.12em]">{ui.feedbackCopy[answerState]}</p>
             </div>
           ) : null}
         </div>
