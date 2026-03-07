@@ -1,0 +1,36 @@
+[world]
+name = "Parchis Trivia Engine (Dev)"
+description = "Authoritative on-chain game engine for Parchis Trivia built with Dojo."
+seed = "parchis_trivia"
+
+[namespace]
+default = "parchis_trivia"
+
+[env]
+rpc_url = "http://localhost:5050/"
+# Default account for katana with seed = 0
+account_address = "0x127fd5f1fe78a71f8bcd1fec63e3fe2f0486b6ecd5c86a0466c3a21fa5cfcec"
+private_key = "0xc5b2fcab997346f3ea1c00b002ecf6f382c5f9c9659a3894eb783c5320f912"
+# world_address = "0x..."
+
+[writers]
+"parchis_trivia-GameConfig" = ["parchis_trivia-config_system", "parchis_trivia-admin_system"]
+"parchis_trivia-BoardSquare" = ["parchis_trivia-config_system", "parchis_trivia-admin_system"]
+"parchis_trivia-GlobalState" = ["parchis_trivia-config_system", "parchis_trivia-lobby_system"]
+"parchis_trivia-Game" = ["parchis_trivia-lobby_system", "parchis_trivia-turn_system"]
+"parchis_trivia-GameSeat" = ["parchis_trivia-lobby_system"]
+"parchis_trivia-LobbyCodeIndex" = ["parchis_trivia-lobby_system"]
+"parchis_trivia-GameRuntimeConfig" = ["parchis_trivia-lobby_system"]
+"parchis_trivia-GamePlayer" = ["parchis_trivia-lobby_system", "parchis_trivia-turn_system", "parchis_trivia-shop_system"]
+"parchis_trivia-Token" = ["parchis_trivia-turn_system", "parchis_trivia-shop_system"]
+"parchis_trivia-TurnState" = ["parchis_trivia-turn_system", "parchis_trivia-shop_system"]
+"parchis_trivia-DiceState" = ["parchis_trivia-lobby_system", "parchis_trivia-turn_system"]
+"parchis_trivia-BonusState" = ["parchis_trivia-lobby_system", "parchis_trivia-turn_system"]
+"parchis_trivia-EgsConfig" = ["parchis_trivia-admin_system"]
+"parchis_trivia-EgsSessionBinding" = ["parchis_trivia-egs_system", "parchis_trivia-turn_system"]
+"parchis_trivia-PendingQuestion" = ["parchis_trivia-turn_system"]
+"parchis_trivia-PlayerItem" = ["parchis_trivia-shop_system", "parchis_trivia-turn_system"]
+"parchis_trivia-SquareOccupancy" = ["parchis_trivia-turn_system"]
+
+[owners]
+"parchis_trivia" = ["parchis_trivia-admin_system", "parchis_trivia-config_system"]

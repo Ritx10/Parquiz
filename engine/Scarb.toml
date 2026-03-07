@@ -1,0 +1,29 @@
+[package]
+name = "parchis_trivia_engine"
+version = "0.1.0"
+edition = "2024_07"
+
+[cairo]
+sierra-replace-ids = true
+
+[scripts]
+migrate = "sozo build && sozo migrate"
+
+[dependencies]
+dojo = "1.8.0"
+starknet = "2.13.1"
+cartridge_vrf = { git = "https://github.com/cartridge-gg/vrf", tag = "v0.3.1" }
+
+[[target.starknet-contract]]
+build-external-contracts = ["dojo::world::world_contract::world"]
+
+[tool.scarb]
+allow-prebuilt-plugins = ["dojo_cairo_macros"]
+
+[dev-dependencies]
+cairo_test = "2.13.1"
+dojo_cairo_test = "1.8.0"
+snforge_std = "0.53.0"
+
+[patch.scarbs-xyz]
+openzeppelin = { git = "https://github.com/OpenZeppelin/cairo-contracts", tag = "v2.0.0" }
