@@ -15,6 +15,7 @@ import type {
 } from '../components/game/match-types'
 import { useReadonlyGameState } from '../store/game-state-store'
 import { useGameUiStore } from '../store/game-ui-store'
+import FinalRankingScreen from '../components/game/FinalRankingScreen'
 
 const TRACK_LENGTH = 68
 
@@ -127,6 +128,10 @@ type FinalPlacement = {
   tag: string
 }
 
+type MatchViewProps = {
+  showVictoryPreviewControl?: boolean
+}
+
 const rewardByPlace: Record<PodiumPlace, number> = {
   1: 1000,
   2: 500,
@@ -135,17 +140,17 @@ const rewardByPlace: Record<PodiumPlace, number> = {
 }
 
 const placeOrdinalLabel: Record<PodiumPlace, string> = {
-  1: '1RO',
-  2: '2DO',
-  3: '3RO',
-  4: '4TO',
+  1: '1º',
+  2: '2º',
+  3: '3º',
+  4: '4º',
 }
 
 const placeResultLabel: Record<PodiumPlace, string> = {
   1: 'GANADOR',
-  2: '2DO LUGAR',
-  3: '3ER LUGAR',
-  4: '4TO LUGAR',
+  2: '2° LUGAR',
+  3: '3° LUGAR',
+  4: '4° LUGAR',
 }
 
 const placeAnnouncementLabel: Record<1 | 2 | 3, string> = {
@@ -927,7 +932,57 @@ const createInitialTokenTrackSteps = (inputTokens: MatchToken[]) => {
   }, {})
 }
 
-export function MatchView() {
+
+const placePodiumHeightClassNew: Record<PodiumPlace, string> = {
+  1: 'h-[320px]',
+  2: 'h-[240px]',
+  3: 'h-[180px]',
+  4: 'h-[130px]',
+}
+
+const placeMedalColors: Record<PodiumPlace, { bg: string, border: string }> = {
+  1: { bg: 'from-[#FFDF73] via-[#F4B41A] to-[#D48900]', border: '#FFEA99' },
+  2: { bg: 'from-[#E2E8F0] via-[#A0AEC0] to-[#718096]', border: '#F7FAFC' },
+  3: { bg: 'from-[#F6AD55] via-[#DD6B20] to-[#9C4221]', border: '#FBD38D' },
+  4: { bg: 'from-[#D69E2E] via-[#B7791F] to-[#975A16]', border: '#F6E05E' },
+}
+
+const placeRibbonClassNew: Record<PodiumPlace, string> = {
+  1: 'bg-[#E74C3C] border-[#C0392B]',
+  2: 'bg-[#2ECC71] border-[#27AE60]',
+  3: 'bg-[#3498DB] border-[#2980B9]',
+  4: 'bg-[#F1C40F] border-[#D68910]',
+}
+
+const placeMedalRibbons = (place: PodiumPlace) => {
+  const common = "w-[18px] h-[54px] rounded-b-sm border-x-2 border-b-2 shadow-sm origin-top";
+  if (place === 1) return (
+    <>
+      <div className={`${common} -rotate-[30deg] bg-gradient-to-b from-[#EF5350] to-[#C62828] border-[#8E0000]`} />
+      <div className={`${common} rotate-[30deg] bg-gradient-to-b from-[#EF5350] to-[#C62828] border-[#8E0000]`} />
+    </>
+  );
+  if (place === 2) return (
+    <>
+      <div className={`${common} -rotate-[30deg] bg-gradient-to-b from-[#42A5F5] to-[#1565C0] border-[#0D47A1]`} />
+      <div className={`${common} rotate-[30deg] bg-gradient-to-b from-[#42A5F5] to-[#1565C0] border-[#0D47A1]`} />
+    </>
+  );
+  if (place === 3) return (
+    <>
+      <div className={`${common} -rotate-[30deg] bg-gradient-to-b from-[#EF5350] to-[#C62828] border-[#8E0000]`} />
+      <div className={`${common} rotate-[30deg] bg-gradient-to-b from-[#42A5F5] to-[#1565C0] border-[#0D47A1]`} />
+    </>
+  );
+  return (
+    <>
+      <div className={`${common} -rotate-[30deg] bg-gradient-to-b from-[#FFA726] to-[#EF6C00] border-[#E65100]`} />
+      <div className={`${common} rotate-[30deg] bg-gradient-to-b from-[#FFA726] to-[#EF6C00] border-[#E65100]`} />
+    </>
+  );
+}
+
+export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps) {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const gameState = useReadonlyGameState()
@@ -976,6 +1031,7 @@ export function MatchView() {
   })
   const hudRollIntervalRef = useRef<null | number>(null)
   const hudRollTimeoutRef = useRef<null | number>(null)
+  const victoryPreviewTimeoutRef = useRef<null | number>(null)
   const aiActionTimeoutRef = useRef<null | number>(null)
   const botWatchdogIntervalRef = useRef<null | number>(null)
   const botTurnStartedAtRef = useRef(0)
@@ -1034,6 +1090,11 @@ export function MatchView() {
   }, [players])
 
   useEffect(() => {
+    if (victoryPreviewTimeoutRef.current !== null) {
+      window.clearTimeout(victoryPreviewTimeoutRef.current)
+      victoryPreviewTimeoutRef.current = null
+    }
+
     setCurrentTurnPlayerId(activeSessionState.turnPlayerId)
     setTokens(initialTokens)
     setTokenTrackSteps(createInitialTokenTrackSteps(initialTokens))
@@ -1223,6 +1284,11 @@ export function MatchView() {
       if (hudRollTimeoutRef.current !== null) {
         window.clearTimeout(hudRollTimeoutRef.current)
         hudRollTimeoutRef.current = null
+      }
+
+      if (victoryPreviewTimeoutRef.current !== null) {
+        window.clearTimeout(victoryPreviewTimeoutRef.current)
+        victoryPreviewTimeoutRef.current = null
       }
 
       if (aiActionTimeoutRef.current !== null) {
@@ -2213,6 +2279,33 @@ export function MatchView() {
       }!`
     : ''
 
+  const previewWinnerPlayer = playersById[currentTurnPlayerId] ?? players[0] ?? null
+
+  const clearVictoryPreview = useCallback(() => {
+    if (victoryPreviewTimeoutRef.current !== null) {
+      window.clearTimeout(victoryPreviewTimeoutRef.current)
+      victoryPreviewTimeoutRef.current = null
+    }
+
+    setWinnerPlayerId(null)
+    setFinalPlacements(null)
+    setAnnouncementIndex(0)
+    setShowFinalClassification(false)
+    setShowPlacementDetails(false)
+  }, [])
+
+  const triggerVictoryPreview = useCallback(() => {
+    if (!previewWinnerPlayer) {
+      return
+    }
+
+    clearVictoryPreview()
+    victoryPreviewTimeoutRef.current = window.setTimeout(() => {
+      setWinnerPlayerId(previewWinnerPlayer.id)
+      victoryPreviewTimeoutRef.current = null
+    }, 40)
+  }, [clearVictoryPreview, previewWinnerPlayer])
+
   return (
     <section
       className="min-h-screen bg-cover bg-center bg-no-repeat px-3 py-4 sm:px-4 sm:py-6"
@@ -2348,6 +2441,29 @@ export function MatchView() {
         </article>
       </div>
 
+      {showVictoryPreviewControl && previewWinnerPlayer ? (
+        <div className="fixed right-3 top-3 z-[240] w-[min(260px,calc(100vw-1.5rem))] rounded-2xl border border-[#4f2f16] bg-[#2c170d]/92 p-3 shadow-[0_14px_28px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#f7d79b]">Mock board</p>
+          <p className="mt-1 text-xs font-semibold text-[#ffeac5]">Forzar preview de victoria para {previewWinnerPlayer.name}.</p>
+          <div className="mt-3 flex gap-2">
+            <button
+              className="flex-1 rounded-full border border-[#f0bf68] bg-gradient-to-b from-[#f5c76d] to-[#d88c2f] px-3 py-2 text-[11px] font-black uppercase tracking-[0.08em] text-[#4a2409] transition hover:brightness-105"
+              onClick={triggerVictoryPreview}
+              type="button"
+            >
+              Ver victoria
+            </button>
+            <button
+              className="rounded-full border border-[#9a7c59] bg-white/8 px-3 py-2 text-[11px] font-black uppercase tracking-[0.08em] text-[#fff1d4] transition hover:bg-white/14"
+              onClick={clearVictoryPreview}
+              type="button"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {activeAnnouncementPlacement ? (
         <div className="fixed inset-0 z-[220] flex items-center justify-center px-3 py-6">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(255,236,173,0.32),rgba(20,10,6,0.84)_62%,rgba(10,5,2,0.9)_100%)] backdrop-blur-[7px]" />
@@ -2435,115 +2551,7 @@ export function MatchView() {
         </div>
       ) : null}
 
-      {showFinalClassification && finalPlacements ? (
-        <div className="fixed inset-0 z-[230] flex items-center justify-center px-2 py-3 sm:px-4 sm:py-6">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(147,222,255,0.46),rgba(39,84,145,0.32)_38%,rgba(9,20,40,0.86)_100%)] backdrop-blur-[6px]" />
-
-          <div className="pointer-events-none absolute inset-0 overflow-hidden">
-            <span className="absolute left-1/2 top-[28%] h-[240px] w-[84%] -translate-x-1/2 rounded-[100%] border border-white/35 bg-[radial-gradient(circle_at_50%_50%,rgba(254,197,102,0.28),rgba(151,111,255,0.24)_48%,rgba(88,158,255,0.16)_72%,transparent_100%)]" />
-
-            {Array.from({ length: 20 }).map((_, index) => (
-              <span
-                className="absolute bottom-[-10px] h-10 w-10 rounded-full border border-[#c68d2f] bg-gradient-to-b from-[#ffe58d] to-[#d69d28] shadow-[0_6px_14px_rgba(0,0,0,0.35)]"
-                key={`coin-${index}`}
-                style={{
-                  left: `${2 + ((index * 5.5) % 96)}%`,
-                  transform: `translateY(${(index % 3) * 6}px)`,
-                }}
-              />
-            ))}
-          </div>
-
-          <div className="relative w-full max-w-[980px] overflow-hidden rounded-[34px] border-[4px] border-[#7a4525] bg-gradient-to-b from-[#d2efff] via-[#8ed4ff] to-[#5d95da] px-3 pb-4 pt-2 shadow-[0_28px_54px_rgba(5,11,23,0.6)] sm:px-5 sm:pb-6 sm:pt-3">
-            <div className="mx-auto mt-1 w-fit rounded-[24px] border-[4px] border-[#7a4928] bg-gradient-to-b from-[#b9784a] via-[#94603c] to-[#734425] px-5 py-2 shadow-[inset_0_1px_0_rgba(255,226,183,0.62),0_8px_16px_rgba(47,25,12,0.38)] sm:px-10 sm:py-3">
-              <p className="font-display text-[40px] uppercase tracking-[0.06em] text-[#ffe9bf] drop-shadow-[0_2px_0_rgba(73,37,16,0.8)] sm:text-[54px]">
-                CLASIFICACION FINAL
-              </p>
-            </div>
-
-            <div className="mx-auto mt-5 flex max-w-[900px] flex-wrap items-end justify-center gap-2 sm:gap-4">
-              {[2, 1, 3, 4].map((placeOrder, index) => {
-                const placement = podiumPlacementByPlace[placeOrder as PodiumPlace]
-
-                if (!placement) {
-                  return null
-                }
-
-                return (
-                  <article
-                    className="podium-rise relative flex w-[170px] flex-col items-center"
-                    key={`podium-${placement.place}`}
-                    style={{
-                      animationDelay: `${index * 110}ms`,
-                    }}
-                  >
-                    <div
-                      className={`mb-2 rounded-full border-[4px] border-[#7d4b2b] bg-gradient-to-b p-1.5 shadow-[0_7px_15px_rgba(0,0,0,0.34)] ${avatarToneByColor[placement.color]} ${
-                        placement.place === 1 ? 'h-[118px] w-[118px]' : 'h-[96px] w-[96px]'
-                      }`}
-                    >
-                      <div className="flex h-full w-full items-center justify-center rounded-full border border-black/20 bg-white/25 text-3xl font-black text-[#2d1a0f]">
-                        {placement.avatar}
-                      </div>
-                    </div>
-
-                    <p
-                      className={`mb-1.5 w-full rounded-xl border-2 px-2 py-1 text-center text-[18px] font-black uppercase tracking-wide shadow-[0_4px_8px_rgba(0,0,0,0.26)] ${placeRibbonClass[placement.place]}`}
-                    >
-                      {placement.tag} - {placeResultLabel[placement.place]}
-                    </p>
-
-                    <div
-                      className={`relative flex w-full flex-col items-center justify-end rounded-t-[20px] border-[3px] border-[#7a4828] bg-gradient-to-b from-[#b87b4c] via-[#94603b] to-[#714225] px-2 pb-4 pt-8 text-center shadow-[inset_0_1px_0_rgba(255,223,184,0.52)] ${placePodiumHeightClass[placement.place]}`}
-                    >
-                      <span
-                        className={`absolute left-1/2 top-[-30px] inline-flex h-[62px] w-[62px] -translate-x-1/2 items-center justify-center rounded-full border-[3px] text-3xl font-black ${placeMedalClass[placement.place]}`}
-                      >
-                        {placeOrdinalLabel[placement.place]}
-                      </span>
-
-                      <p className="font-display text-[54px] leading-none text-[#ffe9c6] drop-shadow-[0_2px_0_rgba(73,37,16,0.8)]">
-                        {placement.reward}
-                      </p>
-                      <p className="mt-1 text-[35px] font-black uppercase tracking-[0.05em] text-[#fff2d8] drop-shadow-[0_2px_0_rgba(70,35,15,0.75)]">
-                        MONEDAS
-                      </p>
-                    </div>
-                  </article>
-                )
-              })}
-            </div>
-
-            {showPlacementDetails ? (
-              <div className="mx-auto mt-3 grid max-w-[860px] gap-1 rounded-2xl border border-[#74503a]/60 bg-[#442717]/35 p-3 text-sm font-black uppercase tracking-[0.08em] text-[#ffefc8] sm:grid-cols-2">
-                {finalPlacements.map((placement) => (
-                  <p key={`details-${placement.place}`}>
-                    {placement.tag}: {placeResultLabel[placement.place]} - {placement.goalCount} en meta - score{' '}
-                    {placement.progressScore}
-                  </p>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="mx-auto mt-4 flex max-w-[860px] flex-col gap-2 sm:flex-row sm:gap-4">
-              <button
-                className="flex-1 rounded-[22px] border-[3px] border-[#2d5b90] bg-gradient-to-b from-[#50abff] via-[#2f79d5] to-[#1e4f9f] px-6 py-3 font-display text-[35px] uppercase tracking-[0.04em] text-[#ecf7ff] shadow-[inset_0_2px_0_rgba(202,232,255,0.72),0_6px_0_rgba(28,66,122,0.9)] transition hover:brightness-105"
-                onClick={goBackToMenu}
-                type="button"
-              >
-                VOLVER AL MENU PRINCIPAL
-              </button>
-              <button
-                className="flex-1 rounded-[22px] border-[3px] border-[#a65e18] bg-gradient-to-b from-[#ffc25f] via-[#ef9732] to-[#c86b1d] px-6 py-3 font-display text-[35px] uppercase tracking-[0.04em] text-[#fff2d9] shadow-[inset_0_2px_0_rgba(255,222,165,0.72),0_6px_0_rgba(140,77,23,0.88)] transition hover:brightness-105"
-                onClick={() => setShowPlacementDetails((current) => !current)}
-                type="button"
-              >
-                VER PUNTUACION DETALLADA
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {showFinalClassification && finalPlacements ? <FinalRankingScreen /> : null}
 
       <style>{`
         @keyframes victoryConfettiFall {
