@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GameAvatar } from '../components/game/game-avatar'
-import { ArcadeIcon } from '../components/ui/arcade-icon'
 import { getPlayerSkinSrc } from '../lib/player-skins'
 import { useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import { useAppSettingsStore } from '../store/app-settings-store'
@@ -24,10 +23,10 @@ const statusLabel: Record<MatchmakingStatus, string> = {
 }
 
 const rivalPool = [
-  { id: 'rival-1', name: 'AventuraFox', avatar: '/skins/parquiz/capi-ninja.png' },
-  { id: 'rival-2', name: 'SaberNova', avatar: '/skins/parquiz/capi-astronaut.png' },
-  { id: 'rival-3', name: 'TurboPanda', avatar: '/skins/parquiz/capi-dino.png' },
-  { id: 'rival-4', name: 'RayoStar', avatar: '/skins/parquiz/capi-pilot.png' },
+  { id: 'rival-1', name: 'AventuraFox', avatar: '🦊' },
+  { id: 'rival-2', name: 'SaberNova', avatar: '🧠' },
+  { id: 'rival-3', name: 'TurboPanda', avatar: '🐼' },
+  { id: 'rival-4', name: 'RayoStar', avatar: '⭐' },
 ] as const
 
 export function MatchmakingLobbyView() {
@@ -161,8 +160,8 @@ export function MatchmakingLobbyView() {
                           </>
                         ) : (
                           <>
-                            <span className="inline-flex h-24 w-24 items-center justify-center rounded-full border-2 border-dashed border-[#c4a57d] bg-[#f2dfbf] text-[#8f6a3f]">
-                              <ArcadeIcon className="h-11 w-11" name="user" />
+                            <span className="inline-flex h-24 w-24 items-center justify-center rounded-full border-2 border-dashed border-[#c4a57d] bg-[#f2dfbf] text-[46px] text-[#8f6a3f]">
+                              ?
                             </span>
                             <p className="mt-2 text-lg font-black uppercase tracking-wide text-[#8b5a2f]">
                               Esperando
@@ -213,7 +212,7 @@ export function MatchmakingLobbyView() {
                               : 'border-[#b69062] bg-[#f2dfbe] text-[#855432]'
                           }`}
                         >
-                          {reached ? <ArcadeIcon className="h-3.5 w-3.5" name="check" /> : index + 1}
+                          {reached ? '✓' : index + 1}
                         </span>
                         <span>{statusLabel[key]}</span>
                         {active && status !== 'found' ? (

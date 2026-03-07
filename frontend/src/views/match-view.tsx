@@ -4,7 +4,6 @@ import { Board3D } from '../components/game/board3d'
 import { GameAvatar } from '../components/game/game-avatar'
 import { LogDrawer } from '../components/game/log-drawer'
 import { TriviaQuestionModal } from '../components/game/trivia-question-modal'
-import { ArcadeIcon } from '../components/ui/arcade-icon'
 import { drawTriviaQuestion, pickAiTriviaAnswer, triviaSecondsByDifficulty, type TriviaDifficulty, type TriviaQuestion } from '../lib/trivia-engine'
 import { useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import type {
@@ -2623,11 +2622,11 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
               />
             ))}
 
-            <span className="absolute left-[8%] top-[17%] text-[#ffd971] opacity-80 drop-shadow-[0_6px_12px_rgba(0,0,0,0.4)]">
-              <ArcadeIcon className="h-14 w-14 sm:h-16 sm:w-16" name="fireworks" />
+            <span className="absolute left-[8%] top-[17%] text-6xl opacity-80 drop-shadow-[0_6px_12px_rgba(0,0,0,0.4)] sm:text-7xl">
+              🎆
             </span>
-            <span className="absolute right-[8%] top-[17%] text-[#ff91c0] opacity-80 drop-shadow-[0_6px_12px_rgba(0,0,0,0.4)]">
-              <ArcadeIcon className="h-14 w-14 sm:h-16 sm:w-16" name="fireworks" />
+            <span className="absolute right-[8%] top-[17%] text-6xl opacity-80 drop-shadow-[0_6px_12px_rgba(0,0,0,0.4)] sm:text-7xl">
+              🎇
             </span>
 
             {Array.from({ length: 8 }).map((_, index) => (
@@ -2647,7 +2646,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
 
           <div className="relative w-full max-w-[860px] text-center">
             <div className="victory-pop relative mx-auto mb-3 flex h-[164px] w-[164px] items-center justify-center rounded-full border-[6px] border-[#7b4528] bg-gradient-to-b from-[#ffe7ab] via-[#f8bf56] to-[#cd8335] shadow-[0_26px_42px_rgba(0,0,0,0.44)]">
-              <span className="absolute -top-8 text-[#ffed95] drop-shadow-[0_4px_5px_rgba(0,0,0,0.4)]"><ArcadeIcon className="h-12 w-12" name="crown" /></span>
+              <span className="absolute -top-8 text-5xl drop-shadow-[0_4px_5px_rgba(0,0,0,0.4)]">👑</span>
               <span
                 className={`inline-flex h-[118px] w-[118px] items-center justify-center rounded-full border-[4px] border-[#7c3f21] bg-gradient-to-b text-3xl font-black text-[#2c190d] ${avatarToneByColor[activeAnnouncementPlacement.color]}`}
               >

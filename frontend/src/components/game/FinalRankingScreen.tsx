@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { ArcadeIcon } from '../ui/arcade-icon';
 import { GameAvatar } from './game-avatar';
 import { getPlayerSkinSrc } from '../../lib/player-skins';
 import { useAppSettingsStore } from '../../store/app-settings-store';
@@ -134,10 +133,10 @@ export default function FinalRankingScreen() {
         <div className="absolute top-[14%] right-[22%] w-[140px] h-[90px] bg-white rounded-full opacity-90" />
 
         {/* Decorative elements */}
-        <div className="absolute top-[40%] left-[15%] text-red-500 opacity-80 drop-shadow-md transform -rotate-12 animate-pulse"><ArcadeIcon className="h-10 w-10" name="heart" /></div>
+        <div className="absolute top-[40%] left-[15%] text-5xl opacity-80 text-red-500 drop-shadow-md transform -rotate-12 animate-pulse">❤️</div>
         <div className="absolute top-[20%] left-[30%] text-6xl opacity-80 text-[#3B82F6] drop-shadow-md font-bold">?</div>
         <div className="absolute top-[35%] right-[20%] text-6xl opacity-80 text-[#3B82F6] drop-shadow-md font-bold transform rotate-12">?</div>
-        <div className="absolute top-[25%] right-[35%] text-red-500 opacity-80 drop-shadow-md transform rotate-[25deg] animate-pulse"><ArcadeIcon className="h-8 w-8" name="heart" /></div>
+        <div className="absolute top-[25%] right-[35%] text-4xl opacity-80 text-red-500 drop-shadow-md transform rotate-[25deg] animate-pulse">❤️</div>
       </div>
 
       {/* Wooden Banner */}
@@ -168,7 +167,7 @@ export default function FinalRankingScreen() {
             >
               <div className="relative flex flex-col items-center justify-end mb-[-25px] z-30">
                  {placeOrder === 1 && (
-                   <div className="absolute -top-[70px] text-[#FFE27D] drop-shadow-[0_4px_8px_rgba(0,0,0,0.4)] animate-bounce z-40"><ArcadeIcon className="h-[80px] w-[80px]" name="crown" /></div>
+                   <div className="absolute -top-[70px] text-[80px] drop-shadow-[0_4px_8px_rgba(0,0,0,0.4)] animate-bounce z-40">👑</div>
                  )}
                  
                     <div className={`relative rounded-full border-[6px] ${placeRibbonClassNew[placement.place]} shadow-[0_10px_20px_rgba(0,0,0,0.3)] ${placeOrder === 1 ? 'h-[135px] w-[135px]' : 'h-[105px] w-[105px]'}`}>
@@ -280,12 +279,10 @@ export default function FinalRankingScreen() {
           justify-content: center;
         }
         .arcade-coin::after {
-          content: '';
-          width: 36%;
-          height: 36%;
-          border-radius: 999px;
-          border: 2px solid rgba(214, 139, 19, 0.6);
-          box-shadow: inset 0 0 0 2px rgba(255,255,255,0.32);
+          content: '⭐';
+          font-size: 50%;
+          color: #D68B13;
+          opacity: 0.6;
         }
 
         .arcade-coin-falling {
@@ -303,12 +300,10 @@ export default function FinalRankingScreen() {
           animation: coinFall linear forwards;
         }
         .arcade-coin-falling::after {
-          content: '';
-          width: 36%;
-          height: 36%;
-          border-radius: 999px;
-          border: 2px solid rgba(214, 139, 19, 0.6);
-          box-shadow: inset 0 0 0 2px rgba(255,255,255,0.32);
+          content: '⭐';
+          font-size: 50%;
+          color: #D68B13;
+          opacity: 0.6;
         }
 
         @keyframes coinFall {

@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GameAvatar } from '../components/game/game-avatar'
-import { ArcadeIcon } from '../components/ui/arcade-icon'
 import { getPlayerSkinSrc } from '../lib/player-skins'
 import { useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import { useAppSettingsStore } from '../store/app-settings-store'
@@ -14,15 +13,15 @@ type LobbyParticipant = {
 }
 
 const friendCandidates: Omit<LobbyParticipant, 'isHost'>[] = [
-  { id: 'friend-a', name: 'LunaDice', avatar: '/skins/parquiz/capi-princess.png' },
-  { id: 'friend-b', name: 'TurboFox', avatar: '/skins/parquiz/capi-ninja.png' },
-  { id: 'friend-c', name: 'NexoStar', avatar: '/skins/parquiz/capi-astronaut.png' },
+  { id: 'friend-a', name: 'LunaDice', avatar: '👩' },
+  { id: 'friend-b', name: 'TurboFox', avatar: '🦊' },
+  { id: 'friend-c', name: 'NexoStar', avatar: '⭐' },
 ]
 
 const remoteHost: LobbyParticipant = {
   id: 'remote-host',
   name: 'HOST_AMIGO',
-  avatar: '/skins/parquiz/capi-chef.png',
+  avatar: '🧔',
   isHost: true,
 }
 
@@ -42,7 +41,7 @@ export function FriendsLobbyView() {
   const navigate = useNavigate()
   const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
   const { username } = useControllerWallet()
-  const localAvatar = getPlayerSkinSrc(selectedSkinId) || '/skins/parquiz/capi-princess.png'
+  const localAvatar = getPlayerSkinSrc(selectedSkinId) || '🧑'
   const hostPlayer = useMemo<LobbyParticipant>(
     () => ({
       id: 'host-local',
@@ -247,8 +246,8 @@ export function FriendsLobbyView() {
                         </>
                       ) : (
                         <>
-                          <span className="inline-flex h-14 w-14 items-center justify-center rounded-full border-2 border-dashed border-[#c5a376] bg-[#f4dfbc] text-[#936a43]">
-                            <ArcadeIcon className="h-7 w-7" name="user" />
+                          <span className="inline-flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#c5a376] border-dashed bg-[#f4dfbc] text-2xl text-[#936a43]">
+                            +
                           </span>
                           <p className="mt-2 text-xs font-black uppercase tracking-wide text-[#8b5a2f]">
                             Esperando jugador...
