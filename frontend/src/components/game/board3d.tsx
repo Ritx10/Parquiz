@@ -1,4 +1,5 @@
-import type { BoardThemeSurfacePalette } from '../../lib/board-themes'
+import { memo, useMemo } from 'react'
+import { getBoardThemeSurfacePalette, type BoardThemeSurfacePalette } from '../../lib/board-themes'
 import { getPlayerVisualThemeByColor } from '../../lib/player-color-themes'
 import type { TokenSkinId } from '../../lib/token-cosmetics'
 import type { MatchToken, PlayerColor } from './match-types'
@@ -386,7 +387,9 @@ type Board3DProps = {
   visualSkinByColor?: Partial<Record<PlayerColor, TokenSkinId>>
 }
 
-export function Board3D({
+const defaultSurfacePalette = getBoardThemeSurfacePalette('theme-classic')
+
+function Board3DComponent({
   players = [],
   tokens,
   blockedSquares,
@@ -402,58 +405,68 @@ export function Board3D({
   onTokenDiceChoiceHover,
   onTokenDiceChoiceSelect,
   onTokenClick,
-  surfacePalette: _surfacePalette,
+  surfacePalette,
+  visualSkinByColor = {},
 }: Board3DProps) {
-  const playersById = players.reduce<Record<string, { avatar: string; name: string }>>((acc, player) => {
-    acc[player.id] = { avatar: player.avatar, name: player.name }
-    return acc
-  }, {})
-
-  const blockedSet = new Set(blockedSquares || getBlockedSquaresFromTokens(tokens))
-  const highlightedSet = new Set(highlightedSquares)
-  const movableSet = new Set(movableTokenIds)
-  const safeSet = new Set(safeSquares)
-  const animatingSet = new Set(animatingTokenIds)
+  const playersById = useMemo(
+    () =>
+      players.reduce<Record<string, { avatar: string; name: string }>>((acc, player) => {
+        acc[player.id] = { avatar: player.avatar, name: player.name }
+        return acc
+      }, {}),
+    [players],
+  )
+  const blockedSet = useMemo(() => new Set(blockedSquares || getBlockedSquaresFromTokens(tokens)), [blockedSquares, tokens])
+  const highlightedSet = useMemo(() => new Set(highlightedSquares), [highlightedSquares])
+  const movableSet = useMemo(() => new Set(movableTokenIds), [movableTokenIds])
+  const safeSet = useMemo(() => new Set(safeSquares), [safeSquares])
+  const animatingSet = useMemo(() => new Set(animatingTokenIds), [animatingTokenIds])
+  const resolvedSurfacePalette = surfacePalette || defaultSurfacePalette
   const themeForColor = (color: PlayerColor) => getPlayerVisualThemeByColor(color)
 
-  const groupedTokens = Object.values(
-    tokens.reduce<Record<string, { cell: Coord; position: number; tokens: MatchToken[] }>>(
-      (acc, token) => {
-        const cell = numberToCell.get(token.position)
+  const groupedTokens = useMemo(
+    () =>
+      Object.values(
+        tokens.reduce<Record<string, { cell: Coord; position: number; tokens: MatchToken[] }>>((acc, token) => {
+          const cell = numberToCell.get(token.position)
 
-        if (!cell) {
-          return acc
-        }
-
-        const key = `${token.position}`
-
-        if (!acc[key]) {
-          acc[key] = {
-            position: token.position,
-            cell,
-            tokens: [],
+          if (!cell) {
+            return acc
           }
-        }
 
-        acc[key].tokens.push(token)
-        return acc
-      },
-      {},
-    ),
+          const key = `${token.position}`
+
+          if (!acc[key]) {
+            acc[key] = {
+              position: token.position,
+              cell,
+              tokens: [],
+            }
+          }
+
+          acc[key].tokens.push(token)
+          return acc
+        }, {}),
+      ),
+    [tokens],
   )
 
-  const homeTokenPlacements = (Object.keys(homeTokenSlots) as PlayerColor[]).flatMap((color) => {
-    const slots = homeTokenSlots[color]
-    const colorHomeTokens = tokens
-      .filter((token) => token.color === color && token.position <= 0)
-      .sort((left, right) => left.id.localeCompare(right.id))
-      .slice(0, slots.length)
+  const homeTokenPlacements = useMemo(
+    () =>
+      (Object.keys(homeTokenSlots) as PlayerColor[]).flatMap((color) => {
+        const slots = homeTokenSlots[color]
+        const colorHomeTokens = tokens
+          .filter((token) => token.color === color && token.position <= 0)
+          .sort((left, right) => left.id.localeCompare(right.id))
+          .slice(0, slots.length)
 
-    return colorHomeTokens.map((token, index) => ({
-      token,
-      slot: slots[index],
-    }))
-  })
+        return colorHomeTokens.map((token, index) => ({
+          token,
+          slot: slots[index],
+        }))
+      }),
+    [tokens],
+  )
 
   const renderTokenControl = (
     token: MatchToken,
@@ -465,6 +478,11 @@ export function Board3D({
       tokenZIndexBoost?: number
     } = {},
   ) => {
+    const resolvedToken = token.cosmeticId
+      ? token
+      : visualSkinByColor[token.color]
+        ? { ...token, cosmeticId: visualSkinByColor[token.color] }
+        : token
     const choices = tokenDiceChoices[token.id] || []
     const compactLabel = choices.map((choice) => `${choice.value}`).join(',')
     const showChoicePicker = expandedTokenId === token.id && choices.length > 1
@@ -492,7 +510,7 @@ export function Board3D({
             transition:
               'left 280ms ease, top 280ms ease, margin-left 280ms ease, margin-top 280ms ease',
           }}
-          token={token}
+          token={resolvedToken}
           tooltipText={tokenHints[token.id] || token.label}
         />
 
@@ -562,8 +580,8 @@ export function Board3D({
     <div
       className="pointer-events-none relative aspect-square w-full overflow-visible rounded-[24px] border-[7px] border-[#b98652] p-1 shadow-board"
       style={{
-        backgroundImage:
-          'repeating-linear-gradient(0deg, rgba(126,84,45,0.18) 0, rgba(126,84,45,0.18) 2px, rgba(229,194,146,0.2) 2px, rgba(229,194,146,0.2) 4px), linear-gradient(120deg, #e7c68f 0%, #d8af77 26%, #f2d8ac 56%, #cca06a 100%)',
+        background: resolvedSurfacePalette.boardOuterBackground,
+        borderColor: resolvedSurfacePalette.boardOuterBorder,
       }}
     >
       <div
@@ -571,9 +589,8 @@ export function Board3D({
         style={{
           gridTemplateColumns: `repeat(${fineGridSize}, minmax(0, 1fr))`,
           gridTemplateRows: `repeat(${fineGridSize}, minmax(0, 1fr))`,
-          backgroundColor: '#f7e6c8',
-          backgroundImage:
-            'linear-gradient(to right, rgba(40, 25, 12, 0.42) 1px, transparent 1px), linear-gradient(to bottom, rgba(40, 25, 12, 0.42) 1px, transparent 1px), repeating-linear-gradient(0deg, rgba(128, 80, 45, 0.08) 0, rgba(128, 80, 45, 0.08) 2px, rgba(239, 208, 170, 0.08) 2px, rgba(239, 208, 170, 0.08) 4px)',
+          background: resolvedSurfacePalette.boardInnerBackground,
+          backgroundImage: resolvedSurfacePalette.boardGridOverlay,
           backgroundSize:
             `calc(100% / ${fineGridSize}) calc(100% / ${fineGridSize}), calc(100% / ${fineGridSize}) calc(100% / ${fineGridSize}), auto`,
           backgroundPosition: '0 0, 0 0, 0 0',
@@ -600,12 +617,20 @@ export function Board3D({
 
           return (
             <Tile
-              className={startColor ? themeForColor(startColor).laneFillClass : 'bg-[#fff8e6]'}
+              className={startColor ? themeForColor(startColor).laneFillClass : ''}
+              isBlocked={blockedSet.has(cell.number)}
               isHighlighted={highlightedSet.has(cell.number)}
               isSafe={safeSet.has(cell.number)}
               key={`track-${cell.number}`}
               number={cell.number}
-              style={cellPlacement(cell.row, cell.col)}
+              style={
+                startColor
+                  ? cellPlacement(cell.row, cell.col)
+                  : {
+                      ...cellPlacement(cell.row, cell.col),
+                      background: resolvedSurfacePalette.neutralTrackFill,
+                    }
+              }
             />
           )
         })}
@@ -669,3 +694,6 @@ export function Board3D({
     </div>
   )
 }
+
+export const Board3D = memo(Board3DComponent)
+Board3D.displayName = 'Board3D'

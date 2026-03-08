@@ -1,12 +1,5 @@
 import { createBrowserRouter } from 'react-router-dom'
-import { DevBootstrapPage } from '../pages/dev-bootstrap-page'
-import { FriendsLobbyPage } from '../pages/friends-lobby-page'
-import { GameBoardMockPage } from '../pages/game-board-mock-page'
-import { GameBoardPage } from '../pages/game-board-page'
-import { HomePage } from '../pages/home-page'
-import { LobbyPage } from '../pages/lobby-page'
 import { NotFoundPage } from '../pages/not-found-page'
-import { SkinSelectionPage } from '../pages/skin-selection-page'
 import { AppShell } from '../layout/app-shell'
 
 export const appRouter = createBrowserRouter([
@@ -16,31 +9,52 @@ export const appRouter = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <HomePage />,
+        lazy: async () => {
+          const module = await import('../pages/home-page')
+          return { Component: module.HomePage }
+        },
       },
       {
         path: 'skin-selection',
-        element: <SkinSelectionPage />,
+        lazy: async () => {
+          const module = await import('../pages/skin-selection-page')
+          return { Component: module.SkinSelectionPage }
+        },
       },
       {
         path: 'lobby',
-        element: <LobbyPage />,
+        lazy: async () => {
+          const module = await import('../pages/lobby-page')
+          return { Component: module.LobbyPage }
+        },
       },
       {
         path: 'lobby-friends',
-        element: <FriendsLobbyPage />,
+        lazy: async () => {
+          const module = await import('../pages/friends-lobby-page')
+          return { Component: module.FriendsLobbyPage }
+        },
       },
       {
         path: 'board',
-        element: <GameBoardPage />,
+        lazy: async () => {
+          const module = await import('../pages/game-board-page')
+          return { Component: module.GameBoardPage }
+        },
       },
       {
         path: 'board-mock',
-        element: <GameBoardMockPage />,
+        lazy: async () => {
+          const module = await import('../pages/game-board-mock-page')
+          return { Component: module.GameBoardMockPage }
+        },
       },
       {
         path: 'dev/bootstrap',
-        element: <DevBootstrapPage />,
+        lazy: async () => {
+          const module = await import('../pages/dev-bootstrap-page')
+          return { Component: module.DevBootstrapPage }
+        },
       },
     ],
   },

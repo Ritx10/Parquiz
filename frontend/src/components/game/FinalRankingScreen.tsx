@@ -19,6 +19,13 @@ interface RankingEntry {
   visualSkinId?: TokenSkinId;
 }
 
+type FallingCoinConfig = {
+  animationDelay: string;
+  animationDuration: string;
+  left: string;
+  transform: string;
+}
+
 const defaultRanking = [
   { id: "P1", name: "P1", place: 1, reward: 1000, color: "red", avatar: 'P1' },
   { id: "P2", name: "P2", place: 2, reward: 500, color: "green", avatar: 'P2' },
@@ -127,6 +134,14 @@ type FinalRankingScreenProps = {
 
 export default function FinalRankingScreen({ placements }: FinalRankingScreenProps) {
   const [show, setShow] = useState(false);
+  const [fallingCoins] = useState<FallingCoinConfig[]>(() =>
+    Array.from({ length: 40 }, () => ({
+      left: `${Math.random() * 100}%`,
+      animationDelay: `${Math.random() * 2}s`,
+      animationDuration: `${1.5 + Math.random() * 2}s`,
+      transform: `scale(${0.5 + Math.random() * 0.5})`,
+    }))
+  );
   const navigate = useNavigate();
   const language = useAppSettingsStore((state) => state.language);
   const ui = rankingCopyByLanguage[language];
@@ -248,16 +263,11 @@ export default function FinalRankingScreen({ placements }: FinalRankingScreenPro
       {/* Falling Coins Animation Layer */}
       {show && (
         <div className="pointer-events-none absolute inset-0 z-[245] overflow-hidden">
-          {Array.from({ length: 40 }).map((_, i) => (
+          {fallingCoins.map((coin, i) => (
              <div 
-               key={`falling-coin-${i}`}
-               className="arcade-coin-falling"
-               style={{
-                 left: `${Math.random() * 100}%`,
-                 animationDelay: `${Math.random() * 2}s`,
-                 animationDuration: `${1.5 + Math.random() * 2}s`,
-                 transform: `scale(${0.5 + Math.random() * 0.5})`,
-               }}
+                key={`falling-coin-${i}`}
+                className="arcade-coin-falling"
+                style={coin}
              />
           ))}
         </div>

@@ -80,7 +80,7 @@ export function useControllerUsernames({
     return () => {
       cancelled = true
     }
-  }, [normalizedAddressesKey])
+  }, [normalizedAddresses, normalizedAddressesKey])
 
   return useMemo(() => {
     const usernamesByAddress = { ...resolvedUsernames }

@@ -1,5 +1,5 @@
 import { useAccount } from '@starknet-react/core'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { applyMove, computeLegalMoves, endTurn, rollTwoDiceAndDrawQuestion, submitAnswer } from '../api'
 import {
@@ -10,17 +10,22 @@ import {
 } from '../api/dojo-state'
 import type { DojoTokenModel, DojoTrackedEvent, LegalMoveApi, MoveType } from '../api/types'
 import { Board3D } from '../components/game/board3d'
+import FinalRankingScreen from '../components/game/FinalRankingScreen'
 import { GameAvatar } from '../components/game/game-avatar'
+import { GameDie } from '../components/game/game-die'
 import { LogDrawer } from '../components/game/log-drawer'
 import type { MatchLogEvent, MatchPlayer, MatchToken, PlayerColor } from '../components/game/match-types'
 import { TriviaQuestionModal } from '../components/game/trivia-question-modal'
 import { isDojoConfigured } from '../config/dojo'
+import { getBoardThemeDefinition, getBoardThemeSurfacePalette } from '../lib/board-themes'
+import { assignDistinctDiceSkins, type DiceSkinId } from '../lib/dice-cosmetics'
 import { getPlayerSkinSrc, playerSkinIdFromIndex } from '../lib/player-skins'
+import { getPlayerVisualThemeByColor } from '../lib/player-color-themes'
 import { getHydratedQuestion } from '../lib/questions/local-question-bank'
 import { useControllerUsernames } from '../lib/starknet/use-controller-usernames'
 import { shortenAddress, useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import { useAppSettingsStore } from '../store/app-settings-store'
-import { tokenSkinIdFromIndex } from '../lib/token-cosmetics'
+import { tokenSkinIdFromIndex, type TokenSkinId } from '../lib/token-cosmetics'
 import type { TriviaDifficulty } from '../lib/trivia-engine'
 
 const TRACK_SQUARE_UI_OFFSET = 4
@@ -30,52 +35,26 @@ const TOKEN_STEP_ANIMATION_MS = 105
 
 type DiceFaceValue = 1 | 2 | 3 | 4 | 5 | 6
 
+type PodiumPlace = 1 | 2 | 3 | 4
+
+type FinalPlacement = {
+  id: string
+  avatar: string
+  color: PlayerColor
+  goalCount: number
+  name: string
+  place: PodiumPlace
+  progressScore: number
+  reward: number
+  tag: string
+  visualSkinId?: TokenSkinId
+}
+
 const seatColorMap: Record<number, PlayerColor> = {
   0: 'blue',
   1: 'red',
   2: 'green',
   3: 'yellow',
-}
-
-const hudAccentClass: Record<PlayerColor, string> = {
-  green: 'bg-[#2bc58d] text-[#0b3d2d]',
-  red: 'bg-[#ff6d5e] text-[#4a1008]',
-  blue: 'bg-[#4a9bff] text-[#0d3058]',
-  yellow: 'bg-[#f4cc4e] text-[#4a3404]',
-}
-
-const dicePipLayout: Record<DiceFaceValue, Array<{ left: string; top: string }>> = {
-  1: [{ left: '50%', top: '50%' }],
-  2: [
-    { left: '28%', top: '28%' },
-    { left: '72%', top: '72%' },
-  ],
-  3: [
-    { left: '28%', top: '28%' },
-    { left: '50%', top: '50%' },
-    { left: '72%', top: '72%' },
-  ],
-  4: [
-    { left: '28%', top: '28%' },
-    { left: '72%', top: '28%' },
-    { left: '28%', top: '72%' },
-    { left: '72%', top: '72%' },
-  ],
-  5: [
-    { left: '28%', top: '28%' },
-    { left: '72%', top: '28%' },
-    { left: '50%', top: '50%' },
-    { left: '28%', top: '72%' },
-    { left: '72%', top: '72%' },
-  ],
-  6: [
-    { left: '28%', top: '24%' },
-    { left: '72%', top: '24%' },
-    { left: '28%', top: '50%' },
-    { left: '72%', top: '50%' },
-    { left: '28%', top: '76%' },
-    { left: '72%', top: '76%' },
-  ],
 }
 
 const laneBaseByColor: Record<PlayerColor, number> = {
@@ -127,6 +106,151 @@ const questionDifficultyByLevel: Record<number, TriviaDifficulty> = {
   1: 'medium',
   2: 'hard',
 }
+
+const rewardByPlace: Record<PodiumPlace, number> = {
+  1: 1000,
+  2: 500,
+  3: 250,
+  4: 100,
+}
+
+const announcementGlassTintByThemeId = {
+  'theme-classic': {
+    border: 'rgba(255, 246, 226, 0.42)',
+    highlight: 'rgba(255, 250, 241, 0.42)',
+    shadow: 'rgba(60, 34, 14, 0.28)',
+    tintA: 'rgba(235, 220, 190, 0.34)',
+    tintB: 'rgba(190, 158, 122, 0.16)',
+  },
+  'theme-rainbow': {
+    border: 'rgba(225, 243, 255, 0.42)',
+    highlight: 'rgba(243, 250, 255, 0.42)',
+    shadow: 'rgba(39, 74, 109, 0.24)',
+    tintA: 'rgba(143, 193, 231, 0.34)',
+    tintB: 'rgba(190, 225, 255, 0.16)',
+  },
+  'theme-castle': {
+    border: 'rgba(236, 228, 255, 0.42)',
+    highlight: 'rgba(248, 245, 255, 0.42)',
+    shadow: 'rgba(65, 54, 108, 0.24)',
+    tintA: 'rgba(168, 153, 221, 0.34)',
+    tintB: 'rgba(213, 204, 246, 0.16)',
+  },
+  'theme-jungle': {
+    border: 'rgba(231, 247, 223, 0.42)',
+    highlight: 'rgba(246, 255, 241, 0.4)',
+    shadow: 'rgba(28, 71, 37, 0.24)',
+    tintA: 'rgba(120, 170, 140, 0.34)',
+    tintB: 'rgba(187, 223, 178, 0.15)',
+  },
+  'theme-desert': {
+    border: 'rgba(255, 236, 214, 0.42)',
+    highlight: 'rgba(255, 248, 238, 0.4)',
+    shadow: 'rgba(113, 68, 25, 0.24)',
+    tintA: 'rgba(214, 167, 112, 0.34)',
+    tintB: 'rgba(246, 214, 165, 0.16)',
+  },
+  'theme-night': {
+    border: 'rgba(217, 228, 255, 0.42)',
+    highlight: 'rgba(240, 245, 255, 0.42)',
+    shadow: 'rgba(20, 32, 74, 0.28)',
+    tintA: 'rgba(120, 150, 210, 0.34)',
+    tintB: 'rgba(84, 111, 184, 0.18)',
+  },
+  'theme-volcano': {
+    border: 'rgba(255, 223, 214, 0.42)',
+    highlight: 'rgba(255, 242, 237, 0.42)',
+    shadow: 'rgba(92, 31, 20, 0.28)',
+    tintA: 'rgba(200, 110, 90, 0.34)',
+    tintB: 'rgba(121, 39, 22, 0.18)',
+  },
+  'theme-legend': {
+    border: 'rgba(255, 235, 210, 0.42)',
+    highlight: 'rgba(255, 247, 235, 0.42)',
+    shadow: 'rgba(92, 68, 26, 0.26)',
+    tintA: 'rgba(208, 175, 114, 0.34)',
+    tintB: 'rgba(140, 109, 62, 0.16)',
+  },
+} as const
+
+const onchainCopyByLanguage = {
+  es: {
+    awaitingTurn: 'En espera',
+    boardTitle: 'Board 3D on-chain',
+    congrats: 'Enhorabuena',
+    clickToRoll: 'Click para tirar',
+    diceAlreadyUsed: 'Dados ya usados',
+    dojoBadge: 'estado real Dojo',
+    dojoDisabledBody: 'Configura las variables de Dojo/Torii para consultar el estado on-chain y habilitar suscripciones en vivo.',
+    dojoDisabledTitle: 'Dojo no esta configurado',
+    emptyBoardBody:
+      'Abre esta ruta con `?gameId=<id>` o `?tokenId=<id>` para resolver la partida vinculada y cargar el tablero on-chain.',
+    emptyBoardTitle: 'No hay una partida on-chain activa',
+    endingTurn: 'Terminando...',
+    endTurn: 'Terminar turno',
+    linkPending: 'Resolviendo partida vinculada del token...',
+    loadBoard: 'Cargando estado on-chain del tablero...',
+    logLabel: 'Log',
+    noMovesLeft: 'No quedan movimientos legales. Puedes terminar el turno.',
+    placeAnnouncementLabel: {
+      1: 'ES 1ER LUGAR',
+      2: 'ES 2DO LUGAR',
+      3: 'ES 3ER LUGAR',
+    } as Record<1 | 2 | 3, string>,
+    placeLabel: {
+      1: '1er lugar',
+      2: '2do lugar',
+      3: '3er lugar',
+      4: '4to lugar',
+    } as Record<PodiumPlace, string>,
+    questionCategory: 'Pregunta',
+    rolling: 'Lanzando...',
+    selectTokenToMove: 'Selecciona una ficha para moverla on-chain.',
+    skip: 'Ver ranking',
+    tokenLinkLabel: 'Token vinculado',
+    turnWaiting: 'En espera',
+    yourTurn: 'Tu turno',
+  },
+  en: {
+    awaitingTurn: 'Waiting',
+    boardTitle: 'On-chain Board 3D',
+    congrats: 'Congratulations',
+    clickToRoll: 'Click to roll',
+    diceAlreadyUsed: 'Dice already used',
+    dojoBadge: 'live Dojo state',
+    dojoDisabledBody: 'Configure the Dojo/Torii environment variables to query the live board state and enable realtime subscriptions.',
+    dojoDisabledTitle: 'Dojo is not configured',
+    emptyBoardBody:
+      'Open this route with `?gameId=<id>` or `?tokenId=<id>` so the client can resolve the linked match and load the on-chain board.',
+    emptyBoardTitle: 'No active on-chain match selected',
+    endingTurn: 'Ending...',
+    endTurn: 'End turn',
+    linkPending: 'Resolving linked token match...',
+    loadBoard: 'Loading on-chain board state...',
+    logLabel: 'Log',
+    noMovesLeft: 'No legal moves remain. You can end the turn.',
+    placeAnnouncementLabel: {
+      1: 'TAKES 1ST PLACE',
+      2: 'TAKES 2ND PLACE',
+      3: 'TAKES 3RD PLACE',
+    } as Record<1 | 2 | 3, string>,
+    placeLabel: {
+      1: '1st place',
+      2: '2nd place',
+      3: '3rd place',
+      4: '4th place',
+    } as Record<PodiumPlace, string>,
+    questionCategory: 'Question',
+    rolling: 'Rolling...',
+    selectTokenToMove: 'Select a token to move it on-chain.',
+    skip: 'View ranking',
+    tokenLinkLabel: 'Linked token',
+    turnWaiting: 'Waiting',
+    yourTurn: 'Your turn',
+  },
+} as const
+
+type OnchainUiCopy = (typeof onchainCopyByLanguage)[keyof typeof onchainCopyByLanguage]
 
 const parseBigNumberish = (value: string): bigint | null => {
   const normalized = value.trim()
@@ -262,37 +386,37 @@ const mapErrorToUserMessage = (error: unknown) => {
   return raw
 }
 
-const normalizeDiceFace = (value: null | number, fallback: DiceFaceValue): DiceFaceValue => {
-  if (!value || value < 1 || value > 6) {
-    return fallback
-  }
-
-  return value as DiceFaceValue
+function HudDie({ skinId, value, rolling }: { skinId: DiceSkinId; value: null | number; rolling: boolean }) {
+  return <GameDie className="h-11 w-11" rolling={rolling} skinId={skinId} value={value} />
 }
 
-function HudDie({ value, rolling }: { value: null | number; rolling: boolean }) {
-  const face = normalizeDiceFace(value, 1)
+function PlayerHudCard({
+  player,
+  isTurn,
+  surfacePalette,
+  ui,
+}: {
+  player: MatchPlayer
+  isTurn: boolean
+  surfacePalette: ReturnType<typeof getBoardThemeSurfacePalette>
+  ui: OnchainUiCopy
+}) {
+  const theme = getPlayerVisualThemeByColor(player.color, player.visualSkinId)
 
   return (
-    <span
-      className={`relative inline-flex h-11 w-11 items-center justify-center rounded-[11px] border border-[#aeb9ca] bg-gradient-to-b from-[#fefefe] to-[#dce6f4] shadow-[0_5px_0_rgba(53,74,107,0.45)] ${rolling ? 'animate-spin' : ''}`}
+    <article
+      className="w-[132px] rounded-2xl border px-3 py-2 text-center shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm"
+      style={{
+        background: surfacePalette.hudCardBackground,
+        borderColor: surfacePalette.hudCardBorder,
+        color: surfacePalette.hudCardText,
+      }}
     >
-      {dicePipLayout[face].map((pip, index) => (
-        <span
-          className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#1e3553]"
-          key={`${face}-${index}`}
-          style={{ left: pip.left, top: pip.top }}
-        />
-      ))}
-    </span>
-  )
-}
-
-function PlayerHudCard({ player, isTurn }: { player: MatchPlayer; isTurn: boolean }) {
-  return (
-    <article className="w-[132px] rounded-2xl border border-white/20 bg-[#082944]/78 px-3 py-2 text-center text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
-      <div className={`mx-auto mb-2 h-1.5 w-full rounded-full ${hudAccentClass[player.color]}`} />
-      <span className="mx-auto mb-2 inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border-2 border-white/45 bg-[#fff4dc] shadow-[0_4px_10px_rgba(0,0,0,0.2)]">
+      <div className={`mx-auto mb-2 h-1.5 w-full rounded-full ${theme.stripClass}`} />
+      <span
+        className="mx-auto mb-2 inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border-2 border-white/45 shadow-[0_4px_10px_rgba(0,0,0,0.2)]"
+        style={{ background: surfacePalette.hudAvatarBackground }}
+      >
         <GameAvatar
           alt={player.name}
           avatar={player.avatar}
@@ -302,18 +426,25 @@ function PlayerHudCard({ player, isTurn }: { player: MatchPlayer; isTurn: boolea
       </span>
       <p className="truncate font-display text-lg leading-none">{player.name}</p>
 
-      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide">
-        <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full ${hudAccentClass[player.color]}`}>
+      <div
+        className="mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-wide"
+        style={{
+          background: surfacePalette.hudPillBackground,
+          borderColor: surfacePalette.hudPillBorder,
+          color: surfacePalette.hudPillText,
+        }}
+      >
+        <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full ${theme.hudAccentClass}`}>
           D
         </span>
-        {isTurn ? 'Tu turno' : 'En espera'}
+        {isTurn ? ui.yourTurn : ui.turnWaiting}
       </div>
 
       <div className="mt-2 flex items-center justify-center gap-1.5">
         {Array.from({ length: 4 }).map((_, index) => (
           <span
             className={`h-2.5 w-2.5 rounded-full border border-white/15 ${
-              index < player.tokensInGoal ? hudAccentClass[player.color] : 'bg-white/20'
+              index < player.tokensInGoal ? theme.hudAccentClass : 'bg-white/20'
             }`}
             key={`${player.id}-progress-${index}`}
           />
@@ -326,19 +457,25 @@ function PlayerHudCard({ player, isTurn }: { player: MatchPlayer; isTurn: boolea
 function TurnDiceLauncher({
   isActive,
   canRoll,
+  diceSkinId,
   rolling,
   dieA,
   dieB,
   preview,
   onRoll,
+  surfacePalette,
+  ui,
 }: {
   isActive: boolean
   canRoll: boolean
+  diceSkinId: DiceSkinId
   rolling: boolean
   dieA: null | number
   dieB: null | number
   preview: { dieA: DiceFaceValue; dieB: DiceFaceValue }
   onRoll: () => void
+  surfacePalette: ReturnType<typeof getBoardThemeSurfacePalette>
+  ui: OnchainUiCopy
 }) {
   const isEnabled = isActive && canRoll && !rolling
 
@@ -347,21 +484,33 @@ function TurnDiceLauncher({
       <button
         className={`pointer-events-auto flex items-center gap-2 rounded-2xl border px-2 py-2 transition-all ${
           isEnabled
-            ? 'border-[#7cd5ff] bg-[#0d3358]/88 shadow-[0_0_0_3px_rgba(124,213,255,0.35)] hover:-translate-y-0.5'
+            ? 'hover:-translate-y-0.5'
             : isActive
-              ? 'cursor-not-allowed border-[#5e738f] bg-[#0d3358]/55 opacity-80'
-              : 'cursor-not-allowed border-white/12 bg-[#0d3358]/45 opacity-60'
+              ? 'cursor-not-allowed opacity-80'
+              : 'cursor-not-allowed opacity-60'
         } ${rolling && isActive ? 'animate-pulse' : ''}`}
         disabled={!isEnabled}
         onClick={onRoll}
+        style={{
+          background: isEnabled ? surfacePalette.diceLauncherActiveBackground : surfacePalette.diceLauncherIdleBackground,
+          borderColor: surfacePalette.diceLauncherBorder,
+          boxShadow: isEnabled ? surfacePalette.diceLauncherRing : 'none',
+        }}
         type="button"
       >
-        <HudDie rolling={rolling && isActive} value={rolling && isActive ? preview.dieA : dieA} />
-        <HudDie rolling={rolling && isActive} value={rolling && isActive ? preview.dieB : dieB} />
+        <HudDie rolling={rolling && isActive} skinId={diceSkinId} value={rolling && isActive ? preview.dieA : dieA} />
+        <HudDie rolling={rolling && isActive} skinId={diceSkinId} value={rolling && isActive ? preview.dieB : dieB} />
       </button>
 
-      <span className="rounded-full border border-white/20 bg-black/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#dbf4ff]">
-        {rolling && isActive ? 'Lanzando...' : isActive ? (canRoll ? 'Click para tirar' : 'Dados ya usados') : 'En espera'}
+      <span
+        className="rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide"
+        style={{
+          background: surfacePalette.hudPillBackground,
+          borderColor: surfacePalette.hudPillBorder,
+          color: surfacePalette.diceLauncherText,
+        }}
+      >
+        {rolling && isActive ? ui.rolling : isActive ? (canRoll ? ui.clickToRoll : ui.diceAlreadyUsed) : ui.awaitingTurn}
       </span>
     </div>
   )
@@ -371,20 +520,26 @@ function PlayerHudSlot({
   player,
   turnPlayerId,
   canRoll,
+  diceSkinId,
   rolling,
   dieA,
   dieB,
   preview,
   onRoll,
+  surfacePalette,
+  ui,
 }: {
   player?: MatchPlayer
   turnPlayerId: string
   canRoll: boolean
+  diceSkinId: DiceSkinId
   rolling: boolean
   dieA: null | number
   dieB: null | number
   preview: { dieA: DiceFaceValue; dieB: DiceFaceValue }
   onRoll: () => void
+  surfacePalette: ReturnType<typeof getBoardThemeSurfacePalette>
+  ui: OnchainUiCopy
 }) {
   if (!player) {
     return null
@@ -394,15 +549,18 @@ function PlayerHudSlot({
 
   return (
     <div className="pointer-events-none flex flex-col items-center">
-      <PlayerHudCard isTurn={isTurn} player={player} />
+      <PlayerHudCard isTurn={isTurn} player={player} surfacePalette={surfacePalette} ui={ui} />
       <TurnDiceLauncher
         canRoll={canRoll}
+        diceSkinId={diceSkinId}
         dieA={dieA}
         dieB={dieB}
         isActive={isTurn}
         onRoll={onRoll}
         preview={preview}
         rolling={rolling}
+        surfacePalette={surfacePalette}
+        ui={ui}
       />
     </div>
   )
@@ -414,12 +572,16 @@ const trackEventToLog = (
   event: DojoTrackedEvent,
   addressLabel: (address: string) => string,
   colorBySeat: Record<number, PlayerColor>,
+  language: 'en' | 'es',
 ): MatchLogEvent => {
   if (event.type === 'DiceRolled') {
     return {
       id: nextId('event-roll'),
       type: 'roll',
-      message: `Dice rolled: ${event.payload.dice_1} / ${event.payload.dice_2}`,
+      message:
+        language === 'es'
+          ? `Dados lanzados: ${event.payload.dice_1} / ${event.payload.dice_2}`
+          : `Dice rolled: ${event.payload.dice_1} / ${event.payload.dice_2}`,
       createdAt: Date.now(),
     }
   }
@@ -428,7 +590,10 @@ const trackEventToLog = (
     return {
       id: nextId('event-question'),
       type: 'question',
-      message: `Pregunta lista para ${event.payload.question_id.toString()}.`,
+      message:
+        language === 'es'
+          ? `Pregunta lista para ${event.payload.question_id.toString()}.`
+          : `Question ready for ${event.payload.question_id.toString()}.`,
       createdAt: Date.now(),
     }
   }
@@ -437,9 +602,10 @@ const trackEventToLog = (
     return {
       id: nextId('event-answer'),
       type: 'question',
-      message: `${addressLabel(event.payload.player)} marco opcion ${event.payload.selected_option + 1} · ${
-        event.payload.correct ? 'correcta' : 'incorrecta'
-      }.`,
+      message:
+        language === 'es'
+          ? `${addressLabel(event.payload.player)} marco opcion ${event.payload.selected_option + 1} · ${event.payload.correct ? 'correcta' : 'incorrecta'}.`
+          : `${addressLabel(event.payload.player)} picked option ${event.payload.selected_option + 1} · ${event.payload.correct ? 'correct' : 'incorrect'}.`,
       createdAt: Date.now(),
     }
   }
@@ -448,7 +614,10 @@ const trackEventToLog = (
     return {
       id: nextId('event-answer-status'),
       type: 'question',
-      message: `${addressLabel(event.payload.player)} ${event.payload.correct ? 'respondio bien' : 'respondio mal'}.`,
+      message:
+        language === 'es'
+          ? `${addressLabel(event.payload.player)} ${event.payload.correct ? 'respondio bien' : 'respondio mal'}.`
+          : `${addressLabel(event.payload.player)} ${event.payload.correct ? 'answered correctly' : 'answered incorrectly'}.`,
       createdAt: Date.now(),
     }
   }
@@ -460,7 +629,10 @@ const trackEventToLog = (
     return {
       id: nextId('event-move'),
       type: 'move',
-      message: `${addressLabel(event.payload.player)} mueve ficha ${event.payload.token_id + 1} de ${fromUi || '-'} a ${toUi || '-'}.`,
+      message:
+        language === 'es'
+          ? `${addressLabel(event.payload.player)} mueve ficha ${event.payload.token_id + 1} de ${fromUi || '-'} a ${toUi || '-'}.`
+          : `${addressLabel(event.payload.player)} moves token ${event.payload.token_id + 1} from ${fromUi || '-'} to ${toUi || '-'}.`,
       createdAt: Date.now(),
     }
   }
@@ -471,7 +643,10 @@ const trackEventToLog = (
     return {
       id: nextId('event-capture'),
       type: 'capture',
-      message: `${addressLabel(event.payload.attacker)} captura ficha ${event.payload.defender_token_id + 1} de ${addressLabel(event.payload.defender)} en ${squareUi || '-'}.`,
+      message:
+        language === 'es'
+          ? `${addressLabel(event.payload.attacker)} captura ficha ${event.payload.defender_token_id + 1} de ${addressLabel(event.payload.defender)} en ${squareUi || '-'}.`
+          : `${addressLabel(event.payload.attacker)} captures token ${event.payload.defender_token_id + 1} from ${addressLabel(event.payload.defender)} on ${squareUi || '-'}.`,
       createdAt: Date.now(),
     }
   }
@@ -480,7 +655,10 @@ const trackEventToLog = (
     return {
       id: nextId('event-home'),
       type: 'home',
-      message: `${addressLabel(event.payload.player)} lleva ficha ${event.payload.token_id + 1} a meta (+${event.payload.bonus_awarded}).`,
+      message:
+        language === 'es'
+          ? `${addressLabel(event.payload.player)} lleva ficha ${event.payload.token_id + 1} a meta (+${event.payload.bonus_awarded}).`
+          : `${addressLabel(event.payload.player)} sends token ${event.payload.token_id + 1} home (+${event.payload.bonus_awarded}).`,
       createdAt: Date.now(),
     }
   }
@@ -491,7 +669,10 @@ const trackEventToLog = (
     return {
       id: nextId('event-bridge'),
       type: 'bridge',
-      message: `${event.type === 'BridgeFormed' ? 'Puente formado' : 'Puente roto'} en ${squareUi || '-'} por ${addressLabel(event.payload.owner)}.`,
+      message:
+        language === 'es'
+          ? `${event.type === 'BridgeFormed' ? 'Puente formado' : 'Puente roto'} en ${squareUi || '-'} por ${addressLabel(event.payload.owner)}.`
+          : `${event.type === 'BridgeFormed' ? 'Bridge formed' : 'Bridge broken'} on ${squareUi || '-'} by ${addressLabel(event.payload.owner)}.`,
       createdAt: Date.now(),
     }
   }
@@ -500,7 +681,10 @@ const trackEventToLog = (
     return {
       id: nextId('event-turn-end'),
       type: 'move',
-      message: `Turno ${event.payload.turn_index} finalizado. Siguiente: ${addressLabel(event.payload.next_player)}.`,
+      message:
+        language === 'es'
+          ? `Turno ${event.payload.turn_index} finalizado. Siguiente: ${addressLabel(event.payload.next_player)}.`
+          : `Turn ${event.payload.turn_index} ended. Next: ${addressLabel(event.payload.next_player)}.`,
       createdAt: Date.now(),
     }
   }
@@ -508,7 +692,10 @@ const trackEventToLog = (
   return {
     id: nextId('event-win'),
     type: 'home',
-    message: `Partida finalizada. Ganador: ${addressLabel(event.payload.winner)} (turno ${event.payload.turn_index}).`,
+    message:
+      language === 'es'
+        ? `Partida finalizada. Ganador: ${addressLabel(event.payload.winner)} (turno ${event.payload.turn_index}).`
+        : `Match finished. Winner: ${addressLabel(event.payload.winner)} (turn ${event.payload.turn_index}).`,
     createdAt: Date.now(),
   }
 }
@@ -763,25 +950,102 @@ const buildOptimisticMovePath = (params: {
   return path
 }
 
+const computeOnchainProgressScore = (playerId: string, snapshot: DojoGameSnapshot, colorBySeat: Record<number, PlayerColor>) => {
+  return snapshot.tokens
+    .filter((token) => normalizeAddressForCompare(token.player) === normalizeAddressForCompare(playerId))
+    .reduce((sum, token) => {
+      const seat = snapshot.players.find(
+        (player) => normalizeAddressForCompare(player.player) === normalizeAddressForCompare(playerId),
+      )?.seat
+      const color = seat === undefined ? null : colorBySeat[seat]
+
+      if (!color) {
+        return sum
+      }
+
+      if (token.token_state === 3) {
+        return sum + TRACK_LENGTH + finalLaneByColor[color].length
+      }
+
+      if (token.token_state === 2) {
+        return sum + TRACK_LENGTH + token.home_lane_pos + 1
+      }
+
+      if (token.token_state === 1) {
+        return sum + Math.max(token.steps_total, 1)
+      }
+
+      return sum
+    }, 0)
+}
+
+const buildOnchainPlacements = (
+  players: MatchPlayer[],
+  snapshot: DojoGameSnapshot,
+  colorBySeat: Record<number, PlayerColor>,
+): FinalPlacement[] => {
+  return [...players]
+    .map((player) => ({
+      player,
+      goalCount: snapshot.players.find(
+        (entry) => normalizeAddressForCompare(entry.player) === normalizeAddressForCompare(player.id),
+      )?.tokens_in_goal ?? 0,
+      progressScore: computeOnchainProgressScore(player.id, snapshot, colorBySeat),
+    }))
+    .sort((left, right) => {
+      if (right.goalCount !== left.goalCount) {
+        return right.goalCount - left.goalCount
+      }
+
+      if (right.progressScore !== left.progressScore) {
+        return right.progressScore - left.progressScore
+      }
+
+      return left.player.name.localeCompare(right.player.name)
+    })
+    .map(({ player, goalCount, progressScore }, index) => {
+      const place = Math.min(index + 1, 4) as PodiumPlace
+      return {
+        id: player.id,
+        avatar: player.avatar,
+        color: player.color,
+        goalCount,
+        name: player.name,
+        place,
+        progressScore,
+        reward: rewardByPlace[place],
+        tag: player.name,
+        visualSkinId: player.visualSkinId,
+      }
+    })
+}
+
 export function MatchOnchainView() {
   const [searchParams] = useSearchParams()
   const { account } = useAccount()
   const { address, username } = useControllerWallet()
   const language = useAppSettingsStore((state) => state.language)
+  const selectedBoardThemeId = useAppSettingsStore((state) => state.selectedBoardThemeId)
+  const selectedDiceSkinId = useAppSettingsStore((state) => state.selectedDiceSkinId)
   const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
+  const selectedTokenSkinId = useAppSettingsStore((state) => state.selectedTokenSkinId)
   const selectedSkinSrc = getPlayerSkinSrc(selectedSkinId)
+  const ui = onchainCopyByLanguage[language]
+  const boardTheme = getBoardThemeDefinition(selectedBoardThemeId)
+  const surfacePalette = getBoardThemeSurfacePalette(selectedBoardThemeId)
 
   const [gameIdInput, setGameIdInput] = useState(searchParams.get('gameId') || '')
   const [tokenIdInput, setTokenIdInput] = useState(searchParams.get('tokenId') || '')
   const [snapshot, setSnapshot] = useState<DojoGameSnapshot | null>(null)
   const [linkedTokenGameId, setLinkedTokenGameId] = useState<bigint | null>(null)
-  const [, setLinkedTokenStatus] = useState<null | string>(null)
-  const [, setIsResolvingTokenLink] = useState(false)
+  const [linkedTokenStatus, setLinkedTokenStatus] = useState<null | string>(null)
+  const [isResolvingTokenLink, setIsResolvingTokenLink] = useState(false)
   const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(false)
   const [snapshotError, setSnapshotError] = useState<null | string>(null)
   const [legalMoves, setLegalMoves] = useState<LegalMoveApi[]>([])
   const [selectedTokenId, setSelectedTokenId] = useState<null | string>(null)
   const [expandedTokenId, setExpandedTokenId] = useState<null | string>(null)
+  const [hoveredChoicePreview, setHoveredChoicePreview] = useState<null | { choiceId: string; tokenId: string }>(null)
   const [isLogOpen, setIsLogOpen] = useState(false)
   const [logEvents, setLogEvents] = useState<MatchLogEvent[]>([])
   const [txPendingLabel, setTxPendingLabel] = useState<null | string>(null)
@@ -799,6 +1063,9 @@ export function MatchOnchainView() {
     dieA: 1,
     dieB: 1,
   })
+  const [finalPlacements, setFinalPlacements] = useState<FinalPlacement[]>([])
+  const [activeAnnouncementPlacement, setActiveAnnouncementPlacement] = useState<FinalPlacement | null>(null)
+  const [showFinalClassification, setShowFinalClassification] = useState(false)
 
   const refreshDebounceRef = useRef<null | number>(null)
   const hudRollIntervalRef = useRef<null | number>(null)
@@ -809,6 +1076,9 @@ export function MatchOnchainView() {
   const activePlayerCardRef = useRef<MatchPlayer | undefined>(undefined)
   const answerOverlayTimeoutRef = useRef<null | number>(null)
   const rollNoticeTimeoutRef = useRef<null | number>(null)
+  const winnerAnnouncementTimeoutRef = useRef<null | number>(null)
+  const lastAnnouncedWinnerRef = useRef<null | string>(null)
+  const onTrackedEventRef = useRef<(event: DojoTrackedEvent) => void>(() => undefined)
 
   useEffect(() => {
     setGameIdInput(searchParams.get('gameId') || '')
@@ -818,6 +1088,12 @@ export function MatchOnchainView() {
   const requestedGameId = useMemo(() => parseBigNumberish(gameIdInput), [gameIdInput])
   const activeTokenId = useMemo(() => parseBigNumberish(tokenIdInput), [tokenIdInput])
   const activeGameId = requestedGameId ?? linkedTokenGameId
+
+  useEffect(() => {
+    lastAnnouncedWinnerRef.current = null
+    setActiveAnnouncementPlacement(null)
+    setShowFinalClassification(false)
+  }, [activeGameId])
 
   useEffect(() => {
     if (!isDojoConfigured || activeTokenId === null) {
@@ -841,7 +1117,9 @@ export function MatchOnchainView() {
 
         if (!link) {
           setLinkedTokenGameId(null)
-          setLinkedTokenStatus('Token sin partida vinculada todavia.')
+          setLinkedTokenStatus(
+            language === 'es' ? 'Token sin partida vinculada todavia.' : 'Token is not linked to a match yet.',
+          )
           return
         }
 
@@ -866,7 +1144,7 @@ export function MatchOnchainView() {
     return () => {
       cancelled = true
     }
-  }, [activeTokenId])
+  }, [activeTokenId, language])
 
   const refreshSnapshot = useCallback(async () => {
     if (!activeGameId || !isDojoConfigured) {
@@ -896,6 +1174,30 @@ export function MatchOnchainView() {
   }, [refreshSnapshot])
 
   const activePlayerAddress = snapshot?.turn_state?.active_player || snapshot?.game?.active_player || ''
+  const legalMovesRefreshKey = useMemo(() => {
+    if (!snapshot?.turn_state || snapshot.turn_state.phase !== 2) {
+      return 'idle'
+    }
+
+    const activeBonus = snapshot.bonus_states.find(
+      (bonus) => normalizeAddressForCompare(bonus.player) === normalizeAddressForCompare(activePlayerAddress),
+    )
+
+    return [
+      activePlayerAddress,
+      snapshot.turn_state.phase,
+      snapshot.turn_state.has_moved_token ? '1' : '0',
+      snapshot.turn_state.first_moved_token_id,
+      snapshot.dice_state?.die_a ?? '-',
+      snapshot.dice_state?.die_b ?? '-',
+      snapshot.dice_state?.die_a_used ? '1' : '0',
+      snapshot.dice_state?.die_b_used ? '1' : '0',
+      snapshot.dice_state?.sum_used ? '1' : '0',
+      activeBonus?.pending_bonus_10 ?? 0,
+      activeBonus?.pending_bonus_20 ?? 0,
+      activeBonus?.bonus_consumed ? '1' : '0',
+    ].join('|')
+  }, [activePlayerAddress, snapshot])
 
   const normalizedWalletAddress = normalizeAddressForCompare(address)
   const normalizedActivePlayerAddress = normalizeAddressForCompare(activePlayerAddress)
@@ -927,7 +1229,11 @@ export function MatchOnchainView() {
       const baseName = resolvedName || (isSelf ? username || 'Tu jugador' : shortenAddress(player.player))
       const customization = customizationByPlayer.get(normalizedPlayerAddress)
       const avatarSkinId = customization ? playerSkinIdFromIndex(customization.avatar_skin_id) : null
-      const visualSkinId = customization ? tokenSkinIdFromIndex(customization.token_skin_id) : undefined
+      const visualSkinId = customization
+        ? tokenSkinIdFromIndex(customization.token_skin_id)
+        : isSelf
+          ? selectedTokenSkinId
+          : undefined
 
       return {
         id: player.player,
@@ -943,7 +1249,7 @@ export function MatchOnchainView() {
         isHost: player.is_host,
       }
     })
-  }, [getUsername, snapshot, normalizedWalletAddress, selectedSkinSrc, username])
+  }, [getUsername, snapshot, normalizedWalletAddress, selectedSkinSrc, selectedTokenSkinId, username])
 
   const playersByAddress = useMemo(() => {
     return players.reduce<Record<string, MatchPlayer>>((acc, player) => {
@@ -1047,6 +1353,62 @@ export function MatchOnchainView() {
       .map((group) => group[0].position)
   }, [uiTokens])
 
+  const rankedPlacements = useMemo(() => {
+    if (!snapshot || players.length === 0) {
+      return []
+    }
+
+    return buildOnchainPlacements(players, snapshot, colorBySeat)
+  }, [colorBySeat, players, snapshot])
+
+  const winnerAddress = useMemo(() => {
+    const winner = snapshot?.game?.winner
+    const normalizedWinner = normalizeAddressForCompare(winner)
+    return normalizedWinner === '0x0' ? null : winner || null
+  }, [snapshot?.game?.winner])
+
+  useEffect(() => {
+    setFinalPlacements(rankedPlacements)
+  }, [rankedPlacements])
+
+  useEffect(() => {
+    if (winnerAnnouncementTimeoutRef.current !== null) {
+      window.clearTimeout(winnerAnnouncementTimeoutRef.current)
+      winnerAnnouncementTimeoutRef.current = null
+    }
+
+    if (!winnerAddress || rankedPlacements.length === 0) {
+      if (!snapshot) {
+        setActiveAnnouncementPlacement(null)
+        setShowFinalClassification(false)
+        lastAnnouncedWinnerRef.current = null
+      }
+      return
+    }
+
+    const winnerKey = normalizeAddressForCompare(winnerAddress)
+    const winnerPlacement = rankedPlacements.find(
+      (placement) => normalizeAddressForCompare(placement.id) === winnerKey,
+    )
+
+    if (!winnerPlacement) {
+      return
+    }
+
+    if (lastAnnouncedWinnerRef.current === winnerKey) {
+      return
+    }
+
+    lastAnnouncedWinnerRef.current = winnerKey
+    setActiveAnnouncementPlacement(winnerPlacement)
+    setShowFinalClassification(false)
+    winnerAnnouncementTimeoutRef.current = window.setTimeout(() => {
+      setActiveAnnouncementPlacement(null)
+      setShowFinalClassification(true)
+      winnerAnnouncementTimeoutRef.current = null
+    }, 3200)
+  }, [rankedPlacements, snapshot, winnerAddress])
+
   const safeSquares = useMemo(() => {
     const source = snapshot?.safe_track_square_refs.length
       ? snapshot.safe_track_square_refs
@@ -1087,7 +1449,7 @@ export function MatchOnchainView() {
     }
 
     return {
-      category: language === 'es' ? 'Pregunta' : 'Question',
+      category: ui.questionCategory,
       correctIndex: activePendingQuestion.correctOption,
       difficulty: questionDifficultyByLevel[snapshot?.pending_question?.difficulty ?? 0] || 'easy',
       icon: '❓',
@@ -1096,7 +1458,7 @@ export function MatchOnchainView() {
       prompt: activePendingQuestion.displayPrompt,
       theme: 'blue' as const,
     }
-  }, [activePendingQuestion, language, snapshot?.pending_question?.difficulty])
+  }, [activePendingQuestion, snapshot?.pending_question?.difficulty, ui.questionCategory])
 
   useEffect(() => {
     if (!snapshot?.turn_state || snapshot.turn_state.phase !== 1) {
@@ -1111,7 +1473,7 @@ export function MatchOnchainView() {
     }
 
     syncSecondsLeft()
-    const intervalId = window.setInterval(syncSecondsLeft, 250)
+    const intervalId = window.setInterval(syncSecondsLeft, 1000)
 
     return () => {
       window.clearInterval(intervalId)
@@ -1125,6 +1487,7 @@ export function MatchOnchainView() {
   useEffect(() => {
     setSelectedTokenId(null)
     setExpandedTokenId(null)
+    setHoveredChoicePreview(null)
     setAnimatingTokenIds([])
     setAnimatedTokenPositions({})
   }, [snapshot?.turn_state?.phase, snapshot?.turn_state?.question_id, snapshot?.turn_state?.deadline])
@@ -1136,6 +1499,9 @@ export function MatchOnchainView() {
       }
       if (rollNoticeTimeoutRef.current !== null) {
         window.clearTimeout(rollNoticeTimeoutRef.current)
+      }
+      if (winnerAnnouncementTimeoutRef.current !== null) {
+        window.clearTimeout(winnerAnnouncementTimeoutRef.current)
       }
     }
   }, [])
@@ -1151,11 +1517,15 @@ export function MatchOnchainView() {
 
   const onTrackedEvent = useCallback(
     (event: DojoTrackedEvent) => {
-      const nextLog = trackEventToLog(event, playerLabelFromAddress, colorBySeatRef.current)
+      const nextLog = trackEventToLog(event, playerLabelFromAddress, colorBySeatRef.current, language)
 
       if (event.type === 'DiceRolled') {
         const rollerName = activePlayerCardRef.current?.name || 'Jugador'
-        setRollNotice(`${rollerName} tiro ${event.payload.dice_1} y ${event.payload.dice_2}.`)
+        setRollNotice(
+          language === 'es'
+            ? `${rollerName} tiro ${event.payload.dice_1} y ${event.payload.dice_2}.`
+            : `${rollerName} rolled ${event.payload.dice_1} and ${event.payload.dice_2}.`,
+        )
 
         if (rollNoticeTimeoutRef.current !== null) {
           window.clearTimeout(rollNoticeTimeoutRef.current)
@@ -1176,7 +1546,7 @@ export function MatchOnchainView() {
           answerState,
           player,
           question: {
-            category: language === 'es' ? 'Pregunta' : 'Question',
+            category: ui.questionCategory,
             correctIndex: question.correctOption,
             difficulty: questionDifficultyByLevel[snapshot?.pending_question?.difficulty ?? 0] || 'easy',
             icon: '❓',
@@ -1200,8 +1570,12 @@ export function MatchOnchainView() {
 
       setLogEvents((current) => [nextLog, ...current].slice(0, 120))
     },
-    [language, playerLabelFromAddress, snapshot?.pending_question?.difficulty],
+    [language, playerLabelFromAddress, snapshot?.pending_question?.difficulty, ui.questionCategory],
   )
+
+  useEffect(() => {
+    onTrackedEventRef.current = onTrackedEvent
+  }, [onTrackedEvent])
 
   useEffect(() => {
     if (!activeGameId || !isDojoConfigured) {
@@ -1232,7 +1606,7 @@ export function MatchOnchainView() {
           gameId: activeGameId,
           configId: initialSnapshot.game?.config_id,
           onStateMutation: scheduleSnapshotRefresh,
-          onTrackedEvent,
+          onTrackedEvent: (event) => onTrackedEventRef.current(event),
         })
       } catch (error) {
         if (!cancelled) {
@@ -1266,20 +1640,22 @@ export function MatchOnchainView() {
         hudRollTimeoutRef.current = null
       }
     }
-  }, [activeGameId, scheduleSnapshotRefresh, onTrackedEvent])
+  }, [activeGameId, scheduleSnapshotRefresh])
 
   useEffect(() => {
-    if (!activeGameId || !snapshot || snapshot.turn_state?.phase !== 2) {
+    if (activeGameId === null || snapshot?.turn_state?.phase !== 2) {
       setLegalMoves([])
       setSelectedTokenId(null)
       return
     }
 
+    const gameId = activeGameId
+
     let cancelled = false
 
     const loadLegalMoves = async () => {
       try {
-        const nextMoves = await computeLegalMoves(activeGameId)
+        const nextMoves = await computeLegalMoves(gameId)
 
         if (!cancelled) {
           setLegalMoves(nextMoves)
@@ -1298,7 +1674,7 @@ export function MatchOnchainView() {
     return () => {
       cancelled = true
     }
-  }, [activeGameId, snapshot])
+  }, [activeGameId, legalMovesRefreshKey, snapshot?.turn_state?.phase])
 
   const uiLegalMoves = useMemo<UiLegalMove[]>(() => {
     if (!activePlayerAddress) {
@@ -1321,12 +1697,18 @@ export function MatchOnchainView() {
   )
 
   const displayedMoves = useMemo(() => {
+    if (hoveredChoicePreview) {
+      return uiLegalMoves.filter(
+        (move) => move.tokenUiId === hoveredChoicePreview.tokenId && move.id === hoveredChoicePreview.choiceId,
+      )
+    }
+
     if (!selectedTokenId) {
       return uiLegalMoves
     }
 
     return uiLegalMoves.filter((move) => move.tokenUiId === selectedTokenId)
-  }, [selectedTokenId, uiLegalMoves])
+  }, [hoveredChoicePreview, selectedTokenId, uiLegalMoves])
 
   const highlightedSquares = useMemo(
     () => Array.from(new Set(displayedMoves.map((move) => move.targetUiPosition))),
@@ -1422,7 +1804,11 @@ export function MatchOnchainView() {
       },
     ) => {
       if (!account || !activeGameId) {
-        setActionError('Conecta Controller Wallet para ejecutar transacciones on-chain.')
+        setActionError(
+          language === 'es'
+            ? 'Conecta Controller Wallet para ejecutar transacciones on-chain.'
+            : 'Connect your Controller Wallet to run on-chain transactions.',
+        )
         return
       }
 
@@ -1445,8 +1831,12 @@ export function MatchOnchainView() {
           setLinkedTokenGameId(link?.game_id ?? null)
           setLinkedTokenStatus(
             link
-              ? `Token vinculado a game_id ${link.game_id.toString()} · score ${link.score.toString()} · status ${link.lifecycle_status}`
-              : 'Token sin partida vinculada todavia.',
+              ? language === 'es'
+                ? `Token vinculado a game_id ${link.game_id.toString()} · score ${link.score.toString()} · status ${link.lifecycle_status}`
+                : `Token linked to game_id ${link.game_id.toString()} · score ${link.score.toString()} · status ${link.lifecycle_status}`
+              : language === 'es'
+                ? 'Token sin partida vinculada todavia.'
+                : 'Token is not linked to a match yet.',
           )
         }
       } catch (error) {
@@ -1457,7 +1847,7 @@ export function MatchOnchainView() {
         setIsAwaitingOnchainSync(false)
       }
     },
-    [account, activeGameId, activeTokenId, refreshSnapshot],
+    [account, activeGameId, activeTokenId, language, refreshSnapshot],
   )
 
   const onApplyMove = useCallback(
@@ -1488,6 +1878,7 @@ export function MatchOnchainView() {
         {
           onOptimistic: () => {
             setExpandedTokenId(null)
+            setHoveredChoicePreview(null)
             setSelectedTokenId(move.tokenUiId)
 
             void (async () => {
@@ -1580,6 +1971,7 @@ export function MatchOnchainView() {
       }
 
       setSelectedTokenId(tokenId)
+      setHoveredChoicePreview(null)
 
       const choices = tokenDiceChoices[tokenId] || []
       if (choices.length === 0) {
@@ -1604,14 +1996,30 @@ export function MatchOnchainView() {
     (tokenId: string | null) => {
       if (!movementEnabled || !tokenId) {
         setExpandedTokenId(null)
+        setHoveredChoicePreview(null)
         return
       }
 
       if ((tokenDiceChoices[tokenId] || []).length > 1) {
         setExpandedTokenId(tokenId)
+        return
       }
+
+      setHoveredChoicePreview(null)
     },
     [movementEnabled, tokenDiceChoices],
+  )
+
+  const onTokenDiceChoiceHover = useCallback(
+    (tokenId: string, choiceId: null | string) => {
+      if (!movementEnabled || !choiceId) {
+        setHoveredChoicePreview(null)
+        return
+      }
+
+      setHoveredChoicePreview({ tokenId, choiceId })
+    },
+    [movementEnabled],
   )
 
   const onTokenDiceChoiceSelect = useCallback(
@@ -1620,6 +2028,7 @@ export function MatchOnchainView() {
         return
       }
 
+      setHoveredChoicePreview(null)
       const selectedMove = tokenChoiceMap[choiceId]
       if (!selectedMove) {
         return
@@ -1663,6 +2072,16 @@ export function MatchOnchainView() {
       return acc
     }, {})
   }, [players])
+  const diceSkinByPlayerId = useMemo(() => {
+    return assignDistinctDiceSkins(
+      players.map((player) => ({
+        playerId: player.id,
+        color: player.color,
+        preferredSkinId:
+          normalizeAddressForCompare(player.id) === normalizedWalletAddress ? selectedDiceSkinId : undefined,
+      })),
+    )
+  }, [normalizedWalletAddress, players, selectedDiceSkinId])
   const triggerHudDiceRoll = useCallback(() => {
     if (!canRoll || hudDiceRolling) {
       return
@@ -1696,19 +2115,99 @@ export function MatchOnchainView() {
     }, 620)
   }, [canRoll, hudDiceRolling, onRoll])
 
+  const activeAnnouncementTheme = activeAnnouncementPlacement
+    ? getPlayerVisualThemeByColor(activeAnnouncementPlacement.color, activeAnnouncementPlacement.visualSkinId)
+    : null
+  const announcementGlassTint = announcementGlassTintByThemeId[selectedBoardThemeId]
+  const announcementGlassPanelStyle = {
+    backdropFilter: 'blur(28px) saturate(145%)',
+    background: `linear-gradient(180deg, ${announcementGlassTint.highlight} 0%, rgba(255,255,255,0.1) 16%, rgba(255,255,255,0.03) 100%), linear-gradient(135deg, ${announcementGlassTint.tintA} 0%, ${announcementGlassTint.tintB} 100%)`,
+    borderColor: announcementGlassTint.border,
+    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.32), inset 0 -18px 28px rgba(255,255,255,0.05), 0 26px 48px ${announcementGlassTint.shadow}`,
+  } satisfies CSSProperties
+  const announcementGlassInnerStyle = {
+    backdropFilter: 'blur(22px) saturate(140%)',
+    background: `linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 24%, rgba(255,255,255,0.03) 100%), linear-gradient(135deg, ${announcementGlassTint.tintA} 0%, ${announcementGlassTint.tintB} 100%)`,
+    borderColor: announcementGlassTint.border,
+    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -10px 22px rgba(255,255,255,0.04), 0 16px 28px ${announcementGlassTint.shadow}`,
+  } satisfies CSSProperties
+  const announcementGlassSheenStyle = {
+    background:
+      'linear-gradient(180deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.12) 38%, rgba(255,255,255,0.02) 100%)',
+  } satisfies CSSProperties
+  const announcementGlassButtonStyle = {
+    backdropFilter: 'blur(22px) saturate(145%)',
+    background: `linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.12) 20%, rgba(255,255,255,0.05) 100%), linear-gradient(135deg, ${announcementGlassTint.tintA} 0%, ${announcementGlassTint.tintB} 100%)`,
+    borderColor: announcementGlassTint.border,
+    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.34), inset 0 -10px 18px rgba(255,255,255,0.05), 0 14px 24px ${announcementGlassTint.shadow}`,
+  } satisfies CSSProperties
+  const activeAnnouncementTitle = activeAnnouncementPlacement
+    ? language === 'es'
+      ? `¡${activeAnnouncementPlacement.name} ${ui.placeAnnouncementLabel[Math.min(activeAnnouncementPlacement.place, 3) as 1 | 2 | 3]}!`
+      : `${activeAnnouncementPlacement.name} ${ui.placeAnnouncementLabel[Math.min(activeAnnouncementPlacement.place, 3) as 1 | 2 | 3]}!`
+    : ''
+  const activeAnnouncementPlaceNumber = activeAnnouncementPlacement ? Math.min(activeAnnouncementPlacement.place, 3) : null
+  const activeAnnouncementSubtitle = activeAnnouncementPlacement ? `${ui.congrats}, ${activeAnnouncementPlacement.name}.` : ''
+
   return (
     <section
       className="min-h-screen bg-cover bg-center bg-no-repeat px-3 py-4 sm:px-4 sm:py-6"
-      style={{ backgroundImage: "url('/home-background.jpg')" }}
+      style={{ backgroundColor: boardTheme.backgroundColor, backgroundImage: boardTheme.backgroundImage }}
     >
       <div className="mx-auto w-full max-w-[1480px]">
-        {activeGameId !== null ? (
-          <article className="game-panel mx-auto bg-gradient-to-b from-[#efcd9a] via-[#e6bf86] to-[#d6a86d] p-3 xl:p-4">
-            <div className="mb-3 flex items-center justify-between rounded-2xl border border-[#4e2f14] bg-gradient-to-r from-[#845223] via-[#9b632e] to-[#7b4b1e] px-3 py-2 shadow-wood">
-              <p className="font-display text-xl uppercase tracking-[0.08em] text-[#fff0c7]">Board 3D on-chain</p>
-              <span className="rounded-full border border-[#7a4e12] bg-gradient-to-b from-[#f8d772] to-[#e4b23a] px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#603d0b]">
-                mismo HUD de /board-mock, estado real Dojo
-              </span>
+        {!isDojoConfigured ? (
+          <article
+            className="game-panel mx-auto max-w-[900px] p-5 text-center xl:p-6"
+            style={{ backgroundImage: surfacePalette.mainPanelBackground, borderColor: surfacePalette.mainPanelBorder }}
+          >
+            <div className="rounded-[28px] border p-6 shadow-wood" style={announcementGlassInnerStyle}>
+              <p className="font-display text-3xl uppercase tracking-[0.08em]" style={{ color: surfacePalette.headerText }}>
+                {ui.dojoDisabledTitle}
+              </p>
+              <p className="mx-auto mt-3 max-w-[620px] text-sm font-semibold leading-6" style={{ color: surfacePalette.hudCardText }}>
+                {ui.dojoDisabledBody}
+              </p>
+            </div>
+          </article>
+        ) : activeGameId !== null ? (
+          <article
+            className="game-panel mx-auto p-3 xl:p-4"
+            style={{ backgroundImage: surfacePalette.mainPanelBackground, borderColor: surfacePalette.mainPanelBorder }}
+          >
+            <div
+              className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-3 py-2 shadow-wood"
+              style={{
+                backgroundImage: surfacePalette.headerBackground,
+                borderColor: surfacePalette.headerBorder,
+              }}
+            >
+              <p className="font-display text-xl uppercase tracking-[0.08em]" style={{ color: surfacePalette.headerText }}>
+                {ui.boardTitle}
+              </p>
+              <div className="flex items-center gap-2">
+                <span
+                  className="rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em]"
+                  style={{
+                    backgroundImage: surfacePalette.badgeBackground,
+                    borderColor: surfacePalette.badgeBorder,
+                    color: surfacePalette.badgeText,
+                  }}
+                >
+                  {ui.dojoBadge}
+                </span>
+                <button
+                  className="rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] transition hover:brightness-105"
+                  onClick={() => setIsLogOpen(true)}
+                  style={{
+                    background: surfacePalette.hudPillBackground,
+                    borderColor: surfacePalette.hudPillBorder,
+                    color: surfacePalette.hudPillText,
+                  }}
+                  type="button"
+                >
+                  {ui.logLabel}
+                </button>
+              </div>
             </div>
 
             {snapshotError ? (
@@ -1725,7 +2224,20 @@ export function MatchOnchainView() {
 
             {isLoadingSnapshot && !snapshot ? (
               <div className="mb-3 rounded-2xl border border-[#8d6c38] bg-[#fff7df] px-4 py-3 text-sm font-bold text-[#6b4a15] shadow-[0_6px_18px_rgba(72,54,8,0.12)]">
-                Cargando estado on-chain del tablero...
+                {ui.loadBoard}
+              </div>
+            ) : null}
+
+            {isResolvingTokenLink || linkedTokenStatus ? (
+              <div
+                className="mb-3 rounded-2xl border px-4 py-3 text-sm font-bold shadow-[0_6px_18px_rgba(72,54,8,0.12)]"
+                style={{
+                  background: surfacePalette.accentPanelBackground,
+                  borderColor: surfacePalette.mainPanelBorder,
+                  color: surfacePalette.badgeText,
+                }}
+              >
+                {isResolvingTokenLink ? ui.linkPending : `${ui.tokenLinkLabel}: ${linkedTokenStatus}`}
               </div>
             ) : null}
 
@@ -1738,9 +2250,7 @@ export function MatchOnchainView() {
             {snapshot?.turn_state?.phase === 2 && isMyTurn ? (
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#7f5b24] bg-[#fff4d3] px-4 py-3 shadow-[0_6px_18px_rgba(72,54,8,0.12)]">
                 <div className="text-sm font-bold text-[#65431a]">
-                  {legalMoves.length > 0
-                    ? 'Selecciona una ficha para moverla on-chain.'
-                    : 'No quedan movimientos legales. Puedes terminar el turno.'}
+                  {legalMoves.length > 0 ? ui.selectTokenToMove : ui.noMovesLeft}
                 </div>
                 <button
                   className="rounded-full border border-[#7b4e15] bg-gradient-to-b from-[#ffd670] to-[#e6aa1b] px-4 py-2 text-sm font-black uppercase tracking-[0.12em] text-[#5a3507] shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_4px_0_rgba(118,80,15,0.45)] disabled:cursor-not-allowed disabled:opacity-60"
@@ -1748,7 +2258,7 @@ export function MatchOnchainView() {
                   onClick={onEndTurn}
                   type="button"
                 >
-                  {txPendingLabel === 'Ending turn' ? 'Terminando...' : 'Terminar turno'}
+                  {txPendingLabel === 'Ending turn' ? ui.endingTurn : ui.endTurn}
                 </button>
               </div>
             ) : null}
@@ -1761,11 +2271,13 @@ export function MatchOnchainView() {
                 highlightedSquares={highlightedSquares}
                 movableTokenIds={highlightedTokenIds}
                 onTokenClick={onTokenClick}
+                onTokenDiceChoiceHover={onTokenDiceChoiceHover}
                 onTokenHover={onTokenHover}
                 onTokenDiceChoiceSelect={onTokenDiceChoiceSelect}
                 players={players}
                 safeSquares={safeSquares}
                 selectedTokenId={selectedTokenId}
+                surfacePalette={surfacePalette}
                 tokenDiceChoices={tokenDiceChoices}
                 tokenHints={tokenHints}
                 tokens={uiTokens}
@@ -1775,46 +2287,58 @@ export function MatchOnchainView() {
               <div className="pointer-events-none absolute inset-x-0 top-2 flex items-start justify-between px-2 lg:hidden">
                 <PlayerHudSlot
                   canRoll={canRollAction}
+                  diceSkinId={playersByColor.green ? diceSkinByPlayerId[playersByColor.green.id] : selectedDiceSkinId}
                   dieA={snapshot?.dice_state?.die_a ?? null}
                   dieB={snapshot?.dice_state?.die_b ?? null}
                   onRoll={triggerHudDiceRoll}
                   player={playersByColor.green}
                   preview={hudDicePreview}
                   rolling={hudDiceRolling}
+                  surfacePalette={surfacePalette}
                   turnPlayerId={activePlayerAddress}
+                  ui={ui}
                 />
                 <PlayerHudSlot
                   canRoll={canRollAction}
+                  diceSkinId={playersByColor.red ? diceSkinByPlayerId[playersByColor.red.id] : selectedDiceSkinId}
                   dieA={snapshot?.dice_state?.die_a ?? null}
                   dieB={snapshot?.dice_state?.die_b ?? null}
                   onRoll={triggerHudDiceRoll}
                   player={playersByColor.red}
                   preview={hudDicePreview}
                   rolling={hudDiceRolling}
+                  surfacePalette={surfacePalette}
                   turnPlayerId={activePlayerAddress}
+                  ui={ui}
                 />
               </div>
 
               <div className="pointer-events-none absolute inset-x-0 bottom-2 flex items-end justify-between px-2 lg:hidden">
                 <PlayerHudSlot
                   canRoll={canRollAction}
+                  diceSkinId={playersByColor.yellow ? diceSkinByPlayerId[playersByColor.yellow.id] : selectedDiceSkinId}
                   dieA={snapshot?.dice_state?.die_a ?? null}
                   dieB={snapshot?.dice_state?.die_b ?? null}
                   onRoll={triggerHudDiceRoll}
                   player={playersByColor.yellow}
                   preview={hudDicePreview}
                   rolling={hudDiceRolling}
+                  surfacePalette={surfacePalette}
                   turnPlayerId={activePlayerAddress}
+                  ui={ui}
                 />
                 <PlayerHudSlot
                   canRoll={canRollAction}
+                  diceSkinId={playersByColor.blue ? diceSkinByPlayerId[playersByColor.blue.id] : selectedDiceSkinId}
                   dieA={snapshot?.dice_state?.die_a ?? null}
                   dieB={snapshot?.dice_state?.die_b ?? null}
                   onRoll={triggerHudDiceRoll}
                   player={playersByColor.blue}
                   preview={hudDicePreview}
                   rolling={hudDiceRolling}
+                  surfacePalette={surfacePalette}
                   turnPlayerId={activePlayerAddress}
+                  ui={ui}
                 />
               </div>
 
@@ -1822,58 +2346,84 @@ export function MatchOnchainView() {
                 <div className="absolute left-4 top-[17%] -translate-y-1/2">
                   <PlayerHudSlot
                     canRoll={canRollAction}
+                    diceSkinId={playersByColor.green ? diceSkinByPlayerId[playersByColor.green.id] : selectedDiceSkinId}
                     dieA={snapshot?.dice_state?.die_a ?? null}
                     dieB={snapshot?.dice_state?.die_b ?? null}
                     onRoll={triggerHudDiceRoll}
                     player={playersByColor.green}
                     preview={hudDicePreview}
                     rolling={hudDiceRolling}
+                    surfacePalette={surfacePalette}
                     turnPlayerId={activePlayerAddress}
+                    ui={ui}
                   />
                 </div>
 
                 <div className="absolute right-4 top-[17%] -translate-y-1/2">
                   <PlayerHudSlot
                     canRoll={canRollAction}
+                    diceSkinId={playersByColor.red ? diceSkinByPlayerId[playersByColor.red.id] : selectedDiceSkinId}
                     dieA={snapshot?.dice_state?.die_a ?? null}
                     dieB={snapshot?.dice_state?.die_b ?? null}
                     onRoll={triggerHudDiceRoll}
                     player={playersByColor.red}
                     preview={hudDicePreview}
                     rolling={hudDiceRolling}
+                    surfacePalette={surfacePalette}
                     turnPlayerId={activePlayerAddress}
+                    ui={ui}
                   />
                 </div>
 
                 <div className="absolute bottom-[17%] left-4 translate-y-1/2">
                   <PlayerHudSlot
                     canRoll={canRollAction}
+                    diceSkinId={playersByColor.yellow ? diceSkinByPlayerId[playersByColor.yellow.id] : selectedDiceSkinId}
                     dieA={snapshot?.dice_state?.die_a ?? null}
                     dieB={snapshot?.dice_state?.die_b ?? null}
                     onRoll={triggerHudDiceRoll}
                     player={playersByColor.yellow}
                     preview={hudDicePreview}
                     rolling={hudDiceRolling}
+                    surfacePalette={surfacePalette}
                     turnPlayerId={activePlayerAddress}
+                    ui={ui}
                   />
                 </div>
 
                 <div className="absolute bottom-[17%] right-4 translate-y-1/2">
                   <PlayerHudSlot
                     canRoll={canRollAction}
+                    diceSkinId={playersByColor.blue ? diceSkinByPlayerId[playersByColor.blue.id] : selectedDiceSkinId}
                     dieA={snapshot?.dice_state?.die_a ?? null}
                     dieB={snapshot?.dice_state?.die_b ?? null}
                     onRoll={triggerHudDiceRoll}
                     player={playersByColor.blue}
                     preview={hudDicePreview}
                     rolling={hudDiceRolling}
+                    surfacePalette={surfacePalette}
                     turnPlayerId={activePlayerAddress}
+                    ui={ui}
                   />
                 </div>
               </div>
             </div>
           </article>
-        ) : null}
+        ) : (
+          <article
+            className="game-panel mx-auto max-w-[900px] p-5 text-center xl:p-6"
+            style={{ backgroundImage: surfacePalette.mainPanelBackground, borderColor: surfacePalette.mainPanelBorder }}
+          >
+            <div className="rounded-[28px] border p-6 shadow-wood" style={announcementGlassInnerStyle}>
+              <p className="font-display text-3xl uppercase tracking-[0.08em]" style={{ color: surfacePalette.headerText }}>
+                {ui.emptyBoardTitle}
+              </p>
+              <p className="mx-auto mt-3 max-w-[620px] text-sm font-semibold leading-6" style={{ color: surfacePalette.hudCardText }}>
+                {ui.emptyBoardBody}
+              </p>
+            </div>
+          </article>
+        )}
 
         {modalQuestion && snapshot?.turn_state?.phase === 1 ? (
           <TriviaQuestionModal
@@ -1900,6 +2450,157 @@ export function MatchOnchainView() {
             selectedOption={resolvedAnswerDisplay.selectedOption}
           />
         ) : null}
+
+        {activeAnnouncementPlacement ? (
+          <div className="fixed inset-0 z-[220] flex items-center justify-center px-3 py-6">
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(18,10,6,0.12),rgba(12,6,3,0.18))] backdrop-blur-[16px]" />
+
+            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+              {Array.from({ length: 20 }).map((_, index) => (
+                <span
+                  className="victory-confetti absolute h-3 w-2 rounded-[2px]"
+                  key={`confetti-${index}`}
+                  style={{
+                    animationDelay: `${(index % 6) * 140}ms`,
+                    animationDuration: `${2400 + (index % 5) * 260}ms`,
+                    background:
+                      index % 4 === 0
+                        ? '#ffe188'
+                        : index % 4 === 1
+                          ? '#ff8f7b'
+                          : index % 4 === 2
+                            ? '#89dbff'
+                            : '#9effb8',
+                    left: `${4 + ((index * 11) % 92)}%`,
+                    top: `${-14 - (index % 6) * 8}%`,
+                  }}
+                />
+              ))}
+
+              <span className="absolute left-[8%] top-[17%] text-6xl opacity-80 drop-shadow-[0_6px_12px_rgba(0,0,0,0.4)] sm:text-7xl">
+                🎆
+              </span>
+              <span className="absolute right-[8%] top-[17%] text-6xl opacity-80 drop-shadow-[0_6px_12px_rgba(0,0,0,0.4)] sm:text-7xl">
+                🎇
+              </span>
+            </div>
+
+            <div className="relative w-full max-w-[980px] text-center">
+              <div
+                className="victory-pop relative mx-auto overflow-hidden rounded-[42px] border-[1.5px] bg-white/10 shadow-[0_30px_60px_rgba(0,0,0,0.48)]"
+                style={announcementGlassPanelStyle}
+              >
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_28%,rgba(255,255,255,0.22),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))]" />
+                <div className="absolute inset-x-[2%] top-[1.4%] h-[22%] rounded-[30px] opacity-80 blur-sm" style={announcementGlassSheenStyle} />
+
+                <div className="relative px-5 pb-7 pt-24 sm:px-8 sm:pb-9 sm:pt-28">
+                  <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 sm:top-4">
+                    <div className="relative flex h-[164px] w-[164px] items-center justify-center sm:h-[184px] sm:w-[184px]">
+                      <div className="absolute left-1/2 top-0 z-30 -translate-x-1/2 text-[#f8d777] drop-shadow-[0_5px_0_rgba(115,62,18,0.55)]">
+                        <svg aria-hidden="true" className="h-16 w-16 sm:h-20 sm:w-20" fill="none" viewBox="0 0 64 64">
+                          <path d="M12 46h40l-3.8 8H15.8L12 46Zm4-24 10 9 6-13 6 13 10-9-4 20H20l-4-20Z" fill="url(#crownFill)" stroke="#8a4e17" strokeLinejoin="round" strokeWidth="3" />
+                          <circle cx="16" cy="22" r="4" fill="#ffeaa0" stroke="#8a4e17" strokeWidth="3" />
+                          <circle cx="32" cy="16" r="4" fill="#ffeaa0" stroke="#8a4e17" strokeWidth="3" />
+                          <circle cx="48" cy="22" r="4" fill="#ffeaa0" stroke="#8a4e17" strokeWidth="3" />
+                          <defs>
+                            <linearGradient id="crownFill" x1="32" x2="32" y1="16" y2="54" gradientUnits="userSpaceOnUse">
+                              <stop stopColor="#fff0a8" />
+                              <stop offset="0.58" stopColor="#f5c248" />
+                              <stop offset="1" stopColor="#cb842b" />
+                            </linearGradient>
+                          </defs>
+                        </svg>
+                      </div>
+
+                      <div className="absolute top-[38px] z-20 rounded-full border-[4px] border-[#874d26] bg-gradient-to-b from-[#fff1b6] via-[#edb546] to-[#b86b1e] px-4 py-1 text-[38px] font-display leading-none text-[#5a2d10] shadow-[0_8px_14px_rgba(0,0,0,0.34),inset_0_2px_0_rgba(255,247,203,0.85)]">
+                        {activeAnnouncementPlaceNumber}
+                      </div>
+
+                      <div className="absolute bottom-0 left-1/2 z-20 flex h-[146px] w-[146px] -translate-x-1/2 items-center justify-center rounded-full border-[6px] border-[#7b4528] bg-gradient-to-b from-[#ffe7ab] via-[#f8bf56] to-[#cd8335] shadow-[0_26px_42px_rgba(0,0,0,0.44)]">
+                        <span
+                          className={`inline-flex h-[116px] w-[116px] items-center justify-center rounded-full border-[4px] border-[#7c3f21] bg-gradient-to-b text-3xl font-black text-[#2c190d] ${activeAnnouncementTheme?.avatarToneClass || ''}`}
+                        >
+                          <GameAvatar
+                            alt={activeAnnouncementPlacement.name}
+                            avatar={activeAnnouncementPlacement.avatar}
+                            imageClassName="h-full w-full object-contain p-2"
+                            textClassName="text-3xl font-black text-[#2c190d]"
+                          />
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    className="relative mx-auto max-w-[760px] rounded-[34px] border bg-white/10 px-4 pb-5 pt-[116px] sm:px-8 sm:pb-7"
+                    style={announcementGlassInnerStyle}
+                  >
+                    <div className="absolute inset-x-5 top-4 h-[72px] rounded-[22px] border border-white/20 bg-white/10" />
+                    <div className="absolute inset-x-[4%] top-[2%] h-[20%] rounded-[26px] opacity-90 blur-sm" style={announcementGlassSheenStyle} />
+
+                    <div
+                      className="relative rounded-[28px] border px-4 py-5 sm:px-6 sm:py-6"
+                      style={announcementGlassInnerStyle}
+                    >
+                      <p className="font-display text-[28px] uppercase leading-[1.05] tracking-[0.04em] text-[#ffe8be] drop-shadow-[0_3px_0_rgba(67,31,12,0.82)] sm:text-[46px]">
+                        {activeAnnouncementTitle}
+                      </p>
+                      <p className="mt-3 text-sm font-black uppercase tracking-[0.14em] text-[#ffefc8] sm:text-lg">
+                        {activeAnnouncementSubtitle}
+                      </p>
+                    </div>
+
+                    <div className="mt-5 flex justify-center">
+                      <button
+                        className="rounded-[22px] border px-8 py-2.5 font-display text-[22px] uppercase tracking-[0.12em] text-[#fff4de] transition hover:brightness-105 active:translate-y-[2px]"
+                        onClick={() => {
+                          if (winnerAnnouncementTimeoutRef.current !== null) {
+                            window.clearTimeout(winnerAnnouncementTimeoutRef.current)
+                            winnerAnnouncementTimeoutRef.current = null
+                          }
+                          setActiveAnnouncementPlacement(null)
+                          setShowFinalClassification(true)
+                        }}
+                        style={{
+                          ...announcementGlassButtonStyle,
+                          textShadow: '0 2px 8px rgba(52,31,16,0.34)',
+                        }}
+                        type="button"
+                      >
+                        {ui.skip}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {showFinalClassification && finalPlacements.length > 0 ? <FinalRankingScreen placements={finalPlacements} /> : null}
+
+        <style>{`
+          @keyframes victoryConfettiFall {
+            0% { opacity: 0; transform: translate3d(0, -35px, 0) rotate(0deg); }
+            15% { opacity: 1; }
+            100% { opacity: 0; transform: translate3d(0, 115vh, 0) rotate(420deg); }
+          }
+
+          @keyframes victoryPop {
+            0% { opacity: 0; transform: translate3d(0, 26px, 0) scale(0.85); }
+            100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+          }
+
+          .victory-confetti {
+            animation-name: victoryConfettiFall;
+            animation-timing-function: linear;
+            animation-iteration-count: infinite;
+          }
+
+          .victory-pop {
+            animation: victoryPop 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+          }
+        `}</style>
 
         <LogDrawer events={logEvents} onClose={() => setIsLogOpen(false)} open={isLogOpen} />
       </div>

@@ -31,6 +31,10 @@ import type {
 } from './types'
 
 type RawModel = Record<string, unknown>
+type ToriiSchema = Record<string, Record<string, Record<string, unknown>>>
+type QueryEntityModelTag = Parameters<ToriiQueryBuilder<ToriiSchema>['withEntityModels']>[0][number]
+type QueryClause = Parameters<ToriiQueryBuilder<ToriiSchema>['withClause']>[0]
+type KeysClauseBuilder = (tags: string[], keys: string[], lengthType: 'FixedLen') => { build: () => QueryClause }
 
 type OnchainEventModelName =
   | 'AnswerResolved'
@@ -238,7 +242,7 @@ const extractModelFromEntity = (entity: { models?: Record<string, Record<string,
 }
 
 const extractModels = (items: Entity[], modelName: string): RawModel[] => {
-  const parsed = parseEntities<any>(items)
+  const parsed = parseEntities<ToriiSchema>(items)
 
   return parsed
     .map((entity) => extractModelFromEntity(entity, modelName))
@@ -271,7 +275,7 @@ const memberValueMatches = (left: unknown, right: bigint | number | string) => {
 }
 
 const buildKeysClause = (modelName: string, keys: Array<bigint | number | string>) =>
-  (KeysClause as any)([modelTag(modelName)], keys.map((value) => `${value}`), 'FixedLen').build()
+  (KeysClause as unknown as KeysClauseBuilder)([modelTag(modelName)], keys.map((value) => `${value}`), 'FixedLen').build()
 
 let toriiClientPromise: null | Promise<ToriiClient> = null
 const boardSquareCache = new Map<string, Promise<DojoBoardSquareModel[]>>()
@@ -304,8 +308,8 @@ const fetchModelByKeys = async (
   modelName: string,
   keys: Array<bigint | number | string>,
 ): Promise<null | RawModel> => {
-  const query = new ToriiQueryBuilder<any>()
-    .withEntityModels([modelTag(modelName) as any])
+  const query = new ToriiQueryBuilder<ToriiSchema>()
+    .withEntityModels([modelTag(modelName) as QueryEntityModelTag])
     .withClause(buildKeysClause(modelName, keys))
     .withLimit(1)
 
@@ -339,8 +343,8 @@ const fetchModelsByMember = async (
   let cursor: string | undefined
 
   while (matches.length < limit) {
-    const query = new ToriiQueryBuilder<any>()
-      .withEntityModels([modelTag(modelName) as any])
+    const query = new ToriiQueryBuilder<ToriiSchema>()
+      .withEntityModels([modelTag(modelName) as QueryEntityModelTag])
       .withLimit(pageSize)
 
     if (cursor) {

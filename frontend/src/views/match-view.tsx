@@ -1852,7 +1852,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
       if (remainingSeconds <= 0) {
         resolveTriviaAnswer(null, 'timeout')
       }
-    }, 200)
+    }, 1000)
 
     return () => {
       if (triviaCountdownIntervalRef.current !== null) {
