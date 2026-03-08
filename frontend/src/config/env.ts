@@ -19,6 +19,10 @@ const resolveLocalProxyUrl = (value: string, proxyPath: string) => {
     return normalizeUrl(value)
   }
 
+  if (window.location.protocol !== 'https:') {
+    return normalizeUrl(value)
+  }
+
   return `${window.location.origin}${proxyPath}`
 }
 
