@@ -1,16 +1,42 @@
 import { useAccount } from '@starknet-react/core'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { setPlayerCustomization } from '../api'
 import { GameAvatar } from '../components/game/game-avatar'
 import { GameDie } from '../components/game/game-die'
-import { boardThemeCatalog, type BoardThemeId } from '../lib/board-themes'
+import {
+  boardThemeCatalog,
+  getBoardThemeName,
+  getBoardThemeRarityLabel,
+  getBoardThemeSubtitle,
+  type BoardThemeId,
+} from '../lib/board-themes'
 import { TokenChip } from '../components/game/token-chip'
-import { diceSkinCatalog, diceSkinIndexFromId, type DiceSkinId } from '../lib/dice-cosmetics'
+import {
+  diceSkinCatalog,
+  diceSkinIndexFromId,
+  getDiceSkinName,
+  getDiceSkinRarityLabel,
+  getDiceSkinSubtitle,
+  type DiceSkinId,
+} from '../lib/dice-cosmetics'
 import { appEnv } from '../config/env'
 import { getPlayerVisualTheme } from '../lib/player-color-themes'
-import { tokenSkinCatalog, tokenSkinIndexFromId, type TokenSkinId } from '../lib/token-cosmetics'
-import { getPlayerSkinSrc, playerSkinIndexFromId, playerSkins } from '../lib/player-skins'
+import {
+  getTokenSkinName,
+  getTokenSkinRarityLabel,
+  getTokenSkinSubtitle,
+  tokenSkinIndexFromId,
+  tokenSkinShopCatalog,
+  type TokenSkinId,
+} from '../lib/token-cosmetics'
+import {
+  getPlayerSkinName,
+  getPlayerSkinSrc,
+  getPlayerSkinSubtitle,
+  playerSkinIndexFromId,
+  playerSkins,
+} from '../lib/player-skins'
 import { useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import { usePlayerProfile } from '../lib/use-player-profile'
 import { GameConfigView } from './game-config-view'
@@ -42,6 +68,8 @@ type LobbyEntry = {
 
 type ShopTab = 'avatars' | 'tokens' | 'dice' | 'themes'
 
+type ShopRarityLabel = string
+
 type ShopItem = {
   boardThemeId?: BoardThemeId
   diceSkinId?: DiceSkinId
@@ -57,7 +85,8 @@ type ShopItem = {
   name?: string
   subtitle?: string
   price: number
-  rarityLabel?: string
+  rarityLabel?: ShopRarityLabel
+  tier?: 'free' | 'premium'
   tokenSkinId?: TokenSkinId
   toneClass: string
 }
@@ -94,62 +123,31 @@ const difficultyOptions: DifficultyOption[] = [
   { id: 'hard', labelKey: 'difficultyHard' },
 ]
 
-const shopItemsByTab: Record<ShopTab, ShopItem[]> = {
-  avatars: [
-    ...playerSkins.map((skin, index) => ({
-      id: skin.id,
-      isStarterSkin: skin.price === 0,
-      isSkinItem: true,
-      mediaSrc: skin.src,
-      name: skin.name,
-      subtitle: skin.subtitle,
-      price: skin.price,
-      toneClass:
-        index % 3 === 0
-          ? 'from-[#ffefdb] to-[#fddcab]'
-          : index % 3 === 1
-            ? 'from-[#eff2ff] to-[#d8dbfb]'
-            : 'from-[#e8fbff] to-[#cbf1ff]',
-    })),
-  ],
-  tokens: [
-    ...tokenSkinCatalog.map((skin) => ({
-      id: `token-${skin.id}`,
-      isTokenItem: true,
-      name: skin.name,
-      price: skin.price,
-      rarityLabel: skin.rarityLabel,
-      subtitle: skin.rarityLabel === 'Especial' ? 'Edicion especial' : 'Ficha equipable',
-      tokenSkinId: skin.id,
-      toneClass: skin.previewToneClass,
-    })),
-  ],
-  dice: [
-    ...diceSkinCatalog.map((skin) => ({
-      id: `dice-${skin.id}`,
-      isDiceItem: true,
-      name: skin.name,
-      price: skin.price,
-      rarityLabel: skin.rarityLabel,
-      subtitle: skin.subtitle,
-      diceSkinId: skin.id,
-      toneClass: skin.previewToneClass,
-    })),
-  ],
-  themes: [
-    ...boardThemeCatalog.map((theme) => ({
-      id: theme.id,
-      icon: theme.icon,
-      isBoardThemeItem: true,
-      name: theme.name,
-      price: theme.price,
-      previewImageSrc: theme.previewImageSrc,
-      rarityLabel: theme.rarityLabel,
-      subtitle: theme.subtitle,
-      boardThemeId: theme.id,
-      toneClass: theme.previewToneClass,
-    })),
-  ],
+const deriveShopRarityLabel = (price: number, language: 'es' | 'en'): ShopRarityLabel => {
+  if (price <= 0) {
+    return language === 'en' ? 'Common' : 'Común'
+  }
+
+  if (price < 700) {
+    return language === 'en' ? 'Rare' : 'Raro'
+  }
+
+  if (price < 1200) {
+    return language === 'en' ? 'Epic' : 'Épico'
+  }
+
+  return language === 'en' ? 'Legendary' : 'Legendario'
+}
+
+const rarityBadgeClassByLabel: Record<ShopRarityLabel, string> = {
+  Common: 'border-[#8d7d63] bg-gradient-to-b from-[#f4f0e4] to-[#d5c8a9] text-[#5c4c36]',
+  Común: 'border-[#8d7d63] bg-gradient-to-b from-[#f4f0e4] to-[#d5c8a9] text-[#5c4c36]',
+  Rare: 'border-[#396b9f] bg-gradient-to-b from-[#dff1ff] to-[#89c4ff] text-[#173b63]',
+  Raro: 'border-[#396b9f] bg-gradient-to-b from-[#dff1ff] to-[#89c4ff] text-[#173b63]',
+  Epic: 'border-[#7a49a6] bg-gradient-to-b from-[#f2e3ff] to-[#c78fff] text-[#4b1f74]',
+  'Épico': 'border-[#7a49a6] bg-gradient-to-b from-[#f2e3ff] to-[#c78fff] text-[#4b1f74]',
+  Legendary: 'border-[#b26e17] bg-gradient-to-b from-[#fff2bf] to-[#f4b84a] text-[#6a3b05]',
+  Legendario: 'border-[#b26e17] bg-gradient-to-b from-[#fff2bf] to-[#f4b84a] text-[#6a3b05]',
 }
 
 const homeCopyByLanguage = {
@@ -182,8 +180,12 @@ const homeCopyByLanguage = {
     equippedItem: 'EQUIPADA',
     levelLabel: 'Nivel',
     prestigeLabel: 'Prestigio',
-    starterSkin: 'INICIAL',
-    premiumSkin: 'CATALOGO',
+    starterSkin: 'GRATIS',
+    premiumSkin: 'PREMIUM',
+    freeTokenTag: 'GRATIS',
+    premiumTokenTag: 'PREMIUM',
+    freeTokenSubtitle: 'Color base disponible',
+    premiumTokenSubtitle: 'Color premium equipable',
     tokenEquippedBadge: 'EQUIPADA',
     cosmeticsSynced: 'Cosmeticos sincronizados on-chain.',
     cosmeticsSyncing: 'Sincronizando cosmeticos...',
@@ -218,8 +220,12 @@ const homeCopyByLanguage = {
     equippedItem: 'EQUIPPED',
     levelLabel: 'Level',
     prestigeLabel: 'Prestige',
-    starterSkin: 'STARTER',
-    premiumSkin: 'CATALOG',
+    starterSkin: 'FREE',
+    premiumSkin: 'PREMIUM',
+    freeTokenTag: 'FREE',
+    premiumTokenTag: 'PREMIUM',
+    freeTokenSubtitle: 'Base color available',
+    premiumTokenSubtitle: 'Premium playable color',
     tokenEquippedBadge: 'EQUIPPED',
     cosmeticsSynced: 'Cosmetics synced on-chain.',
     cosmeticsSyncing: 'Syncing cosmetics...',
@@ -313,6 +319,7 @@ export function HomeView() {
   const language = useAppSettingsStore((state) => state.language)
   const ownedBoardThemeIds = useAppSettingsStore((state) => state.ownedBoardThemeIds)
   const ownedDiceSkinIds = useAppSettingsStore((state) => state.ownedDiceSkinIds)
+  const ownedPlayerSkinIds = useAppSettingsStore((state) => state.ownedPlayerSkinIds)
   const ownedTokenSkinIds = useAppSettingsStore((state) => state.ownedTokenSkinIds)
   const selectedBoardThemeId = useAppSettingsStore((state) => state.selectedBoardThemeId)
   const selectedDiceSkinId = useAppSettingsStore((state) => state.selectedDiceSkinId)
@@ -324,6 +331,7 @@ export function HomeView() {
   const setSelectedTokenSkinId = useAppSettingsStore((state) => state.setSelectedTokenSkinId)
   const unlockBoardTheme = useAppSettingsStore((state) => state.unlockBoardTheme)
   const unlockDiceSkin = useAppSettingsStore((state) => state.unlockDiceSkin)
+  const unlockPlayerSkin = useAppSettingsStore((state) => state.unlockPlayerSkin)
   const unlockTokenSkin = useAppSettingsStore((state) => state.unlockTokenSkin)
   const { isConnected, username } = useControllerWallet()
   const playerProfile = usePlayerProfile()
@@ -332,10 +340,73 @@ export function HomeView() {
   const selectedTokenTheme = getPlayerVisualTheme(selectedTokenSkinId)
   const ownedBoardThemeSet = new Set(ownedBoardThemeIds)
   const ownedDiceSkinSet = new Set(ownedDiceSkinIds)
+  const ownedPlayerSkinSet = new Set(ownedPlayerSkinIds)
   const ownedTokenSkinSet = new Set(ownedTokenSkinIds)
   const displayUsername = playerProfile.username || username || 'PARQUIZ_PLAYER_77'
   const levelLabel = `${ui.levelLabel} ${playerProfile.level}`
   const prestigeLabel = `${ui.prestigeLabel} ${playerProfile.prestige}`
+  const shopItemsByTab = useMemo<Record<ShopTab, ShopItem[]>>(
+    () => ({
+      avatars: [
+        ...playerSkins.map((skin, index) => ({
+          id: skin.id,
+          isStarterSkin: skin.tier === 'free',
+          isSkinItem: true,
+          mediaSrc: skin.src,
+          name: getPlayerSkinName(skin.id, language) || '',
+          subtitle: getPlayerSkinSubtitle(skin.id, language) || '',
+          price: skin.price,
+          rarityLabel: deriveShopRarityLabel(skin.price, language),
+          toneClass:
+            index % 3 === 0
+              ? 'from-[#ffefdb] to-[#fddcab]'
+              : index % 3 === 1
+                ? 'from-[#eff2ff] to-[#d8dbfb]'
+                : 'from-[#e8fbff] to-[#cbf1ff]',
+        })),
+      ],
+      tokens: [
+        ...tokenSkinShopCatalog.map((skin) => ({
+          id: `token-${skin.id}`,
+          isTokenItem: true,
+          name: getTokenSkinName(skin.id, language),
+          price: skin.price,
+          rarityLabel: getTokenSkinRarityLabel(skin.id, language),
+          subtitle: getTokenSkinSubtitle(skin.id, language),
+          tier: skin.tier,
+          tokenSkinId: skin.id,
+          toneClass: skin.previewToneClass,
+        })),
+      ],
+      dice: [
+        ...diceSkinCatalog.map((skin) => ({
+          id: `dice-${skin.id}`,
+          isDiceItem: true,
+          name: getDiceSkinName(skin.id, language),
+          price: skin.price,
+          rarityLabel: getDiceSkinRarityLabel(skin.id, language),
+          subtitle: getDiceSkinSubtitle(skin.id, language),
+          diceSkinId: skin.id,
+          toneClass: skin.previewToneClass,
+        })),
+      ],
+      themes: [
+        ...boardThemeCatalog.map((theme) => ({
+          id: theme.id,
+          icon: theme.icon,
+          isBoardThemeItem: true,
+          name: getBoardThemeName(theme.id, language),
+          price: theme.price,
+          previewImageSrc: theme.previewImageSrc,
+          rarityLabel: getBoardThemeRarityLabel(theme.id, language),
+          subtitle: getBoardThemeSubtitle(theme.id, language),
+          boardThemeId: theme.id,
+          toneClass: theme.previewToneClass,
+        })),
+      ],
+    }),
+    [language],
+  )
   const shopItems = shopItemsByTab[activeShopTab]
   const coinBalance = playerProfile.coins
   const coinLabel = coinBalance.toLocaleString('en-US')
@@ -718,21 +789,22 @@ export function HomeView() {
             type="button"
           />
 
-          <div className="relative z-10 w-full max-w-[1050px]">
-            <div className="relative rounded-[34px] border-[5px] border-[#7b4828] bg-gradient-to-b from-[#bc7c49] via-[#956036] to-[#6f4428] p-2 shadow-[0_24px_48px_rgba(32,16,7,0.56)] sm:p-3">
+          <div className="relative z-10 w-full max-w-[1050px] max-h-[96vh]">
+            <div className="relative flex max-h-[96vh] flex-col overflow-hidden rounded-[34px] border-[5px] border-[#7b4828] bg-gradient-to-b from-[#bc7c49] via-[#956036] to-[#6f4428] p-2 shadow-[0_24px_48px_rgba(32,16,7,0.56)] sm:p-3">
               <div className="absolute right-5 top-2 rounded-full border-2 border-[#8b5332] bg-gradient-to-b from-[#7b4b2f] to-[#58331f] px-4 py-1.5 text-[26px] font-black tracking-wide text-[#fff2d4] shadow-[inset_0_1px_0_rgba(255,228,178,0.38)]">
                 <span className="mr-2 text-[#ffd24e]">🪙</span>
                 {coinLabel}
               </div>
 
-              <div className="mx-auto mt-[-20px] w-fit rounded-[18px] border-[4px] border-[#8f562f] bg-gradient-to-b from-[#b77445] via-[#915731] to-[#6d4327] px-8 py-2 shadow-[inset_0_1px_0_rgba(255,225,189,0.66),0_4px_0_rgba(102,58,29,0.88)] sm:px-12">
+              <div className="mx-auto mt-[-20px] shrink-0 w-fit rounded-[18px] border-[4px] border-[#8f562f] bg-gradient-to-b from-[#b77445] via-[#915731] to-[#6d4327] px-8 py-2 shadow-[inset_0_1px_0_rgba(255,225,189,0.66),0_4px_0_rgba(102,58,29,0.88)] sm:px-12">
                 <p className="font-display text-4xl uppercase tracking-wide text-[#ffeac2] sm:text-5xl">
                   {ui.shopModalTitle}
                 </p>
               </div>
 
-              <div className="mt-3 rounded-[26px] border-2 border-[#9c633b] bg-gradient-to-b from-[#f4d9af] to-[#eac38e] p-3 sm:p-4">
-                <div className="flex flex-wrap gap-1.5 sm:gap-2">
+              <div className="mt-3 flex min-h-0 flex-1 flex-col rounded-[26px] border-2 border-[#9c633b] bg-gradient-to-b from-[#f4d9af] to-[#eac38e] p-3 sm:p-4">
+                <div className="shrink-0">
+                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
                   {shopTabs.map((tab) => {
                     const isActive = activeShopTab === tab.id
                     return (
@@ -751,14 +823,20 @@ export function HomeView() {
                     )
                   })}
                 </div>
+                </div>
 
-                <div className="mt-3 rounded-[24px] border-[3px] border-[#ceaf84] bg-gradient-to-b from-[#fff4dc] to-[#f6e0bc] p-3 sm:p-4">
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div
+                  className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1"
+                  style={{ scrollbarGutter: 'stable' }}
+                >
+                  <div className="rounded-[24px] border-[3px] border-[#ceaf84] bg-gradient-to-b from-[#fff4dc] to-[#f6e0bc] p-3 sm:p-4">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {shopItems.map((item) => (
                       (() => {
                         const isOwnedBoardTheme = Boolean(item.boardThemeId && ownedBoardThemeSet.has(item.boardThemeId))
                         const isEquippedBoardTheme = Boolean(item.boardThemeId && item.boardThemeId === selectedBoardThemeId)
                         const isEquippedSkin = item.isSkinItem && item.id === selectedSkinId
+                        const isOwnedSkin = item.isSkinItem && ownedPlayerSkinSet.has(item.id)
                         const isOwnedDice = Boolean(item.diceSkinId && ownedDiceSkinSet.has(item.diceSkinId))
                         const isEquippedDice = Boolean(item.diceSkinId && item.diceSkinId === selectedDiceSkinId)
                         const isOwnedToken = Boolean(item.tokenSkinId && ownedTokenSkinSet.has(item.tokenSkinId))
@@ -776,6 +854,10 @@ export function HomeView() {
                           }
 
                           if (item.isSkinItem) {
+                            if (!isOwnedSkin) {
+                              unlockPlayerSkin(item.id)
+                            }
+
                             setSelectedSkinId(item.id)
                             void syncCustomization(item.id, selectedDiceSkinId, selectedTokenSkinId)
                             return
@@ -806,7 +888,9 @@ export function HomeView() {
                         const actionLabel = item.isSkinItem
                           ? isEquippedSkin
                             ? ui.equippedItem
-                            : ui.equipItem
+                            : !isOwnedSkin
+                              ? ui.buyItem
+                              : ui.equipItem
                           : item.boardThemeId
                             ? !isOwnedBoardTheme
                               ? ui.buyItem
@@ -831,12 +915,20 @@ export function HomeView() {
                       <article
                         className={`rounded-[20px] border-2 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)] ${
                           isEquippedItem
-                            ? 'border-[#e0b54f] bg-gradient-to-b from-[#fff7d6] to-[#f2dda5] shadow-[0_0_0_3px_rgba(247,202,88,0.28)]'
+                            ? 'border-[#e0b54f] bg-gradient-to-b from-[#fff7d6] to-[#f2dda5] shadow-[0_0_0_3px_rgba(247,202,88,0.28),0_0_22px_rgba(243,204,98,0.32)] animate-[shopGlow_2.6s_ease-in-out_infinite]'
                             : 'border-[#d7b889] bg-gradient-to-b from-[#fff8e8] to-[#f3dfba]'
                         }`}
                         key={item.id}
                       >
                         <div className={`relative flex h-28 items-center justify-center rounded-[16px] bg-gradient-to-b ${item.toneClass} text-[70px] sm:text-[76px]`}>
+                          {item.rarityLabel ? (
+                            <span
+                              className={`absolute left-2 top-2 z-10 rounded-full border px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.14em] shadow-[0_2px_6px_rgba(61,36,17,0.18)] ${rarityBadgeClassByLabel[item.rarityLabel]}`}
+                            >
+                              {item.rarityLabel}
+                            </span>
+                          ) : null}
+
                           {item.mediaSrc ? (
                             <GameAvatar alt={item.name || item.id} avatar={item.mediaSrc} imageClassName="h-full w-full object-contain p-2" />
                           ) : item.boardThemeId ? (
@@ -859,8 +951,12 @@ export function HomeView() {
                             item.icon
                           )}
 
-                          {isEquippedBoardTheme || isEquippedDice || isEquippedToken ? (
-                            <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border border-[#2f7a20] bg-gradient-to-b from-[#7ce05f] to-[#3fa326] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] text-white shadow-[0_0_16px_rgba(88,181,56,0.4)]">
+                          {isEquippedItem ? (
+                            <span className="pointer-events-none absolute inset-0 rounded-[16px] bg-[linear-gradient(120deg,transparent_10%,rgba(255,255,255,0.08)_26%,rgba(255,255,255,0.42)_38%,transparent_52%,transparent_100%)] animate-[shopShine_2.4s_ease-in-out_infinite]" />
+                          ) : null}
+
+                          {isEquippedItem ? (
+                            <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border border-[#2f7a20] bg-gradient-to-b from-[#7ce05f] to-[#3fa326] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] text-white shadow-[0_0_16px_rgba(88,181,56,0.4)] animate-[shopBadgePulse_2s_ease-in-out_infinite]">
                               <span>✓</span>
                               {ui.equippedItem}
                             </span>
@@ -884,9 +980,9 @@ export function HomeView() {
                                 <span className="rounded-full border border-[#b98236] bg-gradient-to-b from-[#ffe28f] to-[#f3b949] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-[#5f3817]">
                                   {item.rarityLabel}
                                 </span>
-                              ) : item.isTokenItem && item.rarityLabel ? (
+                              ) : item.isTokenItem && item.tier ? (
                                 <span className="rounded-full border border-[#b98236] bg-gradient-to-b from-[#ffe28f] to-[#f3b949] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-[#5f3817]">
-                                  {item.rarityLabel}
+                                  {item.tier === 'free' ? ui.freeTokenTag : ui.premiumTokenTag}
                                 </span>
                               ) : null}
                             </div>
@@ -919,11 +1015,12 @@ export function HomeView() {
                         )
                       })()
                     ))}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-4 flex justify-center pb-1">
+              <div className="mt-4 flex shrink-0 justify-center pb-1">
                 <button
                   className="rounded-full border-[3px] border-[#9f3f2c] bg-gradient-to-b from-[#f7785f] to-[#d2472d] px-10 py-2 font-display text-4xl uppercase tracking-wide text-[#ffe3bc] shadow-[inset_0_1px_0_rgba(255,220,188,0.72),0_7px_0_rgba(132,45,27,0.92)] sm:text-5xl"
                   onClick={closeShopPanel}
@@ -951,6 +1048,43 @@ export function HomeView() {
           </div>
         </div>
       ) : null}
+
+      <style>{`
+        @keyframes shopGlow {
+          0%, 100% {
+            box-shadow: 0 0 0 3px rgba(247,202,88,0.24), 0 0 16px rgba(243,204,98,0.18);
+          }
+          50% {
+            box-shadow: 0 0 0 3px rgba(247,202,88,0.34), 0 0 24px rgba(243,204,98,0.34);
+          }
+        }
+
+        @keyframes shopShine {
+          0% {
+            transform: translateX(-110%);
+            opacity: 0;
+          }
+          20% {
+            opacity: 0.5;
+          }
+          55% {
+            opacity: 0.8;
+          }
+          100% {
+            transform: translateX(110%);
+            opacity: 0;
+          }
+        }
+
+        @keyframes shopBadgePulse {
+          0%, 100% {
+            transform: scale(1);
+          }
+          50% {
+            transform: scale(1.04);
+          }
+        }
+      `}</style>
     </section>
   )
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GameAvatar } from '../components/game/game-avatar'
-import { getStarterPlayerSkins } from '../lib/player-skins'
+import { getPlayerSkinName, getPlayerSkinSubtitle, getStarterPlayerSkins } from '../lib/player-skins'
 import { useAppSettingsStore } from '../store/app-settings-store'
 
 const copy = {
@@ -109,7 +109,7 @@ export function SkinSelectionView() {
                           : 'border-[#c89967] bg-gradient-to-b from-[#fff4da] to-[#edd3a9]'
                       } ${isSelected ? 'animate-[skinBounce_580ms_ease-out]' : 'animate-[skinFloat_4.8s_ease-in-out_infinite]'} overflow-hidden p-4`}>
                         <GameAvatar
-                          alt={skin.name}
+                          alt={getPlayerSkinName(skin.id, language) || 'Capi'}
                           avatar={skin.src}
                           imageClassName="h-full w-full object-contain drop-shadow-[0_12px_16px_rgba(82,45,16,0.24)]"
                         />
@@ -117,8 +117,8 @@ export function SkinSelectionView() {
                     </div>
 
                     <div className="mt-4 text-center">
-                      <p className="font-display text-[26px] uppercase tracking-wide text-[#5a3417]">{skin.name}</p>
-                      <p className="mt-1 text-sm font-black uppercase tracking-[0.16em] text-[#91633d]">{skin.subtitle}</p>
+                      <p className="font-display text-[26px] uppercase tracking-wide text-[#5a3417]">{getPlayerSkinName(skin.id, language)}</p>
+                      <p className="mt-1 text-sm font-black uppercase tracking-[0.16em] text-[#91633d]">{getPlayerSkinSubtitle(skin.id, language)}</p>
                     </div>
                   </button>
                 )
@@ -127,7 +127,7 @@ export function SkinSelectionView() {
 
             <div className="mt-7 flex flex-col items-center gap-4">
               <div className="min-h-[24px] text-center text-base font-bold text-[#734722] sm:text-lg">
-                {selectedSkin ? `${selectedSkin.name} ${ui.ready}` : ''}
+                {selectedSkin ? `${getPlayerSkinName(selectedSkin.id, language)} ${ui.ready}` : ''}
               </div>
 
               <button

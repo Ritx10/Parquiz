@@ -299,8 +299,8 @@ const arrowClassByPlacement: Record<TooltipPlacement, string> = {
   right: 'right-full top-1/2 -translate-y-1/2 translate-x-[1px] border-b border-l',
 }
 
-function CornerBase({ color }: { color: PlayerColor }) {
-  const palette = getPlayerVisualThemeByColor(color).homePalette
+function CornerBase({ theme }: { theme: ReturnType<typeof getPlayerVisualThemeByColor> }) {
+  const palette = theme.homePalette
 
   return (
     <div className="relative flex h-full w-full items-center justify-center">
@@ -313,7 +313,7 @@ function CornerBase({ color }: { color: PlayerColor }) {
           {Array.from({ length: 4 }).map((_, index) => (
             <span
               className={`relative z-0 rounded-full border shadow-[inset_0_2px_6px_rgba(0,0,0,0.18)] ${palette.slot} ${palette.slotBorder}`}
-              key={`${color}-slot-${index}`}
+              key={`slot-${index}`}
             />
           ))}
         </div>
@@ -322,11 +322,11 @@ function CornerBase({ color }: { color: PlayerColor }) {
   )
 }
 
-function BoardCenter() {
-  const greenTheme = getPlayerVisualThemeByColor('green')
-  const redTheme = getPlayerVisualThemeByColor('red')
-  const blueTheme = getPlayerVisualThemeByColor('blue')
-  const yellowTheme = getPlayerVisualThemeByColor('yellow')
+function BoardCenter({ themesByColor }: { themesByColor: Record<PlayerColor, ReturnType<typeof getPlayerVisualThemeByColor>> }) {
+  const greenTheme = themesByColor.green
+  const redTheme = themesByColor.red
+  const blueTheme = themesByColor.blue
+  const yellowTheme = themesByColor.yellow
 
   return (
     <div
@@ -422,7 +422,13 @@ function Board3DComponent({
   const safeSet = useMemo(() => new Set(safeSquares), [safeSquares])
   const animatingSet = useMemo(() => new Set(animatingTokenIds), [animatingTokenIds])
   const resolvedSurfacePalette = surfacePalette || defaultSurfacePalette
-  const themeForColor = (color: PlayerColor) => getPlayerVisualThemeByColor(color)
+  const themeForColor = (color: PlayerColor) => getPlayerVisualThemeByColor(color, visualSkinByColor[color])
+  const themesByColor = {
+    green: themeForColor('green'),
+    red: themeForColor('red'),
+    blue: themeForColor('blue'),
+    yellow: themeForColor('yellow'),
+  } satisfies Record<PlayerColor, ReturnType<typeof getPlayerVisualThemeByColor>>
 
   const groupedTokens = useMemo(
     () =>
@@ -598,7 +604,7 @@ function Board3DComponent({
       >
         {cornerHomes.map((home) => (
           <div className="z-10" key={home.color} style={cellPlacement(home.rowStart, home.colStart, 7, 7)}>
-            <CornerBase color={home.color} />
+            <CornerBase theme={themesByColor[home.color]} />
           </div>
         ))}
 
@@ -610,7 +616,7 @@ function Board3DComponent({
           />
         ))}
 
-        <BoardCenter />
+        <BoardCenter themesByColor={themesByColor} />
 
         {trackCells.map((cell) => {
           const startColor = startSquares.get(cell.number)

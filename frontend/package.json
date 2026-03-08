@@ -5,6 +5,9 @@
   "type": "module",
   "packageManager": "bun@1.2.5",
   "scripts": {
+    "predev": "bun run skins:sync",
+    "prebuild": "bun run skins:sync",
+    "pretypecheck": "bun run skins:sync",
     "dev": "vite",
     "dev:live": "VITE_USE_LIVE_RPC=true vite",
     "build": "tsc -b && vite build",
@@ -12,6 +15,7 @@
     "preview": "vite preview",
     "questions:info": "bun run scripts/print-local-question-set.ts",
     "questions:seed:release": "bun run scripts/seed-question-set.ts release",
+    "skins:sync": "bun run scripts/sync-player-skins.ts",
     "test": "vitest --run --passWithNoTests",
     "test:watch": "vitest --passWithNoTests",
     "typecheck": "tsc -b"

@@ -61,6 +61,7 @@ export function GameDie({ className = 'h-11 w-11', rolling = false, skinId, valu
     >
       <span className={`absolute inset-[7%] rounded-[8px] ${skin.faceClass}`} />
       <span className={`absolute inset-[12%] rounded-[7px] ${skin.sparkleClass || 'bg-white/10'}`} />
+      {skin.overlayClass ? <span className={`absolute inset-[12%] rounded-[7px] ${skin.overlayClass}`} /> : null}
       <span className="absolute left-[16%] top-[12%] h-[16%] w-[40%] rotate-[-18deg] rounded-full bg-white/40 blur-[1px]" />
 
       {dicePipLayout[face].map((pip, index) => (
@@ -70,12 +71,6 @@ export function GameDie({ className = 'h-11 w-11', rolling = false, skinId, valu
           style={{ left: pip.left, top: pip.top }}
         />
       ))}
-
-      {skin.symbol ? (
-        <span className="absolute right-[6%] top-[6%] inline-flex h-[24%] w-[24%] items-center justify-center rounded-full border border-white/55 bg-[#4a2b15]/70 text-[32%] font-black leading-none text-white shadow-[0_1px_4px_rgba(34,18,10,0.35)]">
-          {skin.symbol}
-        </span>
-      ) : null}
     </span>
   )
 }

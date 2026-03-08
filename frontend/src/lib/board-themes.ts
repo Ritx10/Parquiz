@@ -1,3 +1,5 @@
+import { localizeShopRarity, localizeShopText, type LocalizedText, type ShopLanguage, type ShopRarityKey } from './shop-i18n'
+
 export type BoardThemeId =
   | 'theme-castle'
   | 'theme-classic'
@@ -19,6 +21,49 @@ export type BoardThemeDefinition = {
   subtitle: string
   backgroundColor: string
   backgroundImage: string
+}
+
+const boardThemeCopyById: Record<BoardThemeId, { name: LocalizedText; rarityKey: ShopRarityKey; subtitle: LocalizedText }> = {
+  'theme-classic': {
+    name: { es: 'Tema Clasico', en: 'Classic Theme' },
+    rarityKey: 'common',
+    subtitle: { es: 'Salon arcade original', en: 'Original arcade lounge' },
+  },
+  'theme-rainbow': {
+    name: { es: 'Tema Arcoiris', en: 'Rainbow Theme' },
+    rarityKey: 'rare',
+    subtitle: { es: 'Cielo brillante multicolor', en: 'Bright multicolor sky' },
+  },
+  'theme-castle': {
+    name: { es: 'Tema Castillo', en: 'Castle Theme' },
+    rarityKey: 'epic',
+    subtitle: { es: 'Reino suave de fantasia', en: 'Soft fantasy kingdom' },
+  },
+  'theme-jungle': {
+    name: { es: 'Tema Palmera', en: 'Jungle Theme' },
+    rarityKey: 'epic',
+    subtitle: { es: 'Oasis tropical animado', en: 'Lively tropical oasis' },
+  },
+  'theme-desert': {
+    name: { es: 'Tema Desierto', en: 'Desert Theme' },
+    rarityKey: 'rare',
+    subtitle: { es: 'Dunas doradas al atardecer', en: 'Golden sunset dunes' },
+  },
+  'theme-night': {
+    name: { es: 'Tema Luna', en: 'Moon Theme' },
+    rarityKey: 'epic',
+    subtitle: { es: 'Noche magica con brillo lunar', en: 'Magical moonlit night' },
+  },
+  'theme-volcano': {
+    name: { es: 'Tema Volcan', en: 'Volcano Theme' },
+    rarityKey: 'epic',
+    subtitle: { es: 'Cielo ardiente y lava', en: 'Fiery sky and lava' },
+  },
+  'theme-legend': {
+    name: { es: 'Tema Legendario', en: 'Legend Theme' },
+    rarityKey: 'legendary',
+    subtitle: { es: 'Aura premium encantada', en: 'Enchanted premium aura' },
+  },
 }
 
 export type BoardThemeSurfacePalette = {
@@ -456,3 +501,12 @@ export const getBoardThemeDefinition = (themeId: BoardThemeId) =>
   boardThemeCatalog.find((theme) => theme.id === themeId) || boardThemeCatalog[0]
 
 export const getBoardThemeSurfacePalette = (themeId: BoardThemeId) => surfacePaletteByThemeId[themeId]
+
+export const getBoardThemeName = (themeId: BoardThemeId, language: ShopLanguage) =>
+  localizeShopText(boardThemeCopyById[themeId]?.name || boardThemeCopyById['theme-classic'].name, language)
+
+export const getBoardThemeSubtitle = (themeId: BoardThemeId, language: ShopLanguage) =>
+  localizeShopText(boardThemeCopyById[themeId]?.subtitle || boardThemeCopyById['theme-classic'].subtitle, language)
+
+export const getBoardThemeRarityLabel = (themeId: BoardThemeId, language: ShopLanguage) =>
+  localizeShopRarity(boardThemeCopyById[themeId]?.rarityKey || 'common', language)
