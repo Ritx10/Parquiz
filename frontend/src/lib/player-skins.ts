@@ -162,7 +162,7 @@ const premiumSkins = sortEntries(premiumSkinModules).map<PlayerSkin>(([modulePat
     index: freeSkins.length + index,
     legacyIds: [],
     name: presentation.name,
-    price: 450 + index * 50,
+    price: 1200 + index * 100,
     src,
     subtitle: presentation.subtitle,
     tier: 'premium',

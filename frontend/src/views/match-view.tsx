@@ -9,6 +9,7 @@ import { TriviaQuestionModal } from '../components/game/trivia-question-modal'
 import { getBoardThemeDefinition, getBoardThemeSurfacePalette } from '../lib/board-themes'
 import { playSoundEffect } from '../lib/audio'
 import { assignDistinctDiceSkins, type DiceSkinId } from '../lib/dice-cosmetics'
+import { calculateMatchRewardSummary, coinsRewardByPlace, type MatchRewardSummary, type PodiumPlace } from '../lib/match-rewards'
 import { getPlayerVisualThemeByColor } from '../lib/player-color-themes'
 import { usePlayerProfileActions } from '../lib/use-player-profile'
 import type { TokenSkinId } from '../lib/token-cosmetics'
@@ -127,6 +128,11 @@ type TurnTriviaState = {
   selectedOption: null | number
 }
 
+type MatchPlayerStats = {
+  captures: number
+  correctAnswers: number
+}
+
 const defaultTurnTriviaState: TurnTriviaState = {
   expiresAt: null,
   movementUnlocked: false,
@@ -135,6 +141,12 @@ const defaultTurnTriviaState: TurnTriviaState = {
   result: 'idle',
   selectedOption: null,
 }
+
+const createInitialPlayerStats = (players: readonly MatchPlayer[]) =>
+  players.reduce<Record<string, MatchPlayerStats>>((acc, player) => {
+    acc[player.id] = { captures: 0, correctAnswers: 0 }
+    return acc
+  }, {})
 
 const aiThinkDelayByDifficulty: Record<PracticeDifficulty, number> = {
   easy: 980,
@@ -187,8 +199,6 @@ type BotRuntimeState = {
   winnerLocked: boolean
 }
 
-type PodiumPlace = 1 | 2 | 3 | 4
-
 type FinalPlacement = {
   id: string
   avatar: string
@@ -198,6 +208,7 @@ type FinalPlacement = {
   place: PodiumPlace
   progressScore: number
   reward: number
+  rewardSummary?: MatchRewardSummary
   tag: string
   visualSkinId?: TokenSkinId
 }
@@ -305,20 +316,6 @@ const matchCopyByLanguage = {
   },
 } as const
 
-const rewardByPlace: Record<PodiumPlace, number> = {
-  1: 1000,
-  2: 500,
-  3: 250,
-  4: 100,
-}
-
-const xpRewardByPlace: Record<PodiumPlace, number> = {
-  1: 100,
-  2: 75,
-  3: 50,
-  4: 25,
-}
-
 const XP_REWARD_CORRECT_ANSWER = 10
 const XP_REWARD_EXIT_HOME = 5
 const XP_REWARD_CAPTURE = 15
@@ -373,7 +370,7 @@ const buildPlacementEntry = (params: {
       tokenTrackSteps: params.tokenTrackSteps,
       tokens: params.tokens,
     }),
-    reward: rewardByPlace[params.place],
+    reward: coinsRewardByPlace[params.place],
     tag: params.player.name,
     visualSkinId: params.player.visualSkinId,
   }
@@ -1220,6 +1217,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   const [finalPlacements, setFinalPlacements] = useState<FinalPlacement[]>([])
   const [announcementIndex, setAnnouncementIndex] = useState(0)
   const [showFinalClassification, setShowFinalClassification] = useState(false)
+  const [, setCurrentPlayerRewardSummary] = useState<MatchRewardSummary | null>(null)
   const [, setShowPlacementDetails] = useState(false)
   const [isTokenMoving, setIsTokenMoving] = useState(false)
   const [hudDiceRolling, setHudDiceRolling] = useState(false)
@@ -1252,6 +1250,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   })
   const usedTriviaQuestionIdsRef = useRef<Set<string>>(new Set())
   const finalPlacementsRef = useRef<FinalPlacement[]>([])
+  const playerStatsRef = useRef<Record<string, MatchPlayerStats>>(createInitialPlayerStats(activeSessionState.players))
   const botRuntimeRef = useRef<BotRuntimeState>({
     bonusConsumed: false,
     bonusPending: false,
@@ -1302,6 +1301,57 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     }, {})
   }, [players])
 
+  const incrementPlayerCorrectAnswers = useCallback((playerId: string) => {
+    const nextStats = { ...playerStatsRef.current }
+    const currentStats = nextStats[playerId] || { captures: 0, correctAnswers: 0 }
+    nextStats[playerId] = {
+      ...currentStats,
+      correctAnswers: currentStats.correctAnswers + 1,
+    }
+    playerStatsRef.current = nextStats
+  }, [])
+
+  const incrementPlayerCaptures = useCallback((playerId: string) => {
+    const nextStats = { ...playerStatsRef.current }
+    const currentStats = nextStats[playerId] || { captures: 0, correctAnswers: 0 }
+    nextStats[playerId] = {
+      ...currentStats,
+      captures: currentStats.captures + 1,
+    }
+    playerStatsRef.current = nextStats
+  }, [])
+
+  const buildRewardedPlacements = useCallback(
+    (placements: FinalPlacement[]) => {
+      const statsByPlayer = playerStatsRef.current
+      const highestCorrectAnswers = placements.reduce((highest, placement) => {
+        const correctAnswers = statsByPlayer[placement.id]?.correctAnswers || 0
+        return correctAnswers > highest ? correctAnswers : highest
+      }, 0)
+      const highestCorrectAnswersCount = placements.filter(
+        (placement) => (statsByPlayer[placement.id]?.correctAnswers || 0) === highestCorrectAnswers,
+      ).length
+
+      return placements.map((placement) => {
+        const stats = statsByPlayer[placement.id] || { captures: 0, correctAnswers: 0 }
+        const rewardSummary = calculateMatchRewardSummary({
+          captureCount: stats.captures,
+          correctAnswers: stats.correctAnswers,
+          highestCorrectAnswers,
+          highestCorrectAnswersCount,
+          place: placement.place,
+        })
+
+        return {
+          ...placement,
+          reward: rewardSummary.totalCoins,
+          rewardSummary,
+        }
+      })
+    },
+    [],
+  )
+
   const visualSkinByColor = useMemo(() => {
     return players.reduce<Partial<Record<PlayerColor, TokenSkinId>>>((acc, player) => {
       if (player.visualSkinId) {
@@ -1331,6 +1381,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   )
 
   const fullTurnOrder = useMemo(() => players.map((player) => player.id), [players])
+  const finalPlacementsWithRewards = useMemo(() => buildRewardedPlacements(finalPlacements), [buildRewardedPlacements, finalPlacements])
   const placedPlayerIds = useMemo(() => finalPlacements.map((placement) => placement.id), [finalPlacements])
   const placedPlayerIdSet = useMemo(() => new Set(placedPlayerIds), [placedPlayerIds])
   const activeTurnOrder = useMemo(
@@ -1427,7 +1478,9 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     setBonusPending(null)
     setLogEvents(createInitialLogEvents(language))
     setFinalPlacements([])
+    setCurrentPlayerRewardSummary(null)
     finalPlacementsRef.current = []
+    playerStatsRef.current = createInitialPlayerStats(activeSessionState.players)
     rewardsGrantedRef.current = false
     setAnnouncementIndex(0)
     setShowFinalClassification(false)
@@ -1889,6 +1942,8 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
       })
 
       if (answeredCorrectly) {
+        incrementPlayerCorrectAnswers(currentTurnPlayerId)
+
         if (currentTurnPlayerId === humanPlayerId) {
           awardXp(XP_REWARD_CORRECT_ANSWER)
           playSoundEffect('correct')
@@ -1953,6 +2008,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
       dice.dieA,
       dice.dieB,
       humanPlayerId,
+      incrementPlayerCorrectAnswers,
       isAiControlledTurn,
       logEvent,
       markBotHeartbeat,
@@ -1996,15 +2052,17 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
       return
     }
 
-    const localPlacement = finalPlacements.find((placement) => placement.id === humanPlayerId)
+    const localPlacement = finalPlacementsWithRewards.find((placement) => placement.id === humanPlayerId)
 
-    if (localPlacement) {
-      awardCoins(localPlacement.reward)
-      awardXp(xpRewardByPlace[localPlacement.place])
+    setCurrentPlayerRewardSummary(localPlacement?.rewardSummary || null)
+
+    if (localPlacement?.rewardSummary) {
+      awardCoins(localPlacement.rewardSummary.totalCoins)
+      awardXp(localPlacement.rewardSummary.totalXp)
     }
 
     rewardsGrantedRef.current = true
-  }, [awardCoins, awardXp, finalPlacements, humanPlayerId, showFinalClassification, showVictoryPreviewControl])
+  }, [awardCoins, awardXp, finalPlacements.length, finalPlacementsWithRewards, humanPlayerId, showFinalClassification, showVictoryPreviewControl])
 
   useEffect(() => {
     if (!isMatchComplete || finalPlacements.length === 0 || winnerSoundPlayedRef.current) {
@@ -2517,6 +2575,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
         nextTokenTrackSteps[capturedToken.id] = 0
         nextBonusPendingValue += 20
         consumedNext.bonus = false
+        incrementPlayerCaptures(movedToken.ownerId)
 
         if (movedToken.ownerId === humanPlayerId) {
           awardXp(XP_REWARD_CAPTURE)
@@ -2983,6 +3042,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
 
     setWinnerPlayerId(null)
     setFinalPlacements([])
+    setCurrentPlayerRewardSummary(null)
     finalPlacementsRef.current = []
     rewardsGrantedRef.current = false
     setAnnouncementIndex(0)
@@ -3230,7 +3290,9 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
         </div>
       ) : null}
 
-      {showFinalClassification && finalPlacements.length > 0 ? <FinalRankingScreen placements={finalPlacements} /> : null}
+      {showFinalClassification && finalPlacementsWithRewards.length > 0 ? (
+        <FinalRankingScreen currentPlayerId={humanPlayerId} placements={finalPlacementsWithRewards} />
+      ) : null}
 
       <style>{`
         @keyframes victoryConfettiFall {

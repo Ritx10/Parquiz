@@ -20,6 +20,7 @@ import { isDojoConfigured } from '../config/dojo'
 import { playSoundEffect } from '../lib/audio'
 import { getBoardThemeDefinition, getBoardThemeSurfacePalette } from '../lib/board-themes'
 import { diceSkinIdFromIndex, getDefaultDiceSkinIdByColor, type DiceSkinId } from '../lib/dice-cosmetics'
+import { calculateMatchRewardSummary, coinsRewardByPlace, type MatchRewardSummary, type PodiumPlace } from '../lib/match-rewards'
 import { getPlayerSkinSrc, playerSkinIdFromIndex } from '../lib/player-skins'
 import { getPlayerVisualThemeByColor } from '../lib/player-color-themes'
 import { getHydratedQuestion } from '../lib/questions/local-question-bank'
@@ -40,8 +41,6 @@ const XP_REWARD_CAPTURE = 15
 
 type DiceFaceValue = 1 | 2 | 3 | 4 | 5 | 6
 
-type PodiumPlace = 1 | 2 | 3 | 4
-
 type FinalPlacement = {
   id: string
   avatar: string
@@ -51,9 +50,21 @@ type FinalPlacement = {
   place: PodiumPlace
   progressScore: number
   reward: number
+  rewardSummary?: MatchRewardSummary
   tag: string
   visualSkinId?: TokenSkinId
 }
+
+type MatchPlayerStats = {
+  captures: number
+  correctAnswers: number
+}
+
+const createInitialPlayerStats = (players: readonly MatchPlayer[]) =>
+  players.reduce<Record<string, MatchPlayerStats>>((acc, player) => {
+    acc[player.id] = { captures: 0, correctAnswers: 0 }
+    return acc
+  }, {})
 
 const seatColorMap: Record<number, PlayerColor> = {
   0: 'blue',
@@ -110,20 +121,6 @@ const questionDifficultyByLevel: Record<number, TriviaDifficulty> = {
   0: 'easy',
   1: 'medium',
   2: 'hard',
-}
-
-const rewardByPlace: Record<PodiumPlace, number> = {
-  1: 1000,
-  2: 500,
-  3: 250,
-  4: 100,
-}
-
-const xpRewardByPlace: Record<PodiumPlace, number> = {
-  1: 100,
-  2: 75,
-  3: 50,
-  4: 25,
 }
 
 const announcementGlassTintByThemeId = {
@@ -1199,7 +1196,7 @@ const buildOnchainPlacements = (
         name: player.name,
         place,
         progressScore,
-        reward: rewardByPlace[place],
+        reward: coinsRewardByPlace[place],
         tag: player.name,
         visualSkinId: player.visualSkinId,
       }
@@ -1270,6 +1267,7 @@ export function MatchOnchainView() {
   const onTrackedEventRef = useRef<(event: DojoTrackedEvent) => void>(() => undefined)
   const rewardsGrantedRef = useRef(false)
   const rewardedEventKeysRef = useRef<Set<string>>(new Set())
+  const playerStatsRef = useRef<Record<string, MatchPlayerStats>>({})
   const winnerSoundPlayedRef = useRef(false)
   const podiumSoundPlayedRef = useRef(false)
 
@@ -1322,6 +1320,7 @@ export function MatchOnchainView() {
     lastResolvedQuestionRef.current = null
     rewardsGrantedRef.current = false
     rewardedEventKeysRef.current.clear()
+    playerStatsRef.current = {}
     winnerSoundPlayedRef.current = false
     podiumSoundPlayedRef.current = false
     setActiveAnnouncementPlacement(null)
@@ -1498,6 +1497,33 @@ export function MatchOnchainView() {
     }, {})
   }, [players])
 
+  const rewardedFinalPlacements = useMemo(() => {
+    const highestCorrectAnswers = finalPlacements.reduce((highest, placement) => {
+      const correctAnswers = playerStatsRef.current[placement.id]?.correctAnswers || 0
+      return correctAnswers > highest ? correctAnswers : highest
+    }, 0)
+    const highestCorrectAnswersCount = finalPlacements.filter(
+      (placement) => (playerStatsRef.current[placement.id]?.correctAnswers || 0) === highestCorrectAnswers,
+    ).length
+
+    return finalPlacements.map((placement) => {
+      const stats = playerStatsRef.current[placement.id] || { captures: 0, correctAnswers: 0 }
+      const rewardSummary = calculateMatchRewardSummary({
+        captureCount: stats.captures,
+        correctAnswers: stats.correctAnswers,
+        highestCorrectAnswers,
+        highestCorrectAnswersCount,
+        place: placement.place,
+      })
+
+      return {
+        ...placement,
+        reward: rewardSummary.totalCoins,
+        rewardSummary,
+      }
+    })
+  }, [finalPlacements])
+
   const activePlayerCard = useMemo(() => {
     if (!activePlayerAddress) {
       return undefined
@@ -1512,6 +1538,19 @@ export function MatchOnchainView() {
       return acc
     }, {})
   }, [playersByAddress])
+
+  useEffect(() => {
+    const currentStats = playerStatsRef.current
+    const nextStats = createInitialPlayerStats(players)
+
+    players.forEach((player) => {
+      if (currentStats[player.id]) {
+        nextStats[player.id] = currentStats[player.id]
+      }
+    })
+
+    playerStatsRef.current = nextStats
+  }, [players])
 
   useEffect(() => {
     activePlayerCardRef.current = activePlayerCard
@@ -1653,17 +1692,17 @@ export function MatchOnchainView() {
     }
 
     const normalizedAddress = normalizeAddressForCompare(address)
-    const localPlacement = finalPlacements.find(
+    const localPlacement = rewardedFinalPlacements.find(
       (placement) => normalizeAddressForCompare(placement.id) === normalizedAddress,
     )
 
-    if (localPlacement) {
-      awardCoins(localPlacement.reward)
-      awardXp(xpRewardByPlace[localPlacement.place])
+    if (localPlacement?.rewardSummary) {
+      awardCoins(localPlacement.rewardSummary.totalCoins)
+      awardXp(localPlacement.rewardSummary.totalXp)
     }
 
     rewardsGrantedRef.current = true
-  }, [address, awardCoins, awardXp, finalPlacements, showFinalClassification])
+  }, [address, awardCoins, awardXp, finalPlacements.length, rewardedFinalPlacements, showFinalClassification])
 
   useEffect(() => {
     if (!showFinalClassification || finalPlacements.length === 0 || podiumSoundPlayedRef.current) {
@@ -1845,9 +1884,27 @@ export function MatchOnchainView() {
         if (event.type === 'AnswerRevealed' && event.payload.correct) {
           const eventPlayer = normalizeAddressForCompare(event.payload.player)
           const rewardKey = `answer:${event.payload.question_id.toString()}:${eventPlayer}`
+          const alreadyProcessed = rewardedEventKeysRef.current.has(rewardKey)
 
-          if (eventPlayer === normalizedAddress && !rewardedEventKeysRef.current.has(rewardKey)) {
+          if (eventPlayer && !alreadyProcessed) {
+            const playerId = Object.keys(playersByAddress).find((playerAddress) => playerAddress === eventPlayer)
+            if (playerId) {
+              const currentStats = playerStatsRef.current[playerId] || { captures: 0, correctAnswers: 0 }
+              playerStatsRef.current = {
+                ...playerStatsRef.current,
+                [playerId]: {
+                  ...currentStats,
+                  correctAnswers: currentStats.correctAnswers + 1,
+                },
+              }
+            }
+          }
+
+          if (!alreadyProcessed) {
             rewardedEventKeysRef.current.add(rewardKey)
+          }
+
+          if (eventPlayer === normalizedAddress && !alreadyProcessed) {
             awardXp(XP_REWARD_CORRECT_ANSWER)
             playSoundEffect('correct')
           }
@@ -1864,9 +1921,27 @@ export function MatchOnchainView() {
         if (event.type === 'TokenCaptured') {
           const eventPlayer = normalizeAddressForCompare(event.payload.attacker)
           const rewardKey = `capture:${event.payload.square_ref}:${event.payload.defender_token_id}:${eventPlayer}`
+          const alreadyProcessed = rewardedEventKeysRef.current.has(rewardKey)
 
-          if (eventPlayer === normalizedAddress && !rewardedEventKeysRef.current.has(rewardKey)) {
+          if (eventPlayer && !alreadyProcessed) {
+            const playerId = Object.keys(playersByAddress).find((playerAddress) => playerAddress === eventPlayer)
+            if (playerId) {
+              const currentStats = playerStatsRef.current[playerId] || { captures: 0, correctAnswers: 0 }
+              playerStatsRef.current = {
+                ...playerStatsRef.current,
+                [playerId]: {
+                  ...currentStats,
+                  captures: currentStats.captures + 1,
+                },
+              }
+            }
+          }
+
+          if (!alreadyProcessed) {
             rewardedEventKeysRef.current.add(rewardKey)
+          }
+
+          if (eventPlayer === normalizedAddress && !alreadyProcessed) {
             awardXp(XP_REWARD_CAPTURE)
           }
 
@@ -2930,7 +3005,9 @@ export function MatchOnchainView() {
           </div>
         ) : null}
 
-        {showFinalClassification && finalPlacements.length > 0 ? <FinalRankingScreen placements={finalPlacements} /> : null}
+        {showFinalClassification && rewardedFinalPlacements.length > 0 ? (
+          <FinalRankingScreen currentPlayerId={address || undefined} placements={rewardedFinalPlacements} />
+        ) : null}
 
         <style>{`
           @keyframes victoryConfettiFall {

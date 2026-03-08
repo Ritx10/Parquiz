@@ -3,12 +3,12 @@ import { motion, type TargetAndTransition } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { GameAvatar } from './game-avatar'
 import { getBoardThemeDefinition, getBoardThemeSurfacePalette } from '../../lib/board-themes'
+import type { MatchRewardSummary, PodiumPlace } from '../../lib/match-rewards'
 import { getPlayerVisualThemeByColor } from '../../lib/player-color-themes'
 import type { TokenSkinId } from '../../lib/token-cosmetics'
 import { useAppSettingsStore } from '../../store/app-settings-store'
 
 type PlayerColor = 'red' | 'green' | 'blue' | 'yellow'
-type PodiumPlace = 1 | 2 | 3 | 4
 
 interface RankingEntry {
   avatar: string
@@ -16,43 +16,58 @@ interface RankingEntry {
   name: string
   place: PodiumPlace
   reward: number
+  rewardSummary?: MatchRewardSummary
   color: PlayerColor
   progressScore?: number
   title?: string
   visualSkinId?: TokenSkinId
 }
 
-const defaultRanking = [
+const defaultRanking: RankingEntry[] = [
   { id: 'P1', name: 'P1', place: 1, reward: 2350, color: 'red', avatar: 'P1' },
   { id: 'P2', name: 'P2', place: 2, reward: 1980, color: 'blue', avatar: 'P2' },
   { id: 'P3', name: 'P3', place: 3, reward: 1650, color: 'green', avatar: 'P3' },
   { id: 'P4', name: 'P4', place: 4, reward: 1400, color: 'yellow', avatar: 'P4' },
-] as const satisfies RankingEntry[]
+]
 
 const rankingCopyByLanguage = {
   es: {
     backHome: 'VOLVER AL MENU',
     championship: 'CAMPEONATO - CLASIFICACION FINAL',
     finalRanking: 'PARQUIZ CHAMPIONSHIP',
+    rewardsTitle: 'RECOMPENSAS',
+    xpEarned: 'XP Ganada',
+    coinsEarned: 'Monedas',
+    bonusQuestions: 'Bonus preguntas',
+    bonusCaptures: 'Bonus capturas',
+    bonusParticipation: 'Bonus participacion',
+    correctAnswers: 'Respuestas correctas',
+    captures: 'Capturas',
     placeLabel: {
       1: 'PRIMER LUGAR',
       2: 'SEGUNDO LUGAR',
       3: 'TERCER LUGAR',
       4: 'CUARTO LUGAR',
     } as Record<PodiumPlace, string>,
-    pts: 'pts',
   },
   en: {
     backHome: 'BACK TO MENU',
     championship: 'CHAMPIONSHIP - FINAL RANKING',
     finalRanking: 'PARQUIZ CHAMPIONSHIP',
+    rewardsTitle: 'REWARDS',
+    xpEarned: 'XP Earned',
+    coinsEarned: 'Coins',
+    bonusQuestions: 'Question bonus',
+    bonusCaptures: 'Capture bonus',
+    bonusParticipation: 'Participation bonus',
+    correctAnswers: 'Correct answers',
+    captures: 'Captures',
     placeLabel: {
       1: 'FIRST PLACE',
       2: 'SECOND PLACE',
       3: 'THIRD PLACE',
       4: 'FOURTH PLACE',
     } as Record<PodiumPlace, string>,
-    pts: 'pts',
   },
 } as const
 
@@ -169,6 +184,7 @@ const rgbaFromHex = (hex: string, alpha: number) => {
 }
 
 type FinalRankingScreenProps = {
+  currentPlayerId?: string
   placements?: RankingEntry[]
 }
 
@@ -222,7 +238,6 @@ function PodiumAvatar({ entry }: { entry: RankingEntry }) {
 
 function PodiumBlock({ entry, delay, ui }: { entry: RankingEntry; delay: number; ui: (typeof rankingCopyByLanguage)[keyof typeof rankingCopyByLanguage] }) {
   const config = podiumConfigByPlace[entry.place]
-  const scoreLabel = `${(entry.progressScore ?? entry.reward).toLocaleString('en-US')} ${ui.pts}`
   const visualTheme = getPlayerVisualThemeByColor(entry.color, entry.visualSkinId)
   const podiumBaseColor = visualTheme.boardCenterColor
   const podiumStyle = {
@@ -256,14 +271,13 @@ function PodiumBlock({ entry, delay, ui }: { entry: RankingEntry; delay: number;
             {ui.placeLabel[entry.place]}
           </p>
           <p className={`mt-3 font-black leading-tight text-white ${entry.place === 4 ? 'text-[14px] sm:text-[18px]' : 'text-[16px] sm:text-[22px]'}`}>{entry.name}</p>
-          <p className={`mt-1 font-black text-[#fff7c8] ${entry.place === 4 ? 'text-[12px] sm:text-[15px]' : 'text-[14px] sm:text-[17px]'}`}>{scoreLabel}</p>
         </div>
       </div>
     </motion.article>
   )
 }
 
-export default function FinalRankingScreen({ placements }: FinalRankingScreenProps) {
+export default function FinalRankingScreen({ currentPlayerId, placements }: FinalRankingScreenProps) {
   const navigate = useNavigate()
   const language = useAppSettingsStore((state) => state.language)
   const selectedBoardThemeId = useAppSettingsStore((state) => state.selectedBoardThemeId)
@@ -303,6 +317,16 @@ export default function FinalRankingScreen({ placements }: FinalRankingScreenPro
       return acc
     }, {} as Record<PodiumPlace, RankingEntry>)
   }, [ranking])
+
+  const currentPlayerPlacement = useMemo(() => {
+    if (!currentPlayerId) {
+      return ranking[0] || null
+    }
+
+    return ranking.find((entry) => entry.id === currentPlayerId) || ranking[0] || null
+  }, [currentPlayerId, ranking])
+
+  const currentPlayerRewards = currentPlayerPlacement?.rewardSummary || null
 
   const confettiPieces = useMemo(
     () =>
@@ -459,6 +483,37 @@ export default function FinalRankingScreen({ placements }: FinalRankingScreenPro
               return <PodiumBlock delay={0.45 + index * 0.18} entry={entry} key={entry.id} ui={ui} />
             })}
           </div>
+
+          {currentPlayerPlacement && currentPlayerRewards ? (
+            <div className="relative mt-6 rounded-[28px] border border-white/20 bg-[linear-gradient(180deg,rgba(255,255,255,0.14),rgba(255,255,255,0.05))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] sm:px-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-display text-[24px] uppercase tracking-[0.08em]" style={{ color: surfacePalette.headerText }}>
+                  {ui.rewardsTitle}
+                </p>
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-white/80 sm:text-sm">
+                  {currentPlayerPlacement.name} · {ui.placeLabel[currentPlayerPlacement.place]}
+                </p>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[22px] border border-white/14 bg-black/14 px-4 py-3">
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-white/70">{ui.xpEarned}</p>
+                  <p className="mt-1 font-display text-[38px] leading-none text-[#fff6bc]">+{currentPlayerRewards.totalXp}</p>
+                </div>
+                <div className="rounded-[22px] border border-white/14 bg-black/14 px-4 py-3">
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-white/70">{ui.coinsEarned}</p>
+                  <p className="mt-1 font-display text-[38px] leading-none text-[#ffe7a8]">+{currentPlayerRewards.totalCoins}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-2 text-sm font-black text-white/88 sm:grid-cols-2">
+                <div className="rounded-[18px] border border-white/12 bg-black/12 px-4 py-3">{ui.bonusQuestions}: +{currentPlayerRewards.bonusKnowledgeXp} XP</div>
+                <div className="rounded-[18px] border border-white/12 bg-black/12 px-4 py-3">{ui.bonusCaptures}: +{currentPlayerRewards.bonusCapturesXp} XP</div>
+                <div className="rounded-[18px] border border-white/12 bg-black/12 px-4 py-3">{ui.bonusParticipation}: +{currentPlayerRewards.bonusParticipationXp} XP</div>
+                <div className="rounded-[18px] border border-white/12 bg-black/12 px-4 py-3">{ui.correctAnswers}: {currentPlayerRewards.correctAnswers} · {ui.captures}: {currentPlayerRewards.captureCount}</div>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <motion.div
