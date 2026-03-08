@@ -1,5 +1,5 @@
 import { useAccount } from '@starknet-react/core'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { createLobby, joinLobbyByCode, leaveLobby, readDojoGameSnapshot, readLatestGameIdByPlayer, setReady, startGame, subscribeDojoGame, type DojoGameSnapshot } from '../api'
 import { GameAvatar } from '../components/game/game-avatar'
@@ -60,6 +60,7 @@ export function FriendsLobbyView() {
   const [statusMessage, setStatusMessage] = useState('Crea una sala privada o unete con codigo para jugar on-chain.')
   const [txPendingLabel, setTxPendingLabel] = useState<null | string>(null)
   const [isResolvingLobby, setIsResolvingLobby] = useState(false)
+  const refreshDebounceRef = useRef<null | number>(null)
 
   useEffect(() => {
     setConfigIdInput(selectedConfigId)
@@ -78,6 +79,28 @@ export function FriendsLobbyView() {
     } catch (error) {
       setStatusMessage(mapStarknetErrorToMessage(error))
       throw error
+    }
+  }, [])
+
+  const scheduleSnapshotRefresh = useCallback(
+    (gameId: bigint) => {
+      if (refreshDebounceRef.current !== null) {
+        window.clearTimeout(refreshDebounceRef.current)
+      }
+
+      refreshDebounceRef.current = window.setTimeout(() => {
+        refreshDebounceRef.current = null
+        void refreshSnapshot(gameId).catch(() => undefined)
+      }, 180)
+    },
+    [refreshSnapshot],
+  )
+
+  useEffect(() => {
+    return () => {
+      if (refreshDebounceRef.current !== null) {
+        window.clearTimeout(refreshDebounceRef.current)
+      }
     }
   }, [])
 
@@ -155,7 +178,7 @@ export function FriendsLobbyView() {
           gameId: activeGameId,
           configId: snapshot?.game?.config_id,
           onStateMutation: () => {
-            void refreshSnapshot(activeGameId).catch(() => undefined)
+            scheduleSnapshotRefresh(activeGameId)
           },
           onTrackedEvent: () => undefined,
         })
@@ -172,7 +195,7 @@ export function FriendsLobbyView() {
       cancelled = true
       unsubscribe?.()
     }
-  }, [activeGameId, refreshSnapshot, snapshot?.game?.config_id])
+  }, [activeGameId, scheduleSnapshotRefresh, snapshot?.game?.config_id])
 
   useEffect(() => {
     if (!activeGameId) {
@@ -180,13 +203,17 @@ export function FriendsLobbyView() {
     }
 
     const intervalId = window.setInterval(() => {
-      void refreshSnapshot(activeGameId).catch(() => undefined)
-    }, 2500)
+      if (document.visibilityState !== 'visible') {
+        return
+      }
+
+      scheduleSnapshotRefresh(activeGameId)
+    }, 5000)
 
     return () => {
       window.clearInterval(intervalId)
     }
-  }, [activeGameId, refreshSnapshot])
+  }, [activeGameId, scheduleSnapshotRefresh])
 
   useEffect(() => {
     if (snapshot?.game?.status === 1 && activeGameId) {

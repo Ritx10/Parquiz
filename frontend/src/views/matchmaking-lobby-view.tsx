@@ -1,5 +1,5 @@
 import { useAccount } from '@starknet-react/core'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { joinPublicMatchmaking, leaveLobby, readDojoGameSnapshot, readLatestGameIdByPlayer, setReady, subscribeDojoGame, type DojoGameSnapshot } from '../api'
 import { GameAvatar } from '../components/game/game-avatar'
@@ -54,6 +54,7 @@ export function MatchmakingLobbyView() {
   const [statusMessage, setStatusMessage] = useState('Busca una partida publica con tu config on-chain.')
   const [txPendingLabel, setTxPendingLabel] = useState<null | string>(null)
   const [isResolvingLobby, setIsResolvingLobby] = useState(false)
+  const refreshDebounceRef = useRef<null | number>(null)
 
   useEffect(() => {
     setConfigIdInput(selectedConfigId)
@@ -70,6 +71,28 @@ export function MatchmakingLobbyView() {
     } catch (error) {
       setStatusMessage(mapStarknetErrorToMessage(error))
       throw error
+    }
+  }, [])
+
+  const scheduleSnapshotRefresh = useCallback(
+    (gameId: bigint) => {
+      if (refreshDebounceRef.current !== null) {
+        window.clearTimeout(refreshDebounceRef.current)
+      }
+
+      refreshDebounceRef.current = window.setTimeout(() => {
+        refreshDebounceRef.current = null
+        void refreshSnapshot(gameId).catch(() => undefined)
+      }, 180)
+    },
+    [refreshSnapshot],
+  )
+
+  useEffect(() => {
+    return () => {
+      if (refreshDebounceRef.current !== null) {
+        window.clearTimeout(refreshDebounceRef.current)
+      }
     }
   }, [])
 
@@ -147,7 +170,7 @@ export function MatchmakingLobbyView() {
           gameId: activeGameId,
           configId: snapshot?.game?.config_id,
           onStateMutation: () => {
-            void refreshSnapshot(activeGameId).catch(() => undefined)
+            scheduleSnapshotRefresh(activeGameId)
           },
           onTrackedEvent: () => undefined,
         })
@@ -164,7 +187,7 @@ export function MatchmakingLobbyView() {
       cancelled = true
       unsubscribe?.()
     }
-  }, [activeGameId, refreshSnapshot, snapshot?.game?.config_id])
+  }, [activeGameId, scheduleSnapshotRefresh, snapshot?.game?.config_id])
 
   useEffect(() => {
     if (!activeGameId) {
@@ -172,13 +195,17 @@ export function MatchmakingLobbyView() {
     }
 
     const intervalId = window.setInterval(() => {
-      void refreshSnapshot(activeGameId).catch(() => undefined)
-    }, 2500)
+      if (document.visibilityState !== 'visible') {
+        return
+      }
+
+      scheduleSnapshotRefresh(activeGameId)
+    }, 5000)
 
     return () => {
       window.clearInterval(intervalId)
     }
-  }, [activeGameId, refreshSnapshot])
+  }, [activeGameId, scheduleSnapshotRefresh])
 
   useEffect(() => {
     if (snapshot?.game?.status === 1 && activeGameId) {

@@ -4,10 +4,10 @@ import './index.css'
 import App from './App.tsx'
 import { AppProviders } from './app/providers.tsx'
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <AppProviders>
-      <App />
-    </AppProviders>
-  </StrictMode>,
+const rootContent = (
+  <AppProviders>
+    <App />
+  </AppProviders>
 )
+
+createRoot(document.getElementById('root')!).render(import.meta.env.DEV ? rootContent : <StrictMode>{rootContent}</StrictMode>)
