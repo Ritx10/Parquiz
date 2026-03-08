@@ -177,6 +177,7 @@ const onchainCopyByLanguage = {
   es: {
     awaitingTurn: 'En espera',
     boardTitle: 'Board 3D on-chain',
+    clearResolver: 'Limpiar',
     congrats: 'Enhorabuena',
     clickToRoll: 'Click para tirar',
     diceAlreadyUsed: 'Dados ya usados',
@@ -192,6 +193,11 @@ const onchainCopyByLanguage = {
     loadBoard: 'Cargando estado on-chain del tablero...',
     logLabel: 'Log',
     noMovesLeft: 'No quedan movimientos legales. Puedes terminar el turno.',
+    resolveByGameId: 'Cargar gameId',
+    resolveByTokenId: 'Resolver tokenId',
+    resolverGamePlaceholder: 'gameId',
+    resolverHelp: 'Carga una partida por gameId o resuelvela desde un token vinculado.',
+    resolverTokenPlaceholder: 'tokenId',
     placeAnnouncementLabel: {
       1: 'ES 1ER LUGAR',
       2: 'ES 2DO LUGAR',
@@ -214,6 +220,7 @@ const onchainCopyByLanguage = {
   en: {
     awaitingTurn: 'Waiting',
     boardTitle: 'On-chain Board 3D',
+    clearResolver: 'Clear',
     congrats: 'Congratulations',
     clickToRoll: 'Click to roll',
     diceAlreadyUsed: 'Dice already used',
@@ -229,6 +236,11 @@ const onchainCopyByLanguage = {
     loadBoard: 'Loading on-chain board state...',
     logLabel: 'Log',
     noMovesLeft: 'No legal moves remain. You can end the turn.',
+    resolveByGameId: 'Load gameId',
+    resolveByTokenId: 'Resolve tokenId',
+    resolverGamePlaceholder: 'gameId',
+    resolverHelp: 'Load a live match by gameId or resolve it from a linked token.',
+    resolverTokenPlaceholder: 'tokenId',
     placeAnnouncementLabel: {
       1: 'TAKES 1ST PLACE',
       2: 'TAKES 2ND PLACE',
@@ -564,6 +576,13 @@ function PlayerHudSlot({
       />
     </div>
   )
+}
+
+const hudSlotPositionClassByColor: Record<PlayerColor, string> = {
+  green: 'left-2 top-2 lg:left-4 lg:top-[17%] lg:-translate-y-1/2',
+  red: 'right-2 top-2 lg:right-4 lg:top-[17%] lg:-translate-y-1/2',
+  yellow: 'bottom-2 left-2 lg:bottom-[17%] lg:left-4 lg:translate-y-1/2',
+  blue: 'bottom-2 right-2 lg:bottom-[17%] lg:right-4 lg:translate-y-1/2',
 }
 
 const tokenUiId = (owner: string, tokenId: number) => `${owner}-${tokenId}`
@@ -1021,7 +1040,7 @@ const buildOnchainPlacements = (
 }
 
 export function MatchOnchainView() {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { account } = useAccount()
   const { address, username } = useControllerWallet()
   const language = useAppSettingsStore((state) => state.language)
@@ -1084,6 +1103,41 @@ export function MatchOnchainView() {
     setGameIdInput(searchParams.get('gameId') || '')
     setTokenIdInput(searchParams.get('tokenId') || '')
   }, [searchParams])
+
+  const applyBoardQuery = useCallback(
+    (mode: 'game' | 'token') => {
+      const nextSearchParams = new URLSearchParams(searchParams)
+      const trimmedGameId = gameIdInput.trim()
+      const trimmedTokenId = tokenIdInput.trim()
+
+      if (mode === 'game') {
+        if (trimmedGameId) {
+          nextSearchParams.set('gameId', trimmedGameId)
+        } else {
+          nextSearchParams.delete('gameId')
+        }
+
+        nextSearchParams.delete('tokenId')
+      } else {
+        if (trimmedTokenId) {
+          nextSearchParams.set('tokenId', trimmedTokenId)
+        } else {
+          nextSearchParams.delete('tokenId')
+        }
+
+        nextSearchParams.delete('gameId')
+      }
+
+      setSearchParams(nextSearchParams, { replace: true })
+    },
+    [gameIdInput, searchParams, setSearchParams, tokenIdInput],
+  )
+
+  const clearBoardQuery = useCallback(() => {
+    setGameIdInput('')
+    setTokenIdInput('')
+    setSearchParams(new URLSearchParams(), { replace: true })
+  }, [setSearchParams])
 
   const requestedGameId = useMemo(() => parseBigNumberish(gameIdInput), [gameIdInput])
   const activeTokenId = useMemo(() => parseBigNumberish(tokenIdInput), [tokenIdInput])
@@ -1154,6 +1208,7 @@ export function MatchOnchainView() {
 
     try {
       const nextSnapshot = await readDojoGameSnapshot(activeGameId, {
+        includeBoardSquares: true,
         includePlayerCustomizations: true,
       })
       setSnapshot((current) => stabilizeSnapshot(nextSnapshot, current))
@@ -1593,6 +1648,7 @@ export function MatchOnchainView() {
 
       try {
         const initialSnapshot = await readDojoGameSnapshot(activeGameId, {
+          includeBoardSquares: true,
           includePlayerCustomizations: true,
         })
 
@@ -1775,7 +1831,7 @@ export function MatchOnchainView() {
 
       const stepForward = () => {
         const nextPosition = path[index]
-        setAnimatedTokenPositions((current) => ({ ...current, [tokenId]: nextPosition }))
+        setAnimatedTokenPositions({ [tokenId]: nextPosition })
         index += 1
 
         if (index >= path.length) {
@@ -2148,6 +2204,7 @@ export function MatchOnchainView() {
     : ''
   const activeAnnouncementPlaceNumber = activeAnnouncementPlacement ? Math.min(activeAnnouncementPlacement.place, 3) : null
   const activeAnnouncementSubtitle = activeAnnouncementPlacement ? `${ui.congrats}, ${activeAnnouncementPlacement.name}.` : ''
+  const hudSlotColors: PlayerColor[] = ['green', 'red', 'yellow', 'blue']
 
   return (
     <section
@@ -2284,128 +2341,28 @@ export function MatchOnchainView() {
                 visualSkinByColor={visualSkinByColor}
               />
 
-              <div className="pointer-events-none absolute inset-x-0 top-2 flex items-start justify-between px-2 lg:hidden">
-                <PlayerHudSlot
-                  canRoll={canRollAction}
-                  diceSkinId={playersByColor.green ? diceSkinByPlayerId[playersByColor.green.id] : selectedDiceSkinId}
-                  dieA={snapshot?.dice_state?.die_a ?? null}
-                  dieB={snapshot?.dice_state?.die_b ?? null}
-                  onRoll={triggerHudDiceRoll}
-                  player={playersByColor.green}
-                  preview={hudDicePreview}
-                  rolling={hudDiceRolling}
-                  surfacePalette={surfacePalette}
-                  turnPlayerId={activePlayerAddress}
-                  ui={ui}
-                />
-                <PlayerHudSlot
-                  canRoll={canRollAction}
-                  diceSkinId={playersByColor.red ? diceSkinByPlayerId[playersByColor.red.id] : selectedDiceSkinId}
-                  dieA={snapshot?.dice_state?.die_a ?? null}
-                  dieB={snapshot?.dice_state?.die_b ?? null}
-                  onRoll={triggerHudDiceRoll}
-                  player={playersByColor.red}
-                  preview={hudDicePreview}
-                  rolling={hudDiceRolling}
-                  surfacePalette={surfacePalette}
-                  turnPlayerId={activePlayerAddress}
-                  ui={ui}
-                />
-              </div>
+              <div className="pointer-events-none absolute inset-0">
+                {hudSlotColors.map((color) => {
+                  const player = playersByColor[color]
 
-              <div className="pointer-events-none absolute inset-x-0 bottom-2 flex items-end justify-between px-2 lg:hidden">
-                <PlayerHudSlot
-                  canRoll={canRollAction}
-                  diceSkinId={playersByColor.yellow ? diceSkinByPlayerId[playersByColor.yellow.id] : selectedDiceSkinId}
-                  dieA={snapshot?.dice_state?.die_a ?? null}
-                  dieB={snapshot?.dice_state?.die_b ?? null}
-                  onRoll={triggerHudDiceRoll}
-                  player={playersByColor.yellow}
-                  preview={hudDicePreview}
-                  rolling={hudDiceRolling}
-                  surfacePalette={surfacePalette}
-                  turnPlayerId={activePlayerAddress}
-                  ui={ui}
-                />
-                <PlayerHudSlot
-                  canRoll={canRollAction}
-                  diceSkinId={playersByColor.blue ? diceSkinByPlayerId[playersByColor.blue.id] : selectedDiceSkinId}
-                  dieA={snapshot?.dice_state?.die_a ?? null}
-                  dieB={snapshot?.dice_state?.die_b ?? null}
-                  onRoll={triggerHudDiceRoll}
-                  player={playersByColor.blue}
-                  preview={hudDicePreview}
-                  rolling={hudDiceRolling}
-                  surfacePalette={surfacePalette}
-                  turnPlayerId={activePlayerAddress}
-                  ui={ui}
-                />
-              </div>
-
-              <div className="pointer-events-none absolute inset-0 hidden lg:block">
-                <div className="absolute left-4 top-[17%] -translate-y-1/2">
-                  <PlayerHudSlot
-                    canRoll={canRollAction}
-                    diceSkinId={playersByColor.green ? diceSkinByPlayerId[playersByColor.green.id] : selectedDiceSkinId}
-                    dieA={snapshot?.dice_state?.die_a ?? null}
-                    dieB={snapshot?.dice_state?.die_b ?? null}
-                    onRoll={triggerHudDiceRoll}
-                    player={playersByColor.green}
-                    preview={hudDicePreview}
-                    rolling={hudDiceRolling}
-                    surfacePalette={surfacePalette}
-                    turnPlayerId={activePlayerAddress}
-                    ui={ui}
-                  />
-                </div>
-
-                <div className="absolute right-4 top-[17%] -translate-y-1/2">
-                  <PlayerHudSlot
-                    canRoll={canRollAction}
-                    diceSkinId={playersByColor.red ? diceSkinByPlayerId[playersByColor.red.id] : selectedDiceSkinId}
-                    dieA={snapshot?.dice_state?.die_a ?? null}
-                    dieB={snapshot?.dice_state?.die_b ?? null}
-                    onRoll={triggerHudDiceRoll}
-                    player={playersByColor.red}
-                    preview={hudDicePreview}
-                    rolling={hudDiceRolling}
-                    surfacePalette={surfacePalette}
-                    turnPlayerId={activePlayerAddress}
-                    ui={ui}
-                  />
-                </div>
-
-                <div className="absolute bottom-[17%] left-4 translate-y-1/2">
-                  <PlayerHudSlot
-                    canRoll={canRollAction}
-                    diceSkinId={playersByColor.yellow ? diceSkinByPlayerId[playersByColor.yellow.id] : selectedDiceSkinId}
-                    dieA={snapshot?.dice_state?.die_a ?? null}
-                    dieB={snapshot?.dice_state?.die_b ?? null}
-                    onRoll={triggerHudDiceRoll}
-                    player={playersByColor.yellow}
-                    preview={hudDicePreview}
-                    rolling={hudDiceRolling}
-                    surfacePalette={surfacePalette}
-                    turnPlayerId={activePlayerAddress}
-                    ui={ui}
-                  />
-                </div>
-
-                <div className="absolute bottom-[17%] right-4 translate-y-1/2">
-                  <PlayerHudSlot
-                    canRoll={canRollAction}
-                    diceSkinId={playersByColor.blue ? diceSkinByPlayerId[playersByColor.blue.id] : selectedDiceSkinId}
-                    dieA={snapshot?.dice_state?.die_a ?? null}
-                    dieB={snapshot?.dice_state?.die_b ?? null}
-                    onRoll={triggerHudDiceRoll}
-                    player={playersByColor.blue}
-                    preview={hudDicePreview}
-                    rolling={hudDiceRolling}
-                    surfacePalette={surfacePalette}
-                    turnPlayerId={activePlayerAddress}
-                    ui={ui}
-                  />
-                </div>
+                  return (
+                    <div className={`absolute ${hudSlotPositionClassByColor[color]}`} key={`hud-slot-${color}`}>
+                      <PlayerHudSlot
+                        canRoll={canRollAction}
+                        diceSkinId={player ? diceSkinByPlayerId[player.id] : selectedDiceSkinId}
+                        dieA={snapshot?.dice_state?.die_a ?? null}
+                        dieB={snapshot?.dice_state?.die_b ?? null}
+                        onRoll={triggerHudDiceRoll}
+                        player={player}
+                        preview={hudDicePreview}
+                        rolling={hudDiceRolling}
+                        surfacePalette={surfacePalette}
+                        turnPlayerId={activePlayerAddress}
+                        ui={ui}
+                      />
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </article>
@@ -2421,6 +2378,89 @@ export function MatchOnchainView() {
               <p className="mx-auto mt-3 max-w-[620px] text-sm font-semibold leading-6" style={{ color: surfacePalette.hudCardText }}>
                 {ui.emptyBoardBody}
               </p>
+
+              <div className="mx-auto mt-6 max-w-[620px] rounded-[26px] border p-4 text-left shadow-wood" style={announcementGlassInnerStyle}>
+                <p className="text-center text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: surfacePalette.badgeText }}>
+                  {ui.resolverHelp}
+                </p>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.12em]" style={{ color: surfacePalette.hudCardText }}>
+                      {ui.resolveByGameId}
+                    </span>
+                    <input
+                      className="w-full rounded-2xl border px-4 py-3 text-sm font-bold outline-none transition focus:brightness-105"
+                      onChange={(event) => setGameIdInput(event.target.value)}
+                      placeholder={ui.resolverGamePlaceholder}
+                      style={{
+                        background: surfacePalette.hudPillBackground,
+                        borderColor: surfacePalette.hudPillBorder,
+                        color: surfacePalette.hudPillText,
+                      }}
+                      type="text"
+                      value={gameIdInput}
+                    />
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.12em]" style={{ color: surfacePalette.hudCardText }}>
+                      {ui.resolveByTokenId}
+                    </span>
+                    <input
+                      className="w-full rounded-2xl border px-4 py-3 text-sm font-bold outline-none transition focus:brightness-105"
+                      onChange={(event) => setTokenIdInput(event.target.value)}
+                      placeholder={ui.resolverTokenPlaceholder}
+                      style={{
+                        background: surfacePalette.hudPillBackground,
+                        borderColor: surfacePalette.hudPillBorder,
+                        color: surfacePalette.hudPillText,
+                      }}
+                      type="text"
+                      value={tokenIdInput}
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  <button
+                    className="rounded-full border px-4 py-2 text-[11px] font-black uppercase tracking-[0.12em] transition hover:brightness-105"
+                    onClick={() => applyBoardQuery('game')}
+                    style={{
+                      background: surfacePalette.hudPillBackground,
+                      borderColor: surfacePalette.hudPillBorder,
+                      color: surfacePalette.hudPillText,
+                    }}
+                    type="button"
+                  >
+                    {ui.resolveByGameId}
+                  </button>
+                  <button
+                    className="rounded-full border px-4 py-2 text-[11px] font-black uppercase tracking-[0.12em] transition hover:brightness-105"
+                    onClick={() => applyBoardQuery('token')}
+                    style={{
+                      background: surfacePalette.hudPillBackground,
+                      borderColor: surfacePalette.hudPillBorder,
+                      color: surfacePalette.hudPillText,
+                    }}
+                    type="button"
+                  >
+                    {ui.resolveByTokenId}
+                  </button>
+                  <button
+                    className="rounded-full border px-4 py-2 text-[11px] font-black uppercase tracking-[0.12em] transition hover:brightness-105"
+                    onClick={clearBoardQuery}
+                    style={{
+                      background: surfacePalette.badgeBackground,
+                      borderColor: surfacePalette.badgeBorder,
+                      color: surfacePalette.badgeText,
+                    }}
+                    type="button"
+                  >
+                    {ui.clearResolver}
+                  </button>
+                </div>
+              </div>
             </div>
           </article>
         )}
@@ -2483,6 +2523,20 @@ export function MatchOnchainView() {
               <span className="absolute right-[8%] top-[17%] text-6xl opacity-80 drop-shadow-[0_6px_12px_rgba(0,0,0,0.4)] sm:text-7xl">
                 🎇
               </span>
+
+              {Array.from({ length: 8 }).map((_, index) => (
+                <span
+                  className="victory-pulse absolute h-4 w-4 rounded-full"
+                  key={`spark-${index}`}
+                  style={{
+                    animationDelay: `${index * 150}ms`,
+                    background: index % 2 === 0 ? '#ffd760' : '#ff89be',
+                    boxShadow: '0 0 24px rgba(255,215,96,0.7)',
+                    left: `${14 + ((index * 10) % 70)}%`,
+                    top: `${16 + ((index * 8) % 52)}%`,
+                  }}
+                />
+              ))}
             </div>
 
             <div className="relative w-full max-w-[980px] text-center">
@@ -2492,6 +2546,14 @@ export function MatchOnchainView() {
               >
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_28%,rgba(255,255,255,0.22),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))]" />
                 <div className="absolute inset-x-[2%] top-[1.4%] h-[22%] rounded-[30px] opacity-80 blur-sm" style={announcementGlassSheenStyle} />
+                <div className="absolute inset-0 opacity-[0.08] mix-blend-screen" style={{ backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.18) 1px, transparent 1px, transparent 3px), repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0, rgba(255,255,255,0.08) 1px, transparent 1px, transparent 4px)' }} />
+
+                <div className="pointer-events-none absolute inset-0">
+                  <span className="absolute left-[7%] top-[18%] h-24 w-24 rounded-full bg-[#ffd36b]/20 blur-2xl" />
+                  <span className="absolute right-[8%] top-[22%] h-20 w-20 rounded-full bg-[#ffefb0]/18 blur-2xl" />
+                  <span className="absolute bottom-[18%] left-[14%] h-16 w-16 rounded-full bg-[#fff3ca]/18 blur-xl" />
+                  <span className="absolute bottom-[12%] right-[12%] h-20 w-20 rounded-full bg-[#ffd985]/18 blur-2xl" />
+                </div>
 
                 <div className="relative px-5 pb-7 pt-24 sm:px-8 sm:pb-9 sm:pt-28">
                   <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 sm:top-4">
@@ -2512,13 +2574,13 @@ export function MatchOnchainView() {
                         </svg>
                       </div>
 
-                      <div className="absolute top-[38px] z-20 rounded-full border-[4px] border-[#874d26] bg-gradient-to-b from-[#fff1b6] via-[#edb546] to-[#b86b1e] px-4 py-1 text-[38px] font-display leading-none text-[#5a2d10] shadow-[0_8px_14px_rgba(0,0,0,0.34),inset_0_2px_0_rgba(255,247,203,0.85)]">
+                      <div className="absolute left-1/2 top-[34px] z-20 -translate-x-1/2 rounded-full border-[4px] border-[#874d26] bg-gradient-to-b from-[#fff1b6] via-[#edb546] to-[#b86b1e] px-4 py-1 text-[32px] font-display leading-none text-[#5a2d10] shadow-[0_8px_14px_rgba(0,0,0,0.34),inset_0_2px_0_rgba(255,247,203,0.85)] sm:top-[38px] sm:text-[38px]">
                         {activeAnnouncementPlaceNumber}
                       </div>
 
-                      <div className="absolute bottom-0 left-1/2 z-20 flex h-[146px] w-[146px] -translate-x-1/2 items-center justify-center rounded-full border-[6px] border-[#7b4528] bg-gradient-to-b from-[#ffe7ab] via-[#f8bf56] to-[#cd8335] shadow-[0_26px_42px_rgba(0,0,0,0.44)]">
+                      <div className="absolute bottom-0 left-1/2 z-20 flex h-[132px] w-[132px] -translate-x-1/2 items-center justify-center rounded-full border-[6px] border-[#7b4528] bg-gradient-to-b from-[#ffe7ab] via-[#f8bf56] to-[#cd8335] shadow-[0_26px_42px_rgba(0,0,0,0.44)] sm:h-[146px] sm:w-[146px]">
                         <span
-                          className={`inline-flex h-[116px] w-[116px] items-center justify-center rounded-full border-[4px] border-[#7c3f21] bg-gradient-to-b text-3xl font-black text-[#2c190d] ${activeAnnouncementTheme?.avatarToneClass || ''}`}
+                          className={`inline-flex h-[104px] w-[104px] items-center justify-center rounded-full border-[4px] border-[#7c3f21] bg-gradient-to-b text-3xl font-black text-[#2c190d] sm:h-[116px] sm:w-[116px] ${activeAnnouncementTheme?.avatarToneClass || ''}`}
                         >
                           <GameAvatar
                             alt={activeAnnouncementPlacement.name}
@@ -2531,12 +2593,10 @@ export function MatchOnchainView() {
                     </div>
                   </div>
 
-                  <div
-                    className="relative mx-auto max-w-[760px] rounded-[34px] border bg-white/10 px-4 pb-5 pt-[116px] sm:px-8 sm:pb-7"
-                    style={announcementGlassInnerStyle}
-                  >
+                  <div className="relative mx-auto max-w-[760px] rounded-[34px] border bg-white/10 px-4 pb-5 pt-[104px] sm:px-8 sm:pb-7 sm:pt-[116px]" style={announcementGlassInnerStyle}>
                     <div className="absolute inset-x-5 top-4 h-[72px] rounded-[22px] border border-white/20 bg-white/10" />
                     <div className="absolute inset-x-[4%] top-[2%] h-[20%] rounded-[26px] opacity-90 blur-sm" style={announcementGlassSheenStyle} />
+                    <div className="absolute inset-0 opacity-[0.06] mix-blend-screen" style={{ backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.16) 0, rgba(255,255,255,0.16) 1px, transparent 1px, transparent 3px), repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0, rgba(255,255,255,0.08) 1px, transparent 1px, transparent 4px)' }} />
 
                     <div
                       className="relative rounded-[28px] border px-4 py-5 sm:px-6 sm:py-6"
@@ -2591,6 +2651,12 @@ export function MatchOnchainView() {
             100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
           }
 
+          @keyframes victoryPulse {
+            0% { opacity: 0; transform: scale(0.2); }
+            35% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0; transform: scale(1.8); }
+          }
+
           .victory-confetti {
             animation-name: victoryConfettiFall;
             animation-timing-function: linear;
@@ -2599,6 +2665,10 @@ export function MatchOnchainView() {
 
           .victory-pop {
             animation: victoryPop 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+          }
+
+          .victory-pulse {
+            animation: victoryPulse 1800ms ease-out infinite;
           }
         `}</style>
 

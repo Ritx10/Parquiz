@@ -12,7 +12,7 @@ function App() {
     const targetPath = hasSelectedSkin ? '/' : '/skin-selection'
 
     if (window.location.pathname !== targetPath) {
-      window.history.replaceState(null, '', targetPath)
+      void appRouter.navigate(targetPath, { replace: true })
     }
 
     setShowSplash(false)

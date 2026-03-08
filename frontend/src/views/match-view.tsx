@@ -970,6 +970,13 @@ function PlayerHudSlot({
   )
 }
 
+const hudSlotPositionClassByColor: Record<PlayerColor, string> = {
+  green: 'left-2 top-2 lg:left-4 lg:top-[17%] lg:-translate-y-1/2',
+  red: 'right-2 top-2 lg:right-4 lg:top-[17%] lg:-translate-y-1/2',
+  yellow: 'bottom-2 left-2 lg:bottom-[17%] lg:left-4 lg:translate-y-1/2',
+  blue: 'bottom-2 right-2 lg:bottom-[17%] lg:right-4 lg:translate-y-1/2',
+}
+
 type TokenDiceChoiceWithMove = {
   id: MoveResource
   value: number
@@ -2823,6 +2830,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
       ? `${ui.congrats}, ${activeAnnouncementPlacement.name}.`
       : `${ui.congrats}, ${activeAnnouncementPlacement.name}.`
     : ''
+  const hudSlotColors: PlayerColor[] = ['green', 'red', 'yellow', 'blue']
 
   const previewWinnerPlayer = playersById[currentTurnPlayerId] ?? players[0] ?? null
 
@@ -2908,7 +2916,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
               onTokenDiceChoiceSelect={onTokenDiceChoiceSelect}
               onTokenHover={onTokenHover}
               players={players}
-              safeSquares={[...activeSessionState.safeSquares]}
+              safeSquares={activeSessionState.safeSquares}
               selectedTokenId={selectedTokenId}
               surfacePalette={surfacePalette}
               tokenDiceChoices={boardTokenDiceChoices}
@@ -2917,112 +2925,26 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
               visualSkinByColor={visualSkinByColor}
             />
 
-            <div className="pointer-events-none absolute inset-x-0 top-2 flex items-start justify-between px-2 lg:hidden">
-              <PlayerHudSlot
-                canRoll={canRollAction}
-                diceSkinId={playersByColor.green ? diceSkinByPlayerId[playersByColor.green.id] : selectedDiceSkinId}
-                dieA={dice.dieA}
-                dieB={dice.dieB}
-                onRoll={triggerHudDiceRoll}
-                player={playersByColor.green}
-                preview={hudDicePreview}
-                rolling={hudDiceRolling}
-                turnPlayerId={currentTurnPlayerId}
-              />
-              <PlayerHudSlot
-                canRoll={canRollAction}
-                diceSkinId={playersByColor.red ? diceSkinByPlayerId[playersByColor.red.id] : selectedDiceSkinId}
-                dieA={dice.dieA}
-                dieB={dice.dieB}
-                onRoll={triggerHudDiceRoll}
-                player={playersByColor.red}
-                preview={hudDicePreview}
-                rolling={hudDiceRolling}
-                turnPlayerId={currentTurnPlayerId}
-              />
-            </div>
+            <div className="pointer-events-none absolute inset-0">
+              {hudSlotColors.map((color) => {
+                const player = playersByColor[color]
 
-            <div className="pointer-events-none absolute inset-x-0 bottom-2 flex items-end justify-between px-2 lg:hidden">
-              <PlayerHudSlot
-                canRoll={canRollAction}
-                diceSkinId={playersByColor.yellow ? diceSkinByPlayerId[playersByColor.yellow.id] : selectedDiceSkinId}
-                dieA={dice.dieA}
-                dieB={dice.dieB}
-                onRoll={triggerHudDiceRoll}
-                player={playersByColor.yellow}
-                preview={hudDicePreview}
-                rolling={hudDiceRolling}
-                turnPlayerId={currentTurnPlayerId}
-              />
-              <PlayerHudSlot
-                canRoll={canRollAction}
-                diceSkinId={playersByColor.blue ? diceSkinByPlayerId[playersByColor.blue.id] : selectedDiceSkinId}
-                dieA={dice.dieA}
-                dieB={dice.dieB}
-                onRoll={triggerHudDiceRoll}
-                player={playersByColor.blue}
-                preview={hudDicePreview}
-                rolling={hudDiceRolling}
-                turnPlayerId={currentTurnPlayerId}
-              />
-            </div>
-
-            <div className="pointer-events-none absolute inset-0 hidden lg:block">
-              <div className="absolute left-4 top-[17%] -translate-y-1/2">
-                <PlayerHudSlot
-                  canRoll={canRollAction}
-                  diceSkinId={playersByColor.green ? diceSkinByPlayerId[playersByColor.green.id] : selectedDiceSkinId}
-                  dieA={dice.dieA}
-                  dieB={dice.dieB}
-                  onRoll={triggerHudDiceRoll}
-                  player={playersByColor.green}
-                  preview={hudDicePreview}
-                  rolling={hudDiceRolling}
-                  turnPlayerId={currentTurnPlayerId}
-                />
-              </div>
-
-              <div className="absolute right-4 top-[17%] -translate-y-1/2">
-                <PlayerHudSlot
-                  canRoll={canRollAction}
-                  diceSkinId={playersByColor.red ? diceSkinByPlayerId[playersByColor.red.id] : selectedDiceSkinId}
-                  dieA={dice.dieA}
-                  dieB={dice.dieB}
-                  onRoll={triggerHudDiceRoll}
-                  player={playersByColor.red}
-                  preview={hudDicePreview}
-                  rolling={hudDiceRolling}
-                  turnPlayerId={currentTurnPlayerId}
-                />
-              </div>
-
-              <div className="absolute bottom-[17%] left-4 translate-y-1/2">
-                <PlayerHudSlot
-                  canRoll={canRollAction}
-                  diceSkinId={playersByColor.yellow ? diceSkinByPlayerId[playersByColor.yellow.id] : selectedDiceSkinId}
-                  dieA={dice.dieA}
-                  dieB={dice.dieB}
-                  onRoll={triggerHudDiceRoll}
-                  player={playersByColor.yellow}
-                  preview={hudDicePreview}
-                  rolling={hudDiceRolling}
-                  turnPlayerId={currentTurnPlayerId}
-                />
-              </div>
-
-              <div className="absolute bottom-[17%] right-4 translate-y-1/2">
-                <PlayerHudSlot
-                  canRoll={canRollAction}
-                  diceSkinId={playersByColor.blue ? diceSkinByPlayerId[playersByColor.blue.id] : selectedDiceSkinId}
-                  dieA={dice.dieA}
-                  dieB={dice.dieB}
-                  onRoll={triggerHudDiceRoll}
-                  player={playersByColor.blue}
-                  preview={hudDicePreview}
-                  rolling={hudDiceRolling}
-                  turnPlayerId={currentTurnPlayerId}
-                />
-              </div>
+                return (
+                  <div className={`absolute ${hudSlotPositionClassByColor[color]}`} key={`hud-slot-${color}`}>
+                    <PlayerHudSlot
+                      canRoll={canRollAction}
+                      diceSkinId={player ? diceSkinByPlayerId[player.id] : selectedDiceSkinId}
+                      dieA={dice.dieA}
+                      dieB={dice.dieB}
+                      onRoll={triggerHudDiceRoll}
+                      player={player}
+                      preview={hudDicePreview}
+                      rolling={hudDiceRolling}
+                      turnPlayerId={currentTurnPlayerId}
+                    />
+                  </div>
+                )
+              })}
             </div>
           </div>
         </article>

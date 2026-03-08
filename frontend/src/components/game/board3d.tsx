@@ -356,12 +356,12 @@ function BoardCenter() {
 type Board3DProps = {
   players?: Array<{ avatar: string; color: PlayerColor; id: string; name: string }>
   tokens: MatchToken[]
-  blockedSquares?: number[]
-  safeSquares?: number[]
-  highlightedSquares?: number[]
-  movableTokenIds?: string[]
+  blockedSquares?: readonly number[]
+  safeSquares?: readonly number[]
+  highlightedSquares?: readonly number[]
+  movableTokenIds?: readonly string[]
   selectedTokenId?: null | string
-  animatingTokenIds?: string[]
+  animatingTokenIds?: readonly string[]
   tokenHints?: Record<string, string>
   tokenDiceChoices?: Record<
       string,

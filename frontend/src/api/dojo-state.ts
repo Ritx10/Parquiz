@@ -280,6 +280,15 @@ const buildKeysClause = (modelName: string, keys: Array<bigint | number | string
 let toriiClientPromise: null | Promise<ToriiClient> = null
 const boardSquareCache = new Map<string, Promise<DojoBoardSquareModel[]>>()
 
+const invalidateBoardSquareCache = (configId?: bigint) => {
+  if (typeof configId === 'undefined') {
+    boardSquareCache.clear()
+    return
+  }
+
+  boardSquareCache.delete(configId.toString())
+}
+
 const withFallback = async <T,>(promise: Promise<T>, fallback: T): Promise<T> => {
   try {
     return await promise
@@ -657,7 +666,15 @@ const readBoardSquaresForConfig = async (client: ToriiClient, configId: bigint) 
         'BoardSquare',
         Array.from({ length: MAIN_TRACK_LEN }, (_, squareIndex) => [configId, squareIndex]),
       )
-      .then((rows) => rows.map((row) => normalizeBoardSquareModel(row)))
+      .then((rows) => {
+        const normalizedRows = rows.map((row) => normalizeBoardSquareModel(row))
+
+        if (normalizedRows.length < MAIN_TRACK_LEN) {
+          boardSquareCache.delete(cacheKey)
+        }
+
+        return normalizedRows
+      })
       .catch((error) => {
         boardSquareCache.delete(cacheKey)
         throw error
@@ -883,9 +900,14 @@ export const subscribeDojoGame = async (params: SubscribeDojoGameParams): Promis
     { modelName: 'GameRuntimeConfig', member: 'game_id', value: params.gameId },
     { modelName: 'PendingQuestion', member: 'game_id', value: params.gameId },
     { modelName: 'GamePlayer', member: 'game_id', value: params.gameId },
+    { modelName: 'GamePlayerCustomization', member: 'game_id', value: params.gameId },
     { modelName: 'Token', member: 'game_id', value: params.gameId },
     { modelName: 'BonusState', member: 'game_id', value: params.gameId },
   ]
+
+  if (typeof params.configId !== 'undefined') {
+    entityModelFilters.push({ modelName: 'BoardSquare', member: 'config_id', value: params.configId })
+  }
 
   try {
     const entitySubscription = await client.onEntityUpdated(
@@ -898,12 +920,16 @@ export const subscribeDojoGame = async (params: SubscribeDojoGameParams): Promis
           return
         }
 
-        const shouldRefresh = entityModelFilters.some(({ modelName, member, value }) => {
+        const matchingFilter = entityModelFilters.find(({ modelName, member, value }) => {
           const model = extractModels([entity], modelName)[0]
           return model ? memberValueMatches(model[member], value) : false
         })
 
-        if (shouldRefresh) {
+        if (matchingFilter) {
+          if (matchingFilter.modelName === 'BoardSquare' && typeof params.configId !== 'undefined') {
+            invalidateBoardSquareCache(params.configId)
+          }
+
           params.onStateMutation()
         }
       },
