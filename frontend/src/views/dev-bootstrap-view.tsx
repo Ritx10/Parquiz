@@ -140,7 +140,6 @@ export function DevBootstrapView() {
           answerTimeLimitSecs: 30,
           turnTimeLimitSecs: 45,
           exitHomeRule: 0,
-          difficultyLevel: 1,
         }),
       async () => {
         setStatusMessage(

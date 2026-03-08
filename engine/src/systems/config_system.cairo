@@ -15,7 +15,7 @@ pub trait IConfigSystem<T> {
 #[dojo::contract]
 pub mod config_system {
     use crate::constants::{
-        GLOBAL_STATE_SINGLETON_ID, MAIN_TRACK_LEN, config_status, difficulty_level, square_type,
+        GLOBAL_STATE_SINGLETON_ID, MAIN_TRACK_LEN, config_status, square_type,
     };
     use crate::models::{BoardSquare, GameConfig, GlobalState};
     use crate::systems::egs_system::egs_system::{maybe_disable_settings, maybe_publish_settings};
@@ -45,7 +45,6 @@ pub mod config_system {
                 answer_time_limit_secs: payload.answer_time_limit_secs,
                 turn_time_limit_secs: payload.turn_time_limit_secs,
                 exit_home_rule: payload.exit_home_rule,
-                difficulty_level: payload.difficulty_level,
                 created_at: now,
                 updated_at: now,
             };
@@ -70,7 +69,6 @@ pub mod config_system {
             config.answer_time_limit_secs = payload.answer_time_limit_secs;
             config.turn_time_limit_secs = payload.turn_time_limit_secs;
             config.exit_home_rule = payload.exit_home_rule;
-            config.difficulty_level = payload.difficulty_level;
             config.updated_at = now;
 
             world.write_model(@config);
@@ -132,7 +130,6 @@ pub mod config_system {
                 answer_time_limit_secs: payload.answer_time_limit_secs,
                 turn_time_limit_secs: payload.turn_time_limit_secs,
                 exit_home_rule: payload.exit_home_rule,
-                difficulty_level: payload.difficulty_level,
                 created_at: now,
                 updated_at: now,
             };
@@ -188,7 +185,6 @@ pub mod config_system {
         assert(payload.answer_time_limit_secs > 0, 'answer_timer');
         assert(payload.turn_time_limit_secs > 0, 'turn_timer');
         assert(payload.exit_home_rule <= 2, 'exit_rule');
-        assert(payload.difficulty_level <= difficulty_level::HARD, 'difficulty');
     }
 
     fn initialize_default_board_squares(ref world: dojo::world::WorldStorage, config_id: u64) {

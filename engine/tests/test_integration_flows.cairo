@@ -211,7 +211,6 @@ fn seed_locked_config(ref world: dojo::world::WorldStorage) -> u64 {
             answer_time_limit_secs: 20,
             turn_time_limit_secs: 45,
             exit_home_rule: 0,
-            difficulty_level: 1,
             created_at: 1,
             updated_at: 1,
         },

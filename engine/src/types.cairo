@@ -5,7 +5,6 @@ pub struct GameConfigPayload {
     pub answer_time_limit_secs: u32,
     pub turn_time_limit_secs: u32,
     pub exit_home_rule: u8,
-    pub difficulty_level: u8,
 }
 
 #[derive(Copy, Drop, Serde)]
@@ -19,7 +18,6 @@ pub struct AnswerPayload {
     pub question_id: u64,
     pub question_index: u32,
     pub category: u8,
-    pub difficulty: u8,
     pub correct_option: u8,
     pub selected_option: u8,
     pub merkle_proof: Array<felt252>,

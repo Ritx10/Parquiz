@@ -483,7 +483,6 @@ const normalizeRuntimeConfigModel = (raw: RawModel): DojoGameRuntimeConfigModel 
   answer_time_limit_secs: toNumber(raw.answer_time_limit_secs),
   turn_time_limit_secs: toNumber(raw.turn_time_limit_secs),
   exit_home_rule: toNumber(raw.exit_home_rule),
-  difficulty_level: toNumber(raw.difficulty_level),
 })
 
 const normalizePendingQuestionModel = (raw: RawModel): DojoPendingQuestionModel => ({
@@ -492,7 +491,6 @@ const normalizePendingQuestionModel = (raw: RawModel): DojoPendingQuestionModel 
   set_id: toBigInt(raw.set_id),
   question_index: toNumber(raw.question_index),
   category: toNumber(raw.category),
-  difficulty: toNumber(raw.difficulty),
   seed_nonce: typeof raw.seed_nonce === 'string' ? raw.seed_nonce : normalizeHex(raw.seed_nonce),
 })
 
@@ -544,7 +542,6 @@ const normalizeGameConfigModel = (raw: RawModel): DojoGameConfigModel => ({
   answer_time_limit_secs: toNumber(raw.answer_time_limit_secs),
   turn_time_limit_secs: toNumber(raw.turn_time_limit_secs),
   exit_home_rule: toNumber(raw.exit_home_rule),
-  difficulty_level: toNumber(raw.difficulty_level),
   created_at: toBigInt(raw.created_at),
   updated_at: toBigInt(raw.updated_at),
 })
@@ -580,7 +577,6 @@ const normalizeTrackedEvent = (
       game_id: toBigInt(raw.game_id),
       turn_index: toNumber(raw.turn_index),
       question_id: toBigInt(raw.question_id),
-      difficulty: toNumber(raw.difficulty),
     }
 
     return { type: 'QuestionDrawn', payload }

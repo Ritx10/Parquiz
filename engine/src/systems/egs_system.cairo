@@ -102,7 +102,7 @@ pub trait IMinigameRegistry<T> {
 pub mod egs_system {
     use crate::constants::{
         EGS_CONFIG_SINGLETON_ID, GLOBAL_STATE_SINGLETON_ID, MAX_SEATS, config_status,
-        difficulty_level, egs_link_status,
+        egs_link_status,
     };
     use crate::models::{
         AdminAccount, BonusState, EgsConfig, EgsSessionBinding, EgsTokenGameLink, Game,
@@ -556,10 +556,9 @@ pub mod egs_system {
 
     fn setting_details_from_config(config: GameConfig) -> GameSettingDetails {
         GameSettingDetails {
-            name: settings_name(config.difficulty_level),
-            description: settings_description(config.difficulty_level),
+            name: settings_name(),
+            description: settings_description(),
             settings: array![
-                GameSetting { name: 'difficulty', value: config.difficulty_level.into() },
                 GameSetting { name: 'answer_secs', value: config.answer_time_limit_secs.into() },
                 GameSetting { name: 'turn_secs', value: config.turn_time_limit_secs.into() },
                 GameSetting { name: 'exit_rule', value: config.exit_home_rule.into() },
@@ -568,26 +567,12 @@ pub mod egs_system {
         }
     }
 
-    fn settings_name(difficulty: u8) -> ByteArray {
-        if difficulty == difficulty_level::EASY {
-            return "ParQuiz Easy";
-        }
-        if difficulty == difficulty_level::MEDIUM {
-            return "ParQuiz Medium";
-        }
-
-        "ParQuiz Hard"
+    fn settings_name() -> ByteArray {
+        "ParQuiz Timed Match"
     }
 
-    fn settings_description(difficulty: u8) -> ByteArray {
-        if difficulty == difficulty_level::EASY {
-            return "Accessible trivia pacing for relaxed board races.";
-        }
-        if difficulty == difficulty_level::MEDIUM {
-            return "Balanced trivia pacing for standard ParQuiz matches.";
-        }
-
-        "Demanding trivia pacing for competitive ParQuiz matches."
+    fn settings_description() -> ByteArray {
+        "On-chain ParQuiz settings with answer timer, turn timer, and exit rule."
     }
 
     fn publish_settings_to_token(ref world: dojo::world::WorldStorage, game_config: GameConfig) {

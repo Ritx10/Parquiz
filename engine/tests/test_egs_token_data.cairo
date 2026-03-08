@@ -7,7 +7,7 @@ mod tests {
         ContractDef, ContractDefTrait, NamespaceDef, TestResource, WorldStorageTestTrait,
         spawn_test_world,
     };
-    use parquiz_engine::constants::{GLOBAL_STATE_SINGLETON_ID, config_status, difficulty_level};
+    use parquiz_engine::constants::{GLOBAL_STATE_SINGLETON_ID, config_status};
     use parquiz_engine::models::{EgsTokenGameLink, GameConfig, GlobalState};
     use parquiz_engine::systems::egs_system::{
         IMINIGAME_ID, IMINIGAME_SETTINGS_ID, IMinigameSettingsDetailsDispatcher,
@@ -134,7 +134,6 @@ mod tests {
                 answer_time_limit_secs: 30,
                 turn_time_limit_secs: 60,
                 exit_home_rule: 0,
-                difficulty_level: difficulty_level::EASY,
                 created_at: 1,
                 updated_at: 1,
             },
@@ -147,7 +146,6 @@ mod tests {
                 answer_time_limit_secs: 45,
                 turn_time_limit_secs: 90,
                 exit_home_rule: 1,
-                difficulty_level: difficulty_level::MEDIUM,
                 created_at: 1,
                 updated_at: 1,
             },
@@ -160,7 +158,6 @@ mod tests {
                 answer_time_limit_secs: 20,
                 turn_time_limit_secs: 40,
                 exit_home_rule: 2,
-                difficulty_level: difficulty_level::HARD,
                 created_at: 1,
                 updated_at: 1,
             },
@@ -172,13 +169,13 @@ mod tests {
         assert(settings_details.settings_count() == 2, 'settings count');
 
         let first = settings_details.settings_details(1);
-        assert(first.settings.len() == 4, 'first settings len');
+        assert(first.settings.len() == 3, 'first settings len');
         let first_setting = *first.settings.at(0);
         let second_setting = *first.settings.at(1);
-        assert(first_setting.name == 'difficulty', 'difficulty key');
-        assert(first_setting.value == 0, 'difficulty value');
-        assert(second_setting.name == 'answer_secs', 'answer key');
-        assert(second_setting.value == 30, 'answer timer');
+        assert(first_setting.name == 'answer_secs', 'answer key');
+        assert(first_setting.value == 30, 'answer timer');
+        assert(second_setting.name == 'turn_secs', 'turn key');
+        assert(second_setting.value == 60, 'turn timer');
 
         let batch = settings_details.settings_details_batch(array![1_u32, 3_u32].span());
         assert(batch.len() == 2, 'details batch len');

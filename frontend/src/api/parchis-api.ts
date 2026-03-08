@@ -120,14 +120,13 @@ export const createGameConfig = async (
   return executeCall(account, {
     contractAddress: configSystem(),
     entrypoint: 'create_game_config',
-    calldata: CallData.compile({
-      payload: {
-        answer_time_limit_secs: payload.answerTimeLimitSecs,
-        turn_time_limit_secs: payload.turnTimeLimitSecs,
-        exit_home_rule: payload.exitHomeRule,
-        difficulty_level: payload.difficultyLevel,
-      },
-    }),
+      calldata: CallData.compile({
+        payload: {
+          answer_time_limit_secs: payload.answerTimeLimitSecs,
+          turn_time_limit_secs: payload.turnTimeLimitSecs,
+          exit_home_rule: payload.exitHomeRule,
+        },
+      }),
   })
 }
 
@@ -245,7 +244,6 @@ export const submitAnswerAndMoves = async (
         question_id: asBigInt(answerPayload.questionId),
         question_index: answerPayload.questionIndex,
         category: answerPayload.category,
-        difficulty: answerPayload.difficulty,
         correct_option: answerPayload.correctOption,
         selected_option: answerPayload.selectedOption,
         merkle_proof: answerPayload.merkleProof.map((value) => asBigInt(value)),
@@ -283,7 +281,6 @@ export const submitAnswer = async (
         question_id: asBigInt(answerPayload.questionId),
         question_index: answerPayload.questionIndex,
         category: answerPayload.category,
-        difficulty: answerPayload.difficulty,
         correct_option: answerPayload.correctOption,
         selected_option: answerPayload.selectedOption,
         merkle_proof: answerPayload.merkleProof.map((value) => asBigInt(value)),

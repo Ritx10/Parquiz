@@ -20,11 +20,9 @@ pub mod turn_system {
     use crate::constants::{
         DEFAULT_ALLOW_SPLIT_DICE, DEFAULT_ALLOW_SUM_DICE, DEFAULT_ALLOW_TWO_STEP_SAME_TOKEN,
         DEFAULT_QUESTION_SET_ID, DEFAULT_REQUIRES_EXACT_HOME, DEFAULT_VRF_PROVIDER_ADDRESS,
-        HARD_DIFFICULTY_REWARD_COINS, HOME_LANE_LEN, MAIN_TRACK_LEN, MAX_SEATS,
-        MEDIUM_DIFFICULTY_REWARD_COINS, TOKENS_PER_PLAYER, TRACK_STEPS_TO_HOME_ENTRY,
-        VRF_CONFIG_SINGLETON_ID, bonus_type, difficulty_level,
+        CORRECT_ANSWER_REWARD_COINS, HOME_LANE_LEN, MAIN_TRACK_LEN, MAX_SEATS,
+        TOKENS_PER_PLAYER, TRACK_STEPS_TO_HOME_ENTRY, VRF_CONFIG_SINGLETON_ID, bonus_type,
         egs_link_status, game_status, move_type, token_state, turn_phase,
-        EASY_DIFFICULTY_REWARD_COINS,
     };
     use crate::events::{
         AnswerResolved, AnswerRevealed, BonusAwarded, BonusConsumed, BlockadeBroken,
@@ -33,7 +31,8 @@ pub mod turn_system {
     };
     use crate::models::{
         BoardSquare, BonusState, DiceState, Game, GamePlayer, GameRuntimeConfig, GameSeat,
-        PendingQuestion, QuestionSet, SquareOccupancy, Token, TurnState, VrfConfig,
+        GameQuestionCycleState, GameQuestionUsageSegment, PendingQuestion, QuestionSet,
+        SquareOccupancy, Token, TurnState, VrfConfig,
     };
     use crate::systems::egs_system::egs_system::{
         assert_bound_token_playable, post_bound_token_action, sync_bound_player_state,
@@ -82,10 +81,6 @@ pub mod turn_system {
 
             let dice_1 = random_dice_value(random_die_1);
             let dice_2 = random_dice_value(random_die_2);
-            let question_index = random_question_index(random_question, question_set.question_count);
-            let difficulty = runtime.difficulty_level;
-            let question_id = make_question_id(game.turn_index, question_index);
-
             if should_skip_question_for_trapped_player(
                 ref world, game.game_id, caller, runtime.exit_home_rule, dice_1, dice_2,
             ) {
@@ -95,13 +90,16 @@ pub mod turn_system {
                 return;
             }
 
+            let question_index =
+                draw_question_index(ref world, game.game_id, question_set, random_question);
+            let question_id = make_question_id(game.turn_index, question_index);
+
             let pending = PendingQuestion {
                 game_id,
                 turn_index: game.turn_index,
                 set_id: DEFAULT_QUESTION_SET_ID,
                 question_index,
                 category: 0,
-                difficulty,
                 seed_nonce: vrf_random,
             };
 
@@ -139,7 +137,6 @@ pub mod turn_system {
                 game_id,
                 turn_index: game.turn_index,
                 question_id,
-                difficulty,
             });
             post_bound_token_action(ref world, game_id, caller);
         }
@@ -360,7 +357,7 @@ pub mod turn_system {
     }
 
     fn resolve_answer_internal(
-        ref world: dojo::world::WorldStorage, game: Game, runtime: GameRuntimeConfig,
+        ref world: dojo::world::WorldStorage, game: Game, _runtime: GameRuntimeConfig,
         caller: ContractAddress, ref turn: TurnState, answer_payload: AnswerPayload,
     ) -> bool {
         let pending: PendingQuestion = world.read_model((game.game_id, game.turn_index));
@@ -393,7 +390,7 @@ pub mod turn_system {
         assert(proof_ok, 'q_proof');
 
         let correct = payload_selected_option == payload_correct_option;
-        let reward = if correct { reward_for_difficulty(pending.difficulty) } else { 0 };
+        let reward = if correct { CORRECT_ANSWER_REWARD_COINS } else { 0 };
 
         let mut player: GamePlayer = world.read_model((game.game_id, caller));
         if correct {
@@ -443,12 +440,14 @@ pub mod turn_system {
         let mut dice_state: DiceState = world.read_model(game.game_id);
         let mut bonus_state: BonusState = world.read_model((game.game_id, caller));
 
-        let (steps, consumed_bonus_type) = consume_move_resource(
+        let (resource_steps, consumed_bonus_type) = consume_move_resource(
             runtime,
             ref dice_state,
             ref bonus_state,
             move_input,
         );
+        assert(move_input.steps > 0, 'move_steps');
+        assert(move_input.steps <= resource_steps, 'move_steps');
 
         sync_turn_with_dice(ref turn, dice_state);
 
@@ -459,7 +458,7 @@ pub mod turn_system {
             caller,
             ref turn,
             move_input.token_id,
-            steps,
+            move_input.steps,
             ref bonus_state,
         );
 
@@ -664,22 +663,80 @@ pub mod turn_system {
             return;
         }
 
-        let can_move =
-            token_has_legal_move_for_steps(ref world, game, runtime, player_state, token, steps);
-        if !can_move {
+        let actual_steps = reachable_steps_for_requested_move(ref world, game, token, steps);
+        if actual_steps == 0 {
             return;
         }
 
-        let target_square_ref = preview_target_square_ref(runtime, player_state.seat, token, steps);
+        let target_square_ref = preview_target_square_ref(runtime, player_state.seat, token, actual_steps);
         legal_moves
             .append(
                 LegalMove {
                     move_type: source_move_type,
                     token_id: token.token_id,
-                    steps,
+                    steps: actual_steps,
                     target_square_ref,
                 },
             );
+    }
+
+    fn reachable_steps_for_requested_move(
+        ref world: dojo::world::WorldStorage, game: Game, token: Token, requested_steps: u8,
+    ) -> u8 {
+        if requested_steps == 0 {
+            return 0;
+        }
+
+        if token.token_state != token_state::ON_TRACK && token.token_state != token_state::IN_HOME_LANE {
+            return 0;
+        }
+
+        let capped_steps = reachable_steps_before_center(token, requested_steps);
+        if capped_steps == 0 {
+            return 0;
+        }
+
+        if token.token_state != token_state::ON_TRACK {
+            return capped_steps;
+        }
+
+        let mut actual_steps: u8 = 0;
+        let mut step: u8 = 1;
+        loop {
+            if step > capped_steps {
+                break;
+            }
+
+            let next_total = token.steps_total + step.into();
+            if next_total <= TRACK_STEPS_TO_HOME_ENTRY {
+                let next_track = wrapped_track_pos(token.track_pos, step.into());
+                let owner = track_blockade_owner(ref world, game.game_id, next_track);
+                if owner != NO_BLOCKADE_OWNER {
+                    break;
+                }
+            }
+
+            actual_steps = step;
+            step += 1;
+        }
+
+        actual_steps
+    }
+
+    fn reachable_steps_before_center(token: Token, requested_steps: u8) -> u8 {
+        let current_steps = token.steps_total;
+        let center_steps = total_steps_to_center();
+        let target_steps = current_steps + requested_steps.into();
+
+        if target_steps <= center_steps {
+            return requested_steps;
+        }
+
+        if current_steps + 1 >= center_steps {
+            return 0;
+        }
+
+        (center_steps - current_steps - 1).try_into().unwrap()
     }
 
     fn token_has_legal_move_for_steps(
@@ -1523,16 +1580,6 @@ pub mod turn_system {
         sum - MAIN_TRACK_LEN
     }
 
-    fn reward_for_difficulty(difficulty: u8) -> u32 {
-        if difficulty == difficulty_level::EASY {
-            return EASY_DIFFICULTY_REWARD_COINS;
-        }
-        if difficulty == difficulty_level::MEDIUM {
-            return MEDIUM_DIFFICULTY_REWARD_COINS;
-        }
-        HARD_DIFFICULTY_REWARD_COINS
-    }
-
     fn end_turn_and_advance(
         ref world: dojo::world::WorldStorage, ref game: Game, ref turn: TurnState,
         runtime: GameRuntimeConfig, now: u64,
@@ -1604,6 +1651,124 @@ pub mod turn_system {
 
     fn make_question_id(turn_index: u32, question_index: u32) -> u64 {
         (turn_index.into() * 1_000_000_u64) + question_index.into()
+    }
+
+    fn draw_question_index(
+        ref world: dojo::world::WorldStorage, game_id: u64, question_set: QuestionSet,
+        random_question: felt252,
+    ) -> u32 {
+        let mut cycle_state: GameQuestionCycleState = world.read_model((game_id, question_set.set_id));
+        if cycle_state.game_id != game_id || cycle_state.set_id != question_set.set_id {
+            cycle_state = GameQuestionCycleState {
+                game_id,
+                set_id: question_set.set_id,
+                cycle: 0,
+                used_count: 0,
+            };
+        }
+
+        if cycle_state.used_count >= question_set.question_count {
+            cycle_state.cycle += 1;
+            cycle_state.used_count = 0;
+        }
+
+        let candidate = random_question_index(random_question, question_set.question_count);
+        let question_index = find_unused_question_index(
+            ref world,
+            game_id,
+            question_set.set_id,
+            cycle_state.cycle,
+            candidate,
+            question_set.question_count,
+        );
+
+        mark_question_used(
+            ref world, game_id, question_set.set_id, cycle_state.cycle, question_index,
+        );
+        cycle_state.used_count += 1;
+        world.write_model(@cycle_state);
+
+        question_index
+    }
+
+    fn find_unused_question_index(
+        ref world: dojo::world::WorldStorage, game_id: u64, set_id: u64, cycle: u32,
+        start_index: u32, question_count: u32,
+    ) -> u32 {
+        let mut attempts: u32 = 0;
+        let mut question_index = start_index;
+
+        loop {
+            assert(attempts < question_count, 'q_cycle');
+            if !is_question_used(ref world, game_id, set_id, cycle, question_index) {
+                return question_index;
+            }
+
+            attempts += 1;
+            question_index = if question_index + 1 >= question_count { 0 } else { question_index + 1 };
+        }
+    }
+
+    fn is_question_used(
+        ref world: dojo::world::WorldStorage, game_id: u64, set_id: u64, cycle: u32,
+        question_index: u32,
+    ) -> bool {
+        let segment_index = question_index / 128_u32;
+        let bit_index = question_index % 128_u32;
+        let segment: GameQuestionUsageSegment =
+            world.read_model((game_id, set_id, cycle, segment_index));
+        if segment.game_id != game_id
+            || segment.set_id != set_id
+            || segment.cycle != cycle
+            || segment.segment_index != segment_index {
+            return false;
+        }
+
+        let mask = question_usage_mask(bit_index);
+        (segment.used_bitmap & mask) != 0
+    }
+
+    fn mark_question_used(
+        ref world: dojo::world::WorldStorage, game_id: u64, set_id: u64, cycle: u32,
+        question_index: u32,
+    ) {
+        let segment_index = question_index / 128_u32;
+        let bit_index = question_index % 128_u32;
+        let mut segment: GameQuestionUsageSegment =
+            world.read_model((game_id, set_id, cycle, segment_index));
+
+        if segment.game_id != game_id
+            || segment.set_id != set_id
+            || segment.cycle != cycle
+            || segment.segment_index != segment_index {
+            segment = GameQuestionUsageSegment {
+                game_id,
+                set_id,
+                cycle,
+                segment_index,
+                used_bitmap: 0,
+            };
+        }
+
+        let mask = question_usage_mask(bit_index);
+        segment.used_bitmap = segment.used_bitmap | mask;
+        world.write_model(@segment);
+    }
+
+    fn question_usage_mask(bit_index: u32) -> u128 {
+        let mut bit: u32 = 0;
+        let mut mask: u128 = 1;
+
+        loop {
+            if bit >= bit_index {
+                break;
+            }
+
+            mask = mask * 2;
+            bit += 1;
+        }
+
+        mask
     }
 
     fn random_dice_value(random: felt252) -> u8 {
@@ -1735,7 +1900,6 @@ pub mod turn_system {
                 answer_time_limit_secs: 30,
                 turn_time_limit_secs: 90,
                 exit_home_rule: 0,
-                difficulty_level: 0,
             }
         }
 

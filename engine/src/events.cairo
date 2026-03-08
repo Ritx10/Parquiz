@@ -79,7 +79,6 @@ pub struct QuestionDrawn {
     #[key]
     pub turn_index: u32,
     pub question_id: u64,
-    pub difficulty: u8,
 }
 
 #[derive(Copy, Drop, Serde)]

@@ -315,7 +315,6 @@ pub mod lobby_system {
             answer_time_limit_secs: config.answer_time_limit_secs,
             turn_time_limit_secs: config.turn_time_limit_secs,
             exit_home_rule: config.exit_home_rule,
-            difficulty_level: config.difficulty_level,
         };
 
         initialize_tokens_for_game(ref world, game.game_id);

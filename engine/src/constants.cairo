@@ -28,12 +28,6 @@ pub mod square_type {
     pub const CENTER: u8 = 5;
 }
 
-pub mod difficulty_level {
-    pub const EASY: u8 = 0;
-    pub const MEDIUM: u8 = 1;
-    pub const HARD: u8 = 2;
-}
-
 pub mod config_status {
     pub const DRAFT: u8 = 0;
     pub const LOCKED: u8 = 1;
@@ -86,6 +80,4 @@ pub const DEFAULT_ALLOW_SPLIT_DICE: bool = true;
 pub const DEFAULT_ALLOW_TWO_STEP_SAME_TOKEN: bool = true;
 pub const DEFAULT_ALLOW_SUM_DICE: bool = false;
 pub const DEFAULT_REQUIRES_EXACT_HOME: bool = true;
-pub const EASY_DIFFICULTY_REWARD_COINS: u32 = 60;
-pub const MEDIUM_DIFFICULTY_REWARD_COINS: u32 = 90;
-pub const HARD_DIFFICULTY_REWARD_COINS: u32 = 130;
+pub const CORRECT_ANSWER_REWARD_COINS: u32 = 90;

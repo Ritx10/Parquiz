@@ -2,7 +2,6 @@ export type GameConfigApiPayload = {
   answerTimeLimitSecs: number
   turnTimeLimitSecs: number
   exitHomeRule: 0 | 1 | 2
-  difficultyLevel: 0 | 1 | 2
 }
 
 export type GameStatus = 0 | 1 | 2 | 3
@@ -17,7 +16,6 @@ export type AnswerApiPayload = {
   questionId: bigint
   questionIndex: number
   category: number
-  difficulty: number
   correctOption: number
   selectedOption: number
   merkleProof: Array<bigint | number | string>
@@ -138,7 +136,6 @@ export type DojoGameRuntimeConfigModel = {
   answer_time_limit_secs: number
   turn_time_limit_secs: number
   exit_home_rule: number
-  difficulty_level: number
 }
 
 export type DojoPendingQuestionModel = {
@@ -147,7 +144,6 @@ export type DojoPendingQuestionModel = {
   set_id: bigint
   question_index: number
   category: number
-  difficulty: number
   seed_nonce: string
 }
 
@@ -207,7 +203,6 @@ export type DojoGameConfigModel = {
   answer_time_limit_secs: number
   turn_time_limit_secs: number
   exit_home_rule: number
-  difficulty_level: number
   created_at: bigint
   updated_at: bigint
 }
@@ -234,7 +229,6 @@ export type DojoQuestionDrawnEvent = {
   game_id: bigint
   turn_index: number
   question_id: bigint
-  difficulty: number
 }
 
 export type DojoAnswerResolvedEvent = {

@@ -203,8 +203,32 @@ pub struct PendingQuestion {
     pub set_id: u64,
     pub question_index: u32,
     pub category: u8,
-    pub difficulty: u8,
     pub seed_nonce: felt252,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct GameQuestionCycleState {
+    #[key]
+    pub game_id: u64,
+    #[key]
+    pub set_id: u64,
+    pub cycle: u32,
+    pub used_count: u32,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct GameQuestionUsageSegment {
+    #[key]
+    pub game_id: u64,
+    #[key]
+    pub set_id: u64,
+    #[key]
+    pub cycle: u32,
+    #[key]
+    pub segment_index: u32,
+    pub used_bitmap: u128,
 }
 
 #[derive(Copy, Drop, Serde)]
@@ -217,7 +241,6 @@ pub struct GameConfig {
     pub answer_time_limit_secs: u32,
     pub turn_time_limit_secs: u32,
     pub exit_home_rule: u8,
-    pub difficulty_level: u8,
     pub created_at: u64,
     pub updated_at: u64,
 }
@@ -230,7 +253,6 @@ pub struct GameRuntimeConfig {
     pub answer_time_limit_secs: u32,
     pub turn_time_limit_secs: u32,
     pub exit_home_rule: u8,
-    pub difficulty_level: u8,
 }
 
 #[derive(Copy, Drop, Serde)]

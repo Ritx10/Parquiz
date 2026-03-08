@@ -8,8 +8,8 @@ type DifficultyPreset = 'easy' | 'medium' | 'hard'
 
 type ConfigDraft = {
   answerTimeLimitSecs: number
+  practiceDifficulty: DifficultyPreset
   turnTimeLimitSecs: number
-  difficultyLevel: DifficultyPreset
   exitHomeRule: ExitHomeRule
   language: AppLanguage
   soundEnabled: boolean
@@ -17,17 +17,11 @@ type ConfigDraft = {
 
 const defaultDraft: ConfigDraft = {
   answerTimeLimitSecs: 20,
+  practiceDifficulty: 'medium',
   turnTimeLimitSecs: 45,
-  difficultyLevel: 'medium',
   exitHomeRule: 'FIVE',
   language: 'es',
   soundEnabled: true,
-}
-
-const difficultyToValue: Record<DifficultyPreset, 0 | 1 | 2> = {
-  easy: 0,
-  medium: 1,
-  hard: 2,
 }
 
 const exitRuleToValue: Record<ExitHomeRule, 0 | 1 | 2> = {
@@ -36,7 +30,7 @@ const exitRuleToValue: Record<ExitHomeRule, 0 | 1 | 2> = {
   SIX: 2,
 }
 
-const difficultyButtonOrder: DifficultyPreset[] = ['easy', 'medium', 'hard']
+const practiceDifficultyButtonOrder: DifficultyPreset[] = ['easy', 'medium', 'hard']
 
 const clampAnswerTime = (value: number) => Math.max(5, Math.floor(value || defaultDraft.answerTimeLimitSecs))
 const clampTurnTime = (value: number) => Math.max(10, Math.floor(value || defaultDraft.turnTimeLimitSecs))
@@ -62,7 +56,7 @@ const copy = {
     responseTime: 'TIEMPO DE RESPUESTA (SEGUNDOS)',
     turnLimit: 'LIMITE DE TURNO (SEGUNDOS)',
     exitRule: 'REGLA PARA SALIR DE CASA',
-    difficulty: 'DIFICULTAD GENERAL',
+    practiceDifficulty: 'DIFICULTAD DE PRACTICA',
     save: 'GUARDAR CAMBIOS',
     saving: 'GUARDANDO...',
     cancel: 'CANCELAR',
@@ -101,7 +95,7 @@ const copy = {
     responseTime: 'RESPONSE TIME (SECONDS)',
     turnLimit: 'TURN LIMIT (SECONDS)',
     exitRule: 'RULE TO EXIT HOME',
-    difficulty: 'GENERAL DIFFICULTY',
+    practiceDifficulty: 'PRACTICE DIFFICULTY',
     save: 'SAVE CHANGES',
     saving: 'SAVING...',
     cancel: 'CANCEL',
@@ -158,7 +152,7 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
   useEffect(() => {
     setDraft({
       answerTimeLimitSecs,
-      difficultyLevel: questionDifficulty || aiDifficulty,
+      practiceDifficulty: questionDifficulty || aiDifficulty,
       exitHomeRule,
       language: savedLanguage,
       soundEnabled: savedSoundEnabled,
@@ -179,7 +173,7 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
 
   const userLabel = username || status || '-'
 
-  const difficultyLabel = {
+  const practiceDifficultyLabel = {
     easy: text.easy,
     medium: text.medium,
     hard: text.hard,
@@ -207,8 +201,8 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
     setDraft(sanitizedDraft)
     setLanguage(sanitizedDraft.language)
     setSoundEnabled(sanitizedDraft.soundEnabled)
-    setAiDifficulty(sanitizedDraft.difficultyLevel)
-    setQuestionDifficulty(sanitizedDraft.difficultyLevel)
+    setAiDifficulty(sanitizedDraft.practiceDifficulty)
+    setQuestionDifficulty(sanitizedDraft.practiceDifficulty)
     setAnswerTimeLimitSecs(sanitizedDraft.answerTimeLimitSecs)
     setTurnTimeLimitSecs(sanitizedDraft.turnTimeLimitSecs)
     setExitHomeRule(sanitizedDraft.exitHomeRule)
@@ -224,7 +218,6 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
       const createHash = await createGameConfig(account, {
         answerTimeLimitSecs: sanitizedDraft.answerTimeLimitSecs,
         turnTimeLimitSecs: sanitizedDraft.turnTimeLimitSecs,
-        difficultyLevel: difficultyToValue[sanitizedDraft.difficultyLevel],
         exitHomeRule: exitRuleToValue[sanitizedDraft.exitHomeRule],
       })
 
@@ -335,6 +328,29 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
                 </button>
               </div>
 
+              <div className="border-b-[3px] border-[#cbaa85] pb-6">
+                <p className="mb-3 text-[18px] font-black uppercase text-[#5c3214] sm:text-[20px]">{text.practiceDifficulty} 🎯</p>
+                <div className="flex w-full overflow-hidden rounded-full border-[3px] border-[#a96639] bg-[#cbaa85] shadow-[0_4px_6px_rgba(0,0,0,0.2)]">
+                  {practiceDifficultyButtonOrder.map((difficulty) => {
+                    const isActive = draft.practiceDifficulty === difficulty
+                    return (
+                      <button
+                        className={`flex-1 py-1.5 text-[14px] font-black uppercase transition-colors ${
+                          isActive
+                            ? 'bg-gradient-to-b from-[#f5d480] to-[#eab044] text-[#5c3214] shadow-inner'
+                            : 'bg-[#cbaa85] text-[#5c3214]/60 hover:bg-[#d5b896]'
+                        }`}
+                        key={difficulty}
+                        onClick={() => updateDraft('practiceDifficulty', difficulty)}
+                        type="button"
+                      >
+                        {practiceDifficultyLabel[difficulty]}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
               <div className="mt-8 border-t-[3px] border-[#cbaa85] pt-6">
                 <h4 className="mb-4 font-display text-[22px] uppercase tracking-wide text-[#5c3214] sm:text-[24px]">
                   {text.walletTitle} 👛
@@ -410,29 +426,6 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
                     <option value="SIX">{text.exitSix}</option>
                   </select>
                   <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] font-black text-[#fff2d7]">▼</span>
-                </div>
-              </div>
-
-              <div className="border-b-[2px] border-[#e8d4b7] pb-4 pt-1">
-                <p className="mb-3 text-center text-[16px] font-black uppercase tracking-wide text-[#5c3214]">{text.difficulty}</p>
-                <div className="flex w-full overflow-hidden rounded-full border-[3px] border-[#a96639] bg-[#cbaa85] shadow-[0_4px_6px_rgba(0,0,0,0.2)]">
-                  {difficultyButtonOrder.map((difficulty) => {
-                    const isActive = draft.difficultyLevel === difficulty
-                    return (
-                      <button
-                        className={`flex-1 py-1.5 text-[14px] font-black uppercase transition-colors ${
-                          isActive
-                            ? 'bg-gradient-to-b from-[#f5d480] to-[#eab044] text-[#5c3214] shadow-inner'
-                            : 'bg-[#cbaa85] text-[#5c3214]/60 hover:bg-[#d5b896]'
-                        }`}
-                        key={difficulty}
-                        onClick={() => updateDraft('difficultyLevel', difficulty)}
-                        type="button"
-                      >
-                        {difficultyLabel[difficulty]}
-                      </button>
-                    )
-                  })}
                 </div>
               </div>
 

@@ -17,7 +17,6 @@ const copy = {
     currentSelection: 'CONFIG ACTIVA',
     creator: 'CREADOR',
     status: 'ESTADO',
-    difficulty: 'DIFICULTAD',
     answerTime: 'RESPUESTA',
     turnTime: 'TURNO',
     exitRule: 'SALIDA',
@@ -33,9 +32,6 @@ const copy = {
     draft: 'Borrador',
     locked: 'Bloqueada',
     disabled: 'Deshabilitada',
-    easy: 'Facil',
-    medium: 'Media',
-    hard: 'Dificil',
     exitFive: 'Sacar 5',
     exitEven: 'Par',
     exitSix: 'Sacar 6',
@@ -49,7 +45,6 @@ const copy = {
     currentSelection: 'ACTIVE CONFIG',
     creator: 'CREATOR',
     status: 'STATUS',
-    difficulty: 'DIFFICULTY',
     answerTime: 'ANSWER',
     turnTime: 'TURN',
     exitRule: 'EXIT',
@@ -65,9 +60,6 @@ const copy = {
     draft: 'Draft',
     locked: 'Locked',
     disabled: 'Disabled',
-    easy: 'Easy',
-    medium: 'Medium',
-    hard: 'Hard',
     exitFive: 'Roll 5',
     exitEven: 'Even',
     exitSix: 'Roll 6',
@@ -153,12 +145,6 @@ export function ConfigBrowserView() {
     () => configs.find((config) => config.config_id.toString() === selectedConfigId) || null,
     [configs, selectedConfigId],
   )
-
-  const difficultyLabel = (value: number) => {
-    if (value === 0) return ui.easy
-    if (value === 2) return ui.hard
-    return ui.medium
-  }
 
   const exitRuleLabel = (value: number) => {
     if (value === 1) return ui.exitEven
@@ -271,10 +257,6 @@ export function ConfigBrowserView() {
                       <div className="rounded-[18px] border border-[#8d613d] bg-[#5d341f]/80 px-3 py-2">
                         <p className="text-[10px] uppercase tracking-[0.14em] text-[#ffcf92]">{ui.creator}</p>
                         <p className="mt-1 truncate">{shortenAddress(config.creator)}</p>
-                      </div>
-                      <div className="rounded-[18px] border border-[#8d613d] bg-[#5d341f]/80 px-3 py-2">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-[#ffcf92]">{ui.difficulty}</p>
-                        <p className="mt-1">{difficultyLabel(config.difficulty_level)}</p>
                       </div>
                       <div className="rounded-[18px] border border-[#8d613d] bg-[#5d341f]/80 px-3 py-2">
                         <p className="text-[10px] uppercase tracking-[0.14em] text-[#ffcf92]">{ui.answerTime}</p>
