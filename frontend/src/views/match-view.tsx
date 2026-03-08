@@ -311,6 +311,17 @@ const rewardByPlace: Record<PodiumPlace, number> = {
   4: 100,
 }
 
+const xpRewardByPlace: Record<PodiumPlace, number> = {
+  1: 100,
+  2: 75,
+  3: 50,
+  4: 25,
+}
+
+const XP_REWARD_CORRECT_ANSWER = 10
+const XP_REWARD_EXIT_HOME = 5
+const XP_REWARD_CAPTURE = 15
+
 const computePlayerProgressScore = (params: {
   playerId: string
   tokenTrackSteps: Record<string, number>
@@ -1149,7 +1160,7 @@ const createInitialTokenTrackSteps = (inputTokens: MatchToken[]) => {
 export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps) {
   const [searchParams] = useSearchParams()
   const { username } = useControllerWallet()
-  const { awardCoins } = usePlayerProfileActions()
+  const { awardCoins, awardXp } = usePlayerProfileActions()
   const language = useAppSettingsStore((state) => state.language)
   const questionDifficulty = useAppSettingsStore((state) => state.questionDifficulty)
   const selectedBoardThemeId = useAppSettingsStore((state) => state.selectedBoardThemeId)
@@ -1875,6 +1886,10 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
       })
 
       if (answeredCorrectly) {
+        if (currentTurnPlayerId === humanPlayerId) {
+          awardXp(XP_REWARD_CORRECT_ANSWER)
+        }
+
         logEvent(
           'question',
           ui.questionAnsweredCorrectly(currentPlayerName, dice.dieA, dice.dieB),
@@ -1924,10 +1939,12 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     },
     [
       advanceTurn,
+      awardXp,
       clearTriviaTimers,
       currentTurnPlayerId,
       dice.dieA,
       dice.dieB,
+      humanPlayerId,
       isAiControlledTurn,
       logEvent,
       markBotHeartbeat,
@@ -1975,10 +1992,11 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
 
     if (localPlacement) {
       awardCoins(localPlacement.reward)
+      awardXp(xpRewardByPlace[localPlacement.place])
     }
 
     rewardsGrantedRef.current = true
-  }, [awardCoins, finalPlacements, humanPlayerId, showFinalClassification, showVictoryPreviewControl])
+  }, [awardCoins, awardXp, finalPlacements, humanPlayerId, showFinalClassification, showVictoryPreviewControl])
 
   useEffect(() => {
     if (turnTimeoutRef.current !== null) {
@@ -2434,6 +2452,10 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
 
       if (move.from <= 0) {
         nextTokenTrackSteps[movedToken.id] = 0
+
+        if (movedToken.ownerId === humanPlayerId) {
+          awardXp(XP_REWARD_EXIT_HOME)
+        }
       } else if (isTrackPosition(move.from)) {
         const trackStepCount = move.path.filter((position) => isTrackPosition(position)).length
         nextTokenTrackSteps[movedToken.id] = (nextTokenTrackSteps[movedToken.id] || 0) + trackStepCount
@@ -2462,6 +2484,10 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
         nextTokenTrackSteps[capturedToken.id] = 0
         nextBonusPendingValue += 20
         consumedNext.bonus = false
+
+        if (movedToken.ownerId === humanPlayerId) {
+          awardXp(XP_REWARD_CAPTURE)
+        }
 
         logEvent(
           'capture',

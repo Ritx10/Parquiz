@@ -10,13 +10,18 @@ const premiumSkinModules = import.meta.glob('../assets/capis/CapisPago/*.{png,jp
   import: 'default',
 }) as Record<string, string>
 
+const rewardSkinModules = import.meta.glob('../assets/capis/CapiEspecial/*.{png,jpg,jpeg,webp,avif}', {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>
+
 type SkinPresentation = {
   name: LocalizedText
   subtitle: LocalizedText
 }
 
 export type PlayerSkinId = string
-export type PlayerSkinTier = 'free' | 'premium'
+export type PlayerSkinTier = 'free' | 'premium' | 'reward'
 
 export type PlayerSkin = {
   id: PlayerSkinId
@@ -27,6 +32,7 @@ export type PlayerSkin = {
   src: string
   subtitle: LocalizedText
   tier: PlayerSkinTier
+  requiredLevel?: number
 }
 
 const freeSkinPresentationBySlug: Record<string, SkinPresentation> = {
@@ -67,6 +73,13 @@ const premiumSkinPresentationBySlug: Record<string, SkinPresentation> = {
   'image-22': { name: { es: 'Capi Cisne', en: 'Capi Swan' }, subtitle: { es: 'Tutu y alas blancas', en: 'Tutu and white wings' } },
 }
 
+const rewardSkinPresentationBySlug: Record<string, SkinPresentation> = {
+  'pasted-graphic-9': {
+    name: { es: 'Capi Especial', en: 'Special Capi' },
+    subtitle: { es: 'Recompensa exclusiva de nivel 10', en: 'Exclusive level 10 reward' },
+  },
+}
+
 const sortEntries = (modules: Record<string, string>) => {
   return Object.entries(modules).sort(([left], [right]) => left.localeCompare(right, 'en'))
 }
@@ -90,7 +103,11 @@ const resolvePresentation = (
   fallbackIndex: number,
 ): SkinPresentation => {
   const mappedPresentation =
-    tier === 'free' ? freeSkinPresentationBySlug[slug] : premiumSkinPresentationBySlug[slug]
+    tier === 'free'
+      ? freeSkinPresentationBySlug[slug]
+      : tier === 'premium'
+        ? premiumSkinPresentationBySlug[slug]
+        : rewardSkinPresentationBySlug[slug]
 
   if (mappedPresentation) {
     return mappedPresentation
@@ -104,11 +121,14 @@ const resolvePresentation = (
     subtitle:
       tier === 'free'
         ? { es: 'Skin gratuita inicial', en: 'Free starter skin' }
-        : { es: 'Skin premium de tienda', en: 'Premium shop skin' },
+        : tier === 'premium'
+          ? { es: 'Skin premium de tienda', en: 'Premium shop skin' }
+          : { es: 'Recompensa especial por nivel', en: 'Special level reward' },
   }
 }
 
-const buildSkinId = (tier: PlayerSkinTier, index: number) => `capi-${tier === 'free' ? 'gratis' : 'pago'}-${index + 1}`
+const buildSkinId = (tier: PlayerSkinTier, index: number) =>
+  `capi-${tier === 'free' ? 'gratis' : tier === 'premium' ? 'pago' : 'especial'}-${index + 1}`
 
 const legacySkinIdGroups = [
   ['capi-princess', 'bear-princess'],
@@ -149,7 +169,25 @@ const premiumSkins = sortEntries(premiumSkinModules).map<PlayerSkin>(([modulePat
   }
 })
 
-export const playerSkins: PlayerSkin[] = [...freeSkins, ...premiumSkins]
+const rewardSkins = sortEntries(rewardSkinModules).map<PlayerSkin>(([modulePath, src], index) => {
+  const presentation = resolvePresentation(getPathSlug(modulePath), 'reward', index)
+
+  return {
+    id: buildSkinId('reward', index),
+    index: freeSkins.length + premiumSkins.length + index,
+    legacyIds: [],
+    name: presentation.name,
+    price: 0,
+    requiredLevel: 10,
+    src,
+    subtitle: presentation.subtitle,
+    tier: 'reward',
+  }
+})
+
+export const playerSkins: PlayerSkin[] = [...freeSkins, ...premiumSkins, ...rewardSkins]
+
+export const specialRewardSkinId: PlayerSkinId | null = rewardSkins[0]?.id || null
 
 export const playerSkinIdOrder: PlayerSkinId[] = playerSkins.map((skin) => skin.id)
 

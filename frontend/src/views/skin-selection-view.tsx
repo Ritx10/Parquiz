@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GameAvatar } from '../components/game/game-avatar'
 import { getPlayerSkinName, getPlayerSkinSubtitle, getStarterPlayerSkins } from '../lib/player-skins'
+import { usePlayerProfileActions } from '../lib/use-player-profile'
 import { useAppSettingsStore } from '../store/app-settings-store'
 
 const copy = {
@@ -27,7 +28,7 @@ export function SkinSelectionView() {
   const navigate = useNavigate()
   const language = useAppSettingsStore((state) => state.language)
   const persistedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
-  const setSelectedSkinId = useAppSettingsStore((state) => state.setSelectedSkinId)
+  const { setSelectedSkinId } = usePlayerProfileActions()
   const [selectedSkinId, setLocalSelectedSkinId] = useState<null | string>(persistedSkinId)
   const starterSkins = useMemo(() => getStarterPlayerSkins(), [])
   const ui = copy[language]

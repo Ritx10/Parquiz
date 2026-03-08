@@ -42,6 +42,16 @@ type AppSettingsState = {
   selectedTokenSkinId: TokenSkinId
   ownedDiceSkinIds: DiceSkinId[]
   ownedTokenSkinIds: TokenSkinId[]
+  hydrateCustomizationState: (customization: {
+    ownedBoardThemeIds: BoardThemeId[]
+    ownedDiceSkinIds: DiceSkinId[]
+    ownedPlayerSkinIds: PlayerSkinId[]
+    ownedTokenSkinIds: TokenSkinId[]
+    selectedBoardThemeId: BoardThemeId
+    selectedDiceSkinId: DiceSkinId
+    selectedSkinId: null | string
+    selectedTokenSkinId: TokenSkinId
+  }) => void
   setLanguage: (language: AppLanguage) => void
   setSoundEnabled: (enabled: boolean) => void
   setAiDifficulty: (difficulty: AiDifficulty) => void
@@ -242,6 +252,31 @@ export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
   soundEnabled: initialSettings.soundEnabled,
   selectedConfigId: initialSettings.selectedConfigId,
   turnTimeLimitSecs: initialSettings.turnTimeLimitSecs,
+  hydrateCustomizationState: (customization) => {
+    set({
+      ownedBoardThemeIds: normalizeOwnedBoardThemeIds(
+        customization.ownedBoardThemeIds,
+        normalizeBoardThemeId(customization.selectedBoardThemeId),
+      ),
+      ownedDiceSkinIds: normalizeOwnedDiceSkinIds(
+        customization.ownedDiceSkinIds,
+        normalizeDiceSkinId(customization.selectedDiceSkinId),
+      ),
+      ownedPlayerSkinIds: normalizeOwnedPlayerSkinIds(
+        customization.ownedPlayerSkinIds,
+        normalizePlayerSkinId(customization.selectedSkinId),
+      ),
+      ownedTokenSkinIds: normalizeOwnedTokenSkinIds(
+        customization.ownedTokenSkinIds,
+        normalizeTokenSkinId(customization.selectedTokenSkinId),
+      ),
+      selectedBoardThemeId: normalizeBoardThemeId(customization.selectedBoardThemeId),
+      selectedDiceSkinId: normalizeDiceSkinId(customization.selectedDiceSkinId),
+      selectedSkinId: normalizePlayerSkinId(customization.selectedSkinId),
+      selectedTokenSkinId: normalizeTokenSkinId(customization.selectedTokenSkinId),
+    })
+    persistSettings(toPersistedSettings(get()))
+  },
   setLanguage: (language) => {
     set({ language })
     persistSettings(toPersistedSettings(get()))

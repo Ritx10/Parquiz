@@ -1,5 +1,5 @@
 import { useAccount } from '@starknet-react/core'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { setPlayerCustomization } from '../api'
 import { GameAvatar } from '../components/game/game-avatar'
@@ -38,7 +38,7 @@ import {
   playerSkins,
 } from '../lib/player-skins'
 import { useControllerWallet } from '../lib/starknet/use-controller-wallet'
-import { usePlayerProfile } from '../lib/use-player-profile'
+import { usePlayerProfile, usePlayerProfileActions } from '../lib/use-player-profile'
 import { GameConfigView } from './game-config-view'
 import { type AiDifficulty, useAppSettingsStore } from '../store/app-settings-store'
 
@@ -85,8 +85,9 @@ type ShopItem = {
   name?: string
   subtitle?: string
   price: number
+  requiredLevel?: number
   rarityLabel?: ShopRarityLabel
-  tier?: 'free' | 'premium'
+  tier?: 'free' | 'premium' | 'reward'
   tokenSkinId?: TokenSkinId
   toneClass: string
 }
@@ -181,8 +182,11 @@ const homeCopyByLanguage = {
     equippedItem: 'EQUIPADA',
     levelLabel: 'Nivel',
     prestigeLabel: 'Prestigio',
+    xpLabel: 'XP',
     starterSkin: 'GRATIS',
     premiumSkin: 'PREMIUM',
+    rewardSkin: 'RECOMPENSA',
+    levelRequirement: 'NIVEL',
     freeTokenTag: 'GRATIS',
     premiumTokenTag: 'PREMIUM',
     freeTokenSubtitle: 'Color base disponible',
@@ -222,8 +226,11 @@ const homeCopyByLanguage = {
     equippedItem: 'EQUIPPED',
     levelLabel: 'Level',
     prestigeLabel: 'Prestige',
+    xpLabel: 'XP',
     starterSkin: 'FREE',
     premiumSkin: 'PREMIUM',
+    rewardSkin: 'REWARD',
+    levelRequirement: 'LEVEL',
     freeTokenTag: 'FREE',
     premiumTokenTag: 'PREMIUM',
     freeTokenSubtitle: 'Base color available',
@@ -309,8 +316,6 @@ export function HomeView() {
   const selectedLobby = initialLobbies[0]
   const activePlayers = selectedLobby.seats
   const me = activePlayers.find((player) => player.id === currentUserId)
-  const readyCount = activePlayers.filter((seat) => seat.ready).length
-  const levelProgress = Math.min(100, 42 + readyCount * 16 + (me?.ready ? 14 : 0))
 
   const [isConfigOpen, setIsConfigOpen] = useState(false)
   const [isShopOpen, setIsShopOpen] = useState(false)
@@ -327,16 +332,18 @@ export function HomeView() {
   const selectedDiceSkinId = useAppSettingsStore((state) => state.selectedDiceSkinId)
   const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
   const selectedTokenSkinId = useAppSettingsStore((state) => state.selectedTokenSkinId)
-  const setSelectedBoardThemeId = useAppSettingsStore((state) => state.setSelectedBoardThemeId)
-  const setSelectedDiceSkinId = useAppSettingsStore((state) => state.setSelectedDiceSkinId)
-  const setSelectedSkinId = useAppSettingsStore((state) => state.setSelectedSkinId)
-  const setSelectedTokenSkinId = useAppSettingsStore((state) => state.setSelectedTokenSkinId)
-  const unlockBoardTheme = useAppSettingsStore((state) => state.unlockBoardTheme)
-  const unlockDiceSkin = useAppSettingsStore((state) => state.unlockDiceSkin)
-  const unlockPlayerSkin = useAppSettingsStore((state) => state.unlockPlayerSkin)
-  const unlockTokenSkin = useAppSettingsStore((state) => state.unlockTokenSkin)
   const { isConnected, username } = useControllerWallet()
   const playerProfile = usePlayerProfile()
+  const {
+    setSelectedBoardThemeId,
+    setSelectedDiceSkinId,
+    setSelectedSkinId,
+    setSelectedTokenSkinId,
+    unlockBoardTheme,
+    unlockDiceSkin,
+    unlockPlayerSkin,
+    unlockTokenSkin,
+  } = usePlayerProfileActions()
   const ui = homeCopyByLanguage[language]
   const selectedSkinSrc = getPlayerSkinSrc(selectedSkinId)
   const selectedTokenTheme = getPlayerVisualTheme(selectedTokenSkinId)
@@ -347,6 +354,10 @@ export function HomeView() {
   const displayUsername = playerProfile.username || username || 'PARQUIZ_PLAYER_77'
   const levelLabel = `${ui.levelLabel} ${playerProfile.level}`
   const prestigeLabel = `${ui.prestigeLabel} ${playerProfile.prestige}`
+  const xpLabel = `${playerProfile.xp}/${playerProfile.xpForNextLevel} ${ui.xpLabel}`
+  const previousLevelRef = useRef(playerProfile.level)
+  const previousXpRef = useRef(playerProfile.xp)
+  const [animatedLevelProgress, setAnimatedLevelProgress] = useState(playerProfile.xpProgressPercent)
   const shopItemsByTab = useMemo<Record<ShopTab, ShopItem[]>>(
     () => ({
       avatars: [
@@ -357,8 +368,9 @@ export function HomeView() {
           mediaSrc: skin.src,
           name: getPlayerSkinName(skin.id, language) || '',
           subtitle: getPlayerSkinSubtitle(skin.id, language) || '',
-          price: skin.price,
-          rarityLabel: deriveShopRarityLabel(skin.price, language),
+            price: skin.price,
+            requiredLevel: skin.requiredLevel,
+            rarityLabel: deriveShopRarityLabel(skin.price, language),
           toneClass:
             index % 3 === 0
               ? 'from-[#ffefdb] to-[#fddcab]'
@@ -414,6 +426,39 @@ export function HomeView() {
   const coinLabel = coinBalance.toLocaleString('en-US')
   const [cosmeticsSyncMessage, setCosmeticsSyncMessage] = useState<null | string>(null)
   const [cosmeticsSyncPending, setCosmeticsSyncPending] = useState(false)
+
+  useEffect(() => {
+    const nextProgress = playerProfile.xpProgressPercent
+    const leveledUp = playerProfile.level > previousLevelRef.current || playerProfile.xp < previousXpRef.current
+
+    let resetTimeout: null | number = null
+    let refillTimeout: null | number = null
+
+    if (leveledUp) {
+      setAnimatedLevelProgress(100)
+      resetTimeout = window.setTimeout(() => {
+        setAnimatedLevelProgress(0)
+        refillTimeout = window.setTimeout(() => {
+          setAnimatedLevelProgress(nextProgress)
+        }, 140)
+      }, 520)
+    } else {
+      setAnimatedLevelProgress(nextProgress)
+    }
+
+    previousLevelRef.current = playerProfile.level
+    previousXpRef.current = playerProfile.xp
+
+    return () => {
+      if (resetTimeout !== null) {
+        window.clearTimeout(resetTimeout)
+      }
+
+      if (refillTimeout !== null) {
+        window.clearTimeout(refillTimeout)
+      }
+    }
+  }, [playerProfile.level, playerProfile.xp, playerProfile.xpProgressPercent])
 
   const syncCustomization = useCallback(
     async (nextSkinId: null | string, nextDiceSkinId: DiceSkinId, nextTokenSkinId: TokenSkinId) => {
@@ -538,8 +583,21 @@ export function HomeView() {
                     {displayUsername}
                   </p>
 
-                  <div className="mt-1.5 rounded-full border border-[#b07f53] bg-[#3f2341] p-1">
-                    <div className="h-3 rounded-full bg-gradient-to-r from-[#44d0ff] via-[#66c9ff] to-[#3d79ce]" style={{ width: `${levelProgress}%` }} />
+                  <div className="mt-1.5 rounded-[18px] border border-[#b07f53] bg-[linear-gradient(180deg,#2c1830_0%,#43224a_100%)] p-1 shadow-[inset_0_1px_0_rgba(255,238,196,0.16)]">
+                    <div className="relative h-5 overflow-hidden rounded-full border border-[#5d3e76] bg-[linear-gradient(180deg,rgba(18,8,28,0.9),rgba(38,21,58,0.92))]">
+                      <span className="pointer-events-none absolute inset-y-[2px] left-2 right-2 rounded-full bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent)] animate-[xpTrackShift_4.4s_linear_infinite]" />
+                      <div
+                        className="relative h-full rounded-full bg-[linear-gradient(90deg,#3fe2ff_0%,#56d8ff_28%,#86cbff_56%,#8a74ff_100%)] shadow-[0_0_16px_rgba(90,215,255,0.48)] transition-[width] duration-[900ms] ease-out"
+                        style={{ width: `${animatedLevelProgress}%` }}
+                      >
+                        <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.42),rgba(255,255,255,0.04))]" />
+                        <span className="pointer-events-none absolute inset-y-0 right-[-18%] w-1/3 bg-[linear-gradient(115deg,transparent_0%,rgba(255,255,255,0.12)_28%,rgba(255,255,255,0.8)_48%,rgba(255,255,255,0.12)_66%,transparent_100%)] animate-[xpShine_2.2s_ease-in-out_infinite]" />
+                      </div>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-2 px-1 text-[10px] font-black uppercase tracking-[0.18em] text-[#d3f4ff] sm:text-[11px]">
+                      <span>{xpLabel}</span>
+                      <span>{animatedLevelProgress.toFixed(0)}%</span>
+                    </div>
                   </div>
 
                   <div className="mt-1 flex items-center gap-2 text-[13px] font-black uppercase tracking-wide text-[#ffe7a7]">
@@ -859,9 +917,16 @@ export function HomeView() {
                         const isEquippedDice = Boolean(item.diceSkinId && item.diceSkinId === selectedDiceSkinId)
                         const isOwnedToken = Boolean(item.tokenSkinId && ownedTokenSkinSet.has(item.tokenSkinId))
                         const isEquippedToken = Boolean(item.tokenSkinId && item.tokenSkinId === selectedTokenSkinId)
+                        const isLevelLocked = Boolean(
+                          item.isSkinItem && item.requiredLevel && !isOwnedSkin && playerProfile.level < item.requiredLevel,
+                        )
                         const isEquippedItem = isEquippedBoardTheme || isEquippedSkin || isEquippedDice || isEquippedToken
 
                         const handleItemAction = () => {
+                          if (isLevelLocked) {
+                            return
+                          }
+
                           if (item.boardThemeId) {
                             if (!isOwnedBoardTheme) {
                               unlockBoardTheme(item.boardThemeId)
@@ -906,6 +971,8 @@ export function HomeView() {
                         const actionLabel = item.isSkinItem
                           ? isEquippedSkin
                             ? ui.equippedItem
+                            : isLevelLocked
+                              ? `${ui.levelRequirement} ${item.requiredLevel}`
                             : !isOwnedSkin
                               ? ui.buyItem
                               : ui.equipItem
@@ -988,7 +1055,7 @@ export function HomeView() {
                               </p>
                               {item.isSkinItem ? (
                                 <span className="rounded-full border border-[#b98236] bg-gradient-to-b from-[#ffe28f] to-[#f3b949] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-[#5f3817]">
-                                  {item.isStarterSkin ? ui.starterSkin : ui.premiumSkin}
+                                  {item.tier === 'reward' ? ui.rewardSkin : item.isStarterSkin ? ui.starterSkin : ui.premiumSkin}
                                 </span>
                               ) : item.isBoardThemeItem && item.rarityLabel ? (
                                 <span className="rounded-full border border-[#b98236] bg-gradient-to-b from-[#ffe28f] to-[#f3b949] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-[#5f3817]">
@@ -1012,17 +1079,28 @@ export function HomeView() {
                           </>
                         ) : null}
                         <div className="mt-2 rounded-full border border-[#d2b083] bg-[#e8cfaa] px-3 py-1 text-center font-display text-[34px] leading-none text-[#5a3417] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
-                          <span className="mr-1 text-[#f6be2f]">🪙</span>
-                          {item.price}
+                          {item.isSkinItem && item.tier === 'reward' ? (
+                            <>
+                              <span className="mr-1 text-[#f6be2f]">⭐</span>
+                              {ui.levelRequirement} {item.requiredLevel}
+                            </>
+                          ) : (
+                            <>
+                              <span className="mr-1 text-[#f6be2f]">🪙</span>
+                              {item.price}
+                            </>
+                          )}
                         </div>
                         {actionLabel ? (
                           <button
                             className={`mt-2 w-full rounded-full border px-3 py-1.5 font-display text-lg uppercase tracking-wide transition ${
                               isEquippedItem
                                 ? 'border-[#2a6719] bg-gradient-to-b from-[#73df58] to-[#3f9f22] text-white shadow-[inset_0_2px_0_rgba(210,255,195,0.8),0_4px_0_rgba(38,95,22,0.85)]'
+                                : isLevelLocked
+                                  ? 'cursor-not-allowed border-[#7e6a56] bg-gradient-to-b from-[#b2a08a] to-[#8f7a63] text-[#f7edd9] shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_4px_0_rgba(110,89,67,0.88)] opacity-85'
                                 : 'border-[#8f562f] bg-gradient-to-b from-[#a46539] to-[#7a4727] text-[#f7ddad] shadow-[inset_0_1px_0_rgba(255,225,189,0.45),0_4px_0_rgba(102,58,29,0.88)] hover:brightness-105'
                             }`}
-                            disabled={cosmeticsSyncPending}
+                            disabled={cosmeticsSyncPending || isLevelLocked}
                             onClick={handleItemAction}
                             type="button"
                           >
@@ -1100,6 +1178,32 @@ export function HomeView() {
           }
           50% {
             transform: scale(1.04);
+          }
+        }
+
+        @keyframes xpShine {
+          0% {
+            transform: translateX(-120%);
+            opacity: 0;
+          }
+          20% {
+            opacity: 0.35;
+          }
+          55% {
+            opacity: 0.9;
+          }
+          100% {
+            transform: translateX(220%);
+            opacity: 0;
+          }
+        }
+
+        @keyframes xpTrackShift {
+          0% {
+            transform: translateX(-18%);
+          }
+          100% {
+            transform: translateX(18%);
           }
         }
       `}</style>

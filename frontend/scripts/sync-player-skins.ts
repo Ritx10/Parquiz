@@ -116,10 +116,12 @@ const projectRoot = resolve(import.meta.dir, '..')
 const assetsRoot = join(projectRoot, 'src', 'assets', 'capis')
 const freeDestination = join(assetsRoot, 'CapisGratis')
 const premiumDestination = join(assetsRoot, 'CapisPago')
+const rewardDestination = join(assetsRoot, 'CapiEspecial')
 
 const freeSource = findDownloadsDirectory('CapisGratis')
 const premiumSource = findDownloadsDirectory('CapisPago')
 const extraPremiumSource = findDownloadsDirectory('Capi')
+const rewardSource = findDownloadsDirectory('CapiEspecial')
 
 if (!freeSource) {
   throw new Error('Missing source folder in Downloads: CapisGratis')
@@ -143,8 +145,22 @@ const premiumCount = syncSkinGroup({
   sourceDirectories: premiumSourceDirectories,
 })
 
+const rewardCount = rewardSource
+  ? syncSkinGroup({
+      destinationDirectory: rewardDestination,
+      groupName: 'especial',
+      sourceDirectories: [rewardSource],
+    })
+  : 0
+
 console.log(`Synced ${freeCount} free capi skins from Downloads/CapisGratis`)
 console.log(`Synced ${premiumCount} premium capi skins from ${premiumSourceDirectories.map((path) => path.replace(`${homedir()}/`, '~/')).join(', ')}`)
+
+if (rewardSource) {
+  console.log(`Synced ${rewardCount} reward capi skins from ${rewardSource.replace(`${homedir()}/`, '~/')}`)
+} else {
+  console.log('Optional Downloads/CapiEspecial folder was not found; no reward skins were imported.')
+}
 
 if (!extraPremiumSource) {
   console.log('Optional Downloads/Capi folder was not found; no extra premium skins were imported.')

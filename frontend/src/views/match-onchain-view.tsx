@@ -22,6 +22,7 @@ import { diceSkinIdFromIndex, getDefaultDiceSkinIdByColor, type DiceSkinId } fro
 import { getPlayerSkinSrc, playerSkinIdFromIndex } from '../lib/player-skins'
 import { getPlayerVisualThemeByColor } from '../lib/player-color-themes'
 import { getHydratedQuestion } from '../lib/questions/local-question-bank'
+import { usePlayerProfileActions } from '../lib/use-player-profile'
 import { useControllerUsernames } from '../lib/starknet/use-controller-usernames'
 import { shortenAddress, useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import { useAppSettingsStore } from '../store/app-settings-store'
@@ -32,6 +33,9 @@ const TRACK_SQUARE_UI_OFFSET = 4
 const TRACK_LENGTH = 68
 const BOARD_DEFAULT_SAFE_TRACK_REFS = [8, 13, 25, 30, 42, 47, 59, 64]
 const TOKEN_STEP_ANIMATION_MS = 105
+const XP_REWARD_CORRECT_ANSWER = 10
+const XP_REWARD_EXIT_HOME = 5
+const XP_REWARD_CAPTURE = 15
 
 type DiceFaceValue = 1 | 2 | 3 | 4 | 5 | 6
 
@@ -112,6 +116,13 @@ const rewardByPlace: Record<PodiumPlace, number> = {
   2: 500,
   3: 250,
   4: 100,
+}
+
+const xpRewardByPlace: Record<PodiumPlace, number> = {
+  1: 100,
+  2: 75,
+  3: 50,
+  4: 25,
 }
 
 const announcementGlassTintByThemeId = {
@@ -1198,6 +1209,7 @@ export function MatchOnchainView() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { account } = useAccount()
   const { address, username } = useControllerWallet()
+  const { awardCoins, awardXp } = usePlayerProfileActions()
   const language = useAppSettingsStore((state) => state.language)
   const selectedBoardThemeId = useAppSettingsStore((state) => state.selectedBoardThemeId)
   const selectedDiceSkinId = useAppSettingsStore((state) => state.selectedDiceSkinId)
@@ -1255,6 +1267,8 @@ export function MatchOnchainView() {
   const winnerAnnouncementTimeoutRef = useRef<null | number>(null)
   const lastAnnouncedWinnerRef = useRef<null | string>(null)
   const onTrackedEventRef = useRef<(event: DojoTrackedEvent) => void>(() => undefined)
+  const rewardsGrantedRef = useRef(false)
+  const rewardedEventKeysRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     setGameIdInput(searchParams.get('gameId') || '')
@@ -1303,6 +1317,8 @@ export function MatchOnchainView() {
   useEffect(() => {
     lastAnnouncedWinnerRef.current = null
     lastResolvedQuestionRef.current = null
+    rewardsGrantedRef.current = false
+    rewardedEventKeysRef.current.clear()
     setActiveAnnouncementPlacement(null)
     setResolvedAnswerDisplay(null)
     setShowFinalClassification(false)
@@ -1621,6 +1637,24 @@ export function MatchOnchainView() {
     }, 3200)
   }, [rankedPlacements, snapshot, winnerAddress])
 
+  useEffect(() => {
+    if (!address || rewardsGrantedRef.current || !showFinalClassification || finalPlacements.length === 0) {
+      return
+    }
+
+    const normalizedAddress = normalizeAddressForCompare(address)
+    const localPlacement = finalPlacements.find(
+      (placement) => normalizeAddressForCompare(placement.id) === normalizedAddress,
+    )
+
+    if (localPlacement) {
+      awardCoins(localPlacement.reward)
+      awardXp(xpRewardByPlace[localPlacement.place])
+    }
+
+    rewardsGrantedRef.current = true
+  }, [address, awardCoins, awardXp, finalPlacements, showFinalClassification])
+
   const safeSquares = useMemo(() => {
     const source = snapshot?.safe_track_square_refs.length
       ? snapshot.safe_track_square_refs
@@ -1786,9 +1820,43 @@ export function MatchOnchainView() {
         }, 1800)
       }
 
+      const normalizedAddress = normalizeAddressForCompare(address)
+
+      if (normalizedAddress) {
+        if (event.type === 'AnswerRevealed' && event.payload.correct) {
+          const eventPlayer = normalizeAddressForCompare(event.payload.player)
+          const rewardKey = `answer:${event.payload.question_id.toString()}:${eventPlayer}`
+
+          if (eventPlayer === normalizedAddress && !rewardedEventKeysRef.current.has(rewardKey)) {
+            rewardedEventKeysRef.current.add(rewardKey)
+            awardXp(XP_REWARD_CORRECT_ANSWER)
+          }
+        }
+
+        if (event.type === 'TokenCaptured') {
+          const eventPlayer = normalizeAddressForCompare(event.payload.attacker)
+          const rewardKey = `capture:${event.payload.square_ref}:${event.payload.defender_token_id}:${eventPlayer}`
+
+          if (eventPlayer === normalizedAddress && !rewardedEventKeysRef.current.has(rewardKey)) {
+            rewardedEventKeysRef.current.add(rewardKey)
+            awardXp(XP_REWARD_CAPTURE)
+          }
+        }
+
+        if (event.type === 'TokenMoved' && event.payload.from_square_ref === 0) {
+          const eventPlayer = normalizeAddressForCompare(event.payload.player)
+          const rewardKey = `exit:${event.payload.token_id}:${event.payload.to_square_ref}:${eventPlayer}`
+
+          if (eventPlayer === normalizedAddress && !rewardedEventKeysRef.current.has(rewardKey)) {
+            rewardedEventKeysRef.current.add(rewardKey)
+            awardXp(XP_REWARD_EXIT_HOME)
+          }
+        }
+      }
+
       setLogEvents((current) => [nextLog, ...current].slice(0, 120))
     },
-    [language, playerLabelFromAddress, playersByAddress, ui.questionCategory],
+    [address, awardXp, language, playerLabelFromAddress, playersByAddress, ui.questionCategory],
   )
 
   useEffect(() => {
