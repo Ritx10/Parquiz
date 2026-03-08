@@ -18,9 +18,11 @@ pub mod lobby_system {
         GameStarted, LobbyCreated, PlayerJoined, PlayerReadyChanged, TurnStarted,
     };
     use crate::models::{
-        BonusState, DiceState, Game, GameConfig, GamePlayer, GameRuntimeConfig, GameSeat,
-        GlobalState, LobbyCodeIndex, PublicLobbyIndex, Token, TurnState,
+        BonusState, DiceState, Game, GameConfig, GamePlayer, GamePlayerCustomization,
+        GameRuntimeConfig, GameSeat, GlobalState, LobbyCodeIndex, PublicLobbyIndex, Token,
+        TurnState,
     };
+    use crate::systems::customization_system::customization_system::load_player_customization;
     use crate::systems::egs_system::egs_system::{
         assert_bound_token_playable, sync_bound_player_state,
     };
@@ -207,7 +209,7 @@ pub mod lobby_system {
     #[generate_trait]
     impl InternalImpl of InternalTrait {
         fn world_default(self: @ContractState) -> dojo::world::WorldStorage {
-            self.world(@"parchis_trivia")
+            self.world(@"parquiz")
         }
     }
 
@@ -253,6 +255,7 @@ pub mod lobby_system {
         world.write_model(@game);
         world.write_model(@host);
         world.write_model(@seat);
+        snapshot_player_customization(ref world, game_id, caller);
 
         game_id
     }
@@ -290,6 +293,7 @@ pub mod lobby_system {
         world.write_model(@game);
         world.write_model(@player);
         world.write_model(@game_seat);
+        snapshot_player_customization(ref world, game_id, caller);
         world.emit_event(@PlayerJoined { game_id, player: caller, seat });
 
         game_id
@@ -307,11 +311,11 @@ pub mod lobby_system {
             turn_time_limit_secs: config.turn_time_limit_secs,
             exit_home_rule: config.exit_home_rule,
             difficulty_level: config.difficulty_level,
-            shop_enabled_on_safe_squares: config.shop_enabled_on_safe_squares,
         };
 
         initialize_tokens_for_game(ref world, game.game_id);
         initialize_bonus_state_for_game(ref world, game.game_id);
+        snapshot_all_player_customizations(ref world, game.game_id);
 
         let active_player = first_active_player(ref world, game.game_id);
 
@@ -332,9 +336,6 @@ pub mod lobby_system {
             question_id: 0,
             question_answered: false,
             question_correct: false,
-            shop_enabled: false,
-            shop_square_ref: 0,
-            purchases_this_turn: 0,
             has_moved_token: false,
             first_moved_token_id: 0,
             deadline: now + config.turn_time_limit_secs.into(),
@@ -505,7 +506,6 @@ pub mod lobby_system {
                         track_pos: 0,
                         home_lane_pos: 0,
                         steps_total: 0,
-                        has_shield: false,
                     };
                     world.write_model(@token);
 
@@ -535,6 +535,37 @@ pub mod lobby_system {
                     bonus_consumed: false,
                 };
                 world.write_model(@bonus);
+            }
+
+            seat += 1;
+        }
+    }
+
+    fn snapshot_player_customization(
+        ref world: dojo::world::WorldStorage, game_id: u64, player: ContractAddress,
+    ) {
+        let profile = load_player_customization(ref world, player);
+        world.write_model(
+            @GamePlayerCustomization {
+                game_id,
+                player,
+                avatar_skin_id: profile.avatar_skin_id,
+                token_skin_id: profile.token_skin_id,
+            },
+        );
+    }
+
+    fn snapshot_all_player_customizations(ref world: dojo::world::WorldStorage, game_id: u64) {
+        let mut seat: u8 = 0;
+
+        loop {
+            if seat >= MAX_SEATS {
+                break;
+            }
+
+            let game_seat: GameSeat = world.read_model((game_id, seat));
+            if game_seat.occupied {
+                snapshot_player_customization(ref world, game_id, game_seat.player);
             }
 
             seat += 1;

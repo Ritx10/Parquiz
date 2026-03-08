@@ -33,6 +33,15 @@ pub struct PlayerReadyChanged {
 
 #[derive(Copy, Drop, Serde)]
 #[dojo::event]
+pub struct PlayerCustomizationUpdated {
+    #[key]
+    pub player: ContractAddress,
+    pub avatar_skin_id: u8,
+    pub token_skin_id: u8,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::event]
 pub struct GameStarted {
     #[key]
     pub game_id: u64,
@@ -79,6 +88,19 @@ pub struct AnswerResolved {
     pub game_id: u64,
     #[key]
     pub player: ContractAddress,
+    pub correct: bool,
+    pub reward: u32,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::event]
+pub struct AnswerRevealed {
+    #[key]
+    pub game_id: u64,
+    #[key]
+    pub player: ContractAddress,
+    pub question_id: u64,
+    pub selected_option: u8,
     pub correct: bool,
     pub reward: u32,
 }
@@ -177,39 +199,6 @@ pub struct BridgeBroken {
     pub game_id: u64,
     pub owner: ContractAddress,
     pub square_ref: u32,
-}
-
-#[derive(Copy, Drop, Serde)]
-#[dojo::event]
-pub struct ShopUnlocked {
-    #[key]
-    pub game_id: u64,
-    #[key]
-    pub player: ContractAddress,
-    pub square_ref: u32,
-}
-
-#[derive(Copy, Drop, Serde)]
-#[dojo::event]
-pub struct ItemPurchased {
-    #[key]
-    pub game_id: u64,
-    #[key]
-    pub player: ContractAddress,
-    pub item_id: u16,
-    pub amount: u16,
-}
-
-#[derive(Copy, Drop, Serde)]
-#[dojo::event]
-pub struct ItemUsed {
-    #[key]
-    pub game_id: u64,
-    #[key]
-    pub player: ContractAddress,
-    pub item_id: u16,
-    pub target_player: ContractAddress,
-    pub target_token_id: u8,
 }
 
 #[derive(Copy, Drop, Serde)]

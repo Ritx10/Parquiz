@@ -3,11 +3,9 @@ import { appEnv } from '../config/env'
 import type {
   ApplyMoveApiPayload,
   AnswerApiPayload,
-  BuyItemApiPayload,
   GameConfigApiPayload,
   LegalMoveApi,
   MoveApiPlan,
-  UseItemApiPayload,
 } from './types'
 
 type FeltLike = bigint | number | string
@@ -86,7 +84,7 @@ const parseLegalMoves = (serialized: string[]): LegalMoveApi[] => {
 const configSystem = () => requireAddress('config system', appEnv.configSystemAddress)
 const lobbySystem = () => requireAddress('lobby system', appEnv.lobbySystemAddress)
 const turnSystem = () => requireAddress('turn system', appEnv.turnSystemAddress)
-const shopSystem = () => requireAddress('shop system', appEnv.shopSystemAddress)
+const customizationSystem = () => requireAddress('customization system', appEnv.customizationSystemAddress)
 const egsSystem = () => requireAddress('EGS system', appEnv.egsSystemAddress)
 
 export const createGameConfig = async (
@@ -102,7 +100,6 @@ export const createGameConfig = async (
         turn_time_limit_secs: payload.turnTimeLimitSecs,
         exit_home_rule: payload.exitHomeRule,
         difficulty_level: payload.difficultyLevel,
-        shop_enabled_on_safe_squares: toCairoBool(payload.shopEnabledOnSafeSquares),
       },
     }),
   })
@@ -172,6 +169,21 @@ export const bindEgsToken = async (account: AccountInterface, gameId: FeltLike, 
   })
 }
 
+export const setPlayerCustomization = async (
+  account: AccountInterface,
+  avatarSkinId: number,
+  tokenSkinId: number,
+) => {
+  return executeCall(account, {
+    contractAddress: customizationSystem(),
+    entrypoint: 'set_player_customization',
+    calldata: CallData.compile({
+      avatar_skin_id: avatarSkinId,
+      token_skin_id: tokenSkinId,
+    }),
+  })
+}
+
 export const rollTwoDiceAndDrawQuestion = async (account: AccountInterface, gameId: FeltLike) => {
   const vrfProvider = requireAddress('VRF provider', appEnv.vrfProviderAddress)
   const turnSystemAddress = turnSystem()
@@ -179,10 +191,7 @@ export const rollTwoDiceAndDrawQuestion = async (account: AccountInterface, game
   const vrfCall = {
     contractAddress: vrfProvider,
     entrypoint: 'request_random',
-    calldata: CallData.compile({
-      caller: turnSystemAddress,
-      source: [0, account.address],
-    }),
+    calldata: CallData.compile([turnSystemAddress, 0, account.address]),
   }
 
   const rollCall = {
@@ -284,14 +293,6 @@ export const endTurn = async (account: AccountInterface, gameId: FeltLike) => {
   })
 }
 
-export const skipShop = async (account: AccountInterface, gameId: FeltLike) => {
-  return executeCall(account, {
-    contractAddress: turnSystem(),
-    entrypoint: 'skip_shop',
-    calldata: CallData.compile({ game_id: asBigInt(gameId) }),
-  })
-}
-
 export const forceSkipTurn = async (account: AccountInterface, gameId: FeltLike) => {
   return executeCall(account, {
     contractAddress: turnSystem(),
@@ -308,42 +309,4 @@ export const computeLegalMoves = async (gameId: FeltLike): Promise<LegalMoveApi[
   })
 
   return parseLegalMoves(serialized)
-}
-
-export const buyItem = async (
-  account: AccountInterface,
-  gameId: FeltLike,
-  payload: BuyItemApiPayload,
-) => {
-  return executeCall(account, {
-    contractAddress: shopSystem(),
-    entrypoint: 'buy_item',
-    calldata: CallData.compile({
-      game_id: asBigInt(gameId),
-      payload: {
-        item_id: payload.itemId,
-        target_token_id: payload.targetTokenId ?? 0,
-        has_target_token: toCairoBool(payload.targetTokenId !== undefined),
-      },
-    }),
-  })
-}
-
-export const consumeItem = async (
-  account: AccountInterface,
-  payload: UseItemApiPayload,
-) => {
-  return executeCall(account, {
-    contractAddress: shopSystem(),
-    entrypoint: 'use_item',
-    calldata: CallData.compile({
-      payload: {
-        item_id: payload.itemId,
-        game_id: asBigInt(payload.gameId),
-        target_player: payload.targetPlayer,
-        target_token_id: payload.targetTokenId,
-        effect_value: payload.effectValue,
-      },
-    }),
-  })
 }

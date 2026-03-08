@@ -5,7 +5,7 @@ const configEntrypoints = [
   {
     label: 'Create Game Config',
     entrypoint: 'create_game_config',
-    description: 'Creates a reusable Parchis Trivia rules preset',
+    description: 'Creates a reusable ParQuiz rules preset',
   },
   {
     label: 'Update Game Config',
@@ -25,7 +25,7 @@ const configEntrypoints = [
   {
     label: 'Set Board Square',
     entrypoint: 'set_board_square',
-    description: 'Updates board SAFE_SHOP metadata per config',
+    description: 'Updates board safe-space metadata per config',
   },
 ] as const
 
@@ -89,14 +89,17 @@ const turnEntrypoints = [
     description: 'Sends answer proof and move plan in one action',
   },
   {
-    label: 'Skip Shop',
-    entrypoint: 'skip_shop',
-    description: 'Closes optional shop phase for current turn',
-  },
-  {
     label: 'Force Skip Turn',
     entrypoint: 'force_skip_turn',
     description: 'Skips stalled turns after the on-chain deadline',
+  },
+] as const
+
+const customizationEntrypoints = [
+  {
+    label: 'Set Player Customization',
+    entrypoint: 'set_player_customization',
+    description: 'Updates the player cosmetic profile used across lobbies and matches',
   },
 ] as const
 
@@ -105,19 +108,6 @@ const vrfEntrypoints = [
     label: 'Request Random',
     entrypoint: 'request_random',
     description: 'Requests Cartridge VRF randomness for roll flow',
-  },
-] as const
-
-const shopEntrypoints = [
-  {
-    label: 'Buy Item',
-    entrypoint: 'buy_item',
-    description: 'Purchases one item in SAFE_SHOP tile flow',
-  },
-  {
-    label: 'Use Item',
-    entrypoint: 'use_item',
-    description: 'Consumes one purchased item from inventory',
   },
 ] as const
 
@@ -133,9 +123,9 @@ const adminEntrypoints = [
     description: 'Registers or updates an on-chain question set root',
   },
   {
-    label: 'Set Item Def',
-    entrypoint: 'set_item_def',
-    description: 'Registers or updates shop item definitions',
+    label: 'Set VRF Provider',
+    entrypoint: 'set_vrf_provider',
+    description: 'Updates the VRF provider address used by turn flow',
   },
 ] as const
 
@@ -143,7 +133,7 @@ const egsEntrypoints = [
   {
     label: 'Bind EGS Token',
     entrypoint: 'bind_egs_token',
-    description: 'Links a playable tournament token to one on-chain Parquiz match',
+    description: 'Links a playable tournament token to one on-chain ParQuiz match',
   },
 ] as const
 
@@ -160,22 +150,29 @@ const contracts: NonNullable<SessionPolicies['contracts']> = {}
 
 if (appEnv.configSystemAddress) {
   contracts[appEnv.configSystemAddress] = {
-    description: 'Parchis Trivia config system permissions',
+    description: 'ParQuiz config system permissions',
     methods: asMethods(configEntrypoints),
   }
 }
 
 if (appEnv.lobbySystemAddress) {
   contracts[appEnv.lobbySystemAddress] = {
-    description: 'Parchis Trivia lobby system permissions',
+    description: 'ParQuiz lobby system permissions',
     methods: asMethods(lobbyEntrypoints),
   }
 }
 
 if (appEnv.turnSystemAddress) {
   contracts[appEnv.turnSystemAddress] = {
-    description: 'Parchis Trivia turn system permissions',
+    description: 'ParQuiz turn system permissions',
     methods: asMethods(turnEntrypoints),
+  }
+}
+
+if (appEnv.customizationSystemAddress) {
+  contracts[appEnv.customizationSystemAddress] = {
+    description: 'ParQuiz customization system permissions',
+    methods: asMethods(customizationEntrypoints),
   }
 }
 
@@ -186,23 +183,16 @@ if (appEnv.vrfProviderAddress) {
   }
 }
 
-if (appEnv.shopSystemAddress) {
-  contracts[appEnv.shopSystemAddress] = {
-    description: 'Parchis Trivia shop system permissions',
-    methods: asMethods(shopEntrypoints),
-  }
-}
-
 if (appEnv.adminSystemAddress) {
   contracts[appEnv.adminSystemAddress] = {
-    description: 'Parchis Trivia admin system permissions',
+    description: 'ParQuiz admin system permissions',
     methods: asMethods(adminEntrypoints),
   }
 }
 
 if (appEnv.egsSystemAddress) {
   contracts[appEnv.egsSystemAddress] = {
-    description: 'Parchis Trivia EGS token binding permissions',
+    description: 'ParQuiz EGS token binding permissions',
     methods: asMethods(egsEntrypoints),
   }
 }

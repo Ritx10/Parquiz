@@ -10,7 +10,6 @@ pub trait ITurnSystem<T> {
     fn submit_answer_and_moves(
         ref self: T, game_id: u64, answer_payload: AnswerPayload, move_plan: MovePlan,
     );
-    fn skip_shop(ref self: T, game_id: u64);
     fn force_skip_turn(ref self: T, game_id: u64);
 }
 
@@ -20,21 +19,21 @@ pub mod turn_system {
     use core::poseidon::poseidon_hash_span;
     use crate::constants::{
         DEFAULT_ALLOW_SPLIT_DICE, DEFAULT_ALLOW_SUM_DICE, DEFAULT_ALLOW_TWO_STEP_SAME_TOKEN,
-        DEFAULT_MAX_SHOP_PURCHASES_PER_TURN, DEFAULT_QUESTION_SET_ID, DEFAULT_REQUIRES_EXACT_HOME,
+        DEFAULT_QUESTION_SET_ID, DEFAULT_REQUIRES_EXACT_HOME, DEFAULT_VRF_PROVIDER_ADDRESS,
         HARD_DIFFICULTY_REWARD_COINS, HOME_LANE_LEN, MAIN_TRACK_LEN, MAX_SEATS,
         MEDIUM_DIFFICULTY_REWARD_COINS, TOKENS_PER_PLAYER, TRACK_STEPS_TO_HOME_ENTRY,
-        bonus_type, difficulty_level,
+        VRF_CONFIG_SINGLETON_ID, bonus_type, difficulty_level,
         egs_link_status, game_status, move_type, token_state, turn_phase,
         EASY_DIFFICULTY_REWARD_COINS,
     };
     use crate::events::{
-        AnswerResolved, BonusAwarded, BonusConsumed, BlockadeBroken, BlockadeCreated, BridgeBroken,
-        BridgeFormed, DiceRolled, GameWon, QuestionDrawn, ShopUnlocked, TokenCaptured, TokenMoved,
+        AnswerResolved, AnswerRevealed, BonusAwarded, BonusConsumed, BlockadeBroken,
+        BlockadeCreated, BridgeBroken, BridgeFormed, DiceRolled, GameWon, QuestionDrawn, TokenCaptured, TokenMoved,
         TokenReachedHome, TurnEnded, TurnStarted,
     };
     use crate::models::{
         BoardSquare, BonusState, DiceState, Game, GamePlayer, GameRuntimeConfig, GameSeat,
-        PendingQuestion, QuestionSet, SquareOccupancy, Token, TurnState,
+        PendingQuestion, QuestionSet, SquareOccupancy, Token, TurnState, VrfConfig,
     };
     use crate::systems::egs_system::egs_system::{
         assert_bound_token_playable, sync_bound_player_state, sync_bound_players_terminal,
@@ -45,8 +44,6 @@ pub mod turn_system {
     use starknet::{ContractAddress, get_block_timestamp, get_caller_address};
     use super::ITurnSystem;
 
-    const VRF_PROVIDER_ADDRESS: felt252 =
-        0x051fea4450da9d6aee758bdeba88b2f665bcbf549d2c61421aa724e9ac0ced8f;
     const NO_BLOCKADE_OWNER: u8 = 255;
 
     #[abi(embed_v0)]
@@ -56,7 +53,7 @@ pub mod turn_system {
             let caller = get_caller_address();
             let now = get_block_timestamp();
 
-            let game: Game = world.read_model(game_id);
+            let mut game: Game = world.read_model(game_id);
             assert(game.status == game_status::IN_PROGRESS, 'not_live');
             assert(game.active_player == caller, 'not_active');
             assert_bound_token_playable(ref world, game_id, caller);
@@ -71,7 +68,7 @@ pub mod turn_system {
             assert(question_set.question_count > 0, 'q_count');
 
             let vrf_provider = IVrfProviderDispatcher {
-                contract_address: VRF_PROVIDER_ADDRESS.try_into().unwrap(),
+                contract_address: load_vrf_provider_address(ref world),
             };
 
             let vrf_random: felt252 = vrf_provider.consume_random(Source::Nonce(caller));
@@ -84,6 +81,14 @@ pub mod turn_system {
             let question_index = random_question_index(random_question, question_set.question_count);
             let difficulty = runtime.difficulty_level;
             let question_id = make_question_id(game.turn_index, question_index);
+
+            if should_skip_question_for_trapped_player(
+                ref world, game.game_id, caller, runtime.exit_home_rule, dice_1, dice_2,
+            ) {
+                world.emit_event(@DiceRolled { game_id, turn_index: game.turn_index, dice_1, dice_2 });
+                end_turn_internal(ref world, ref game, ref turn, runtime, now, false);
+                return;
+            }
 
             let pending = PendingQuestion {
                 game_id,
@@ -112,9 +117,6 @@ pub mod turn_system {
             turn.question_id = question_id;
             turn.question_answered = false;
             turn.question_correct = false;
-            turn.shop_enabled = false;
-            turn.shop_square_ref = 0;
-            turn.purchases_this_turn = 0;
             turn.has_moved_token = false;
             turn.first_moved_token_id = 0;
             turn.deadline = now + runtime.answer_time_limit_secs.into();
@@ -165,8 +167,6 @@ pub mod turn_system {
 
             turn.phase = turn_phase::MOVE_PENDING;
             turn.deadline = now + runtime.turn_time_limit_secs.into();
-            turn.shop_enabled = false;
-            turn.shop_square_ref = 0;
             turn.has_moved_token = false;
             turn.first_moved_token_id = 0;
             world.write_model(@turn);
@@ -201,7 +201,6 @@ pub mod turn_system {
                 game.updated_at = now;
 
                 turn.phase = turn_phase::TURN_ENDED;
-                turn.shop_enabled = false;
                 turn.deadline = 0;
 
                 world.write_model(@game);
@@ -281,8 +280,6 @@ pub mod turn_system {
 
             turn.phase = turn_phase::MOVE_PENDING;
             turn.deadline = now + runtime.turn_time_limit_secs.into();
-            turn.shop_enabled = false;
-            turn.shop_square_ref = 0;
             turn.has_moved_token = false;
             turn.first_moved_token_id = 0;
             world.write_model(@turn);
@@ -316,7 +313,6 @@ pub mod turn_system {
                 game.updated_at = now;
 
                 turn.phase = turn_phase::TURN_ENDED;
-                turn.shop_enabled = false;
                 turn.deadline = 0;
 
                 world.write_model(@game);
@@ -329,23 +325,6 @@ pub mod turn_system {
             }
 
             end_turn_internal(ref world, ref game, ref turn, runtime, now, true);
-        }
-
-        fn skip_shop(ref self: ContractState, game_id: u64) {
-            let mut world = self.world_default();
-            let caller = get_caller_address();
-            let now = get_block_timestamp();
-
-            let mut game: Game = world.read_model(game_id);
-            assert(game.status == game_status::IN_PROGRESS, 'not_live');
-            assert(game.active_player == caller, 'not_active');
-            assert_bound_token_playable(ref world, game_id, caller);
-
-            let mut turn: TurnState = world.read_model(game_id);
-            assert(turn.phase == turn_phase::SHOP_PENDING, 'phase');
-
-            let runtime: GameRuntimeConfig = world.read_model(game_id);
-            end_turn_internal(ref world, ref game, ref turn, runtime, now, false);
         }
 
         fn force_skip_turn(ref self: ContractState, game_id: u64) {
@@ -366,7 +345,7 @@ pub mod turn_system {
     #[generate_trait]
     impl InternalImpl of InternalTrait {
         fn world_default(self: @ContractState) -> dojo::world::WorldStorage {
-            self.world(@"parchis_trivia")
+            self.world(@"parquiz")
         }
     }
 
@@ -382,7 +361,6 @@ pub mod turn_system {
         let payload_question_id = answer_payload.question_id;
         let payload_question_index = answer_payload.question_index;
         let payload_category = answer_payload.category;
-        let payload_difficulty = answer_payload.difficulty;
         let payload_correct_option = answer_payload.correct_option;
         let payload_selected_option = answer_payload.selected_option;
         let payload_proof = answer_payload.merkle_proof;
@@ -392,14 +370,9 @@ pub mod turn_system {
         assert(turn.question_id == payload_question_id, 'q_id');
         assert(payload_question_index == pending.question_index, 'q_index');
         assert(payload_category == pending.category, 'q_cat');
-        assert(payload_difficulty == pending.difficulty, 'q_diff');
 
-        let leaf_hash = build_question_leaf_hash(
-            payload_question_index,
-            payload_category,
-            payload_difficulty,
-            payload_correct_option,
-        );
+        let leaf_hash =
+            build_question_leaf_hash(payload_question_index, payload_category, payload_correct_option);
 
         let proof_ok = verify_merkle_proof(
             leaf_hash,
@@ -410,7 +383,7 @@ pub mod turn_system {
         assert(proof_ok, 'q_proof');
 
         let correct = payload_selected_option == payload_correct_option;
-        let reward = if correct { reward_for_difficulty(payload_difficulty) } else { 0 };
+        let reward = if correct { reward_for_difficulty(pending.difficulty) } else { 0 };
 
         let mut player: GamePlayer = world.read_model((game.game_id, caller));
         if correct {
@@ -428,7 +401,20 @@ pub mod turn_system {
             false,
             egs_link_status::ACTIVE,
         );
-        world.emit_event(@AnswerResolved { game_id: game.game_id, player: caller, correct, reward });
+        world.emit_event(@AnswerResolved {
+            game_id: game.game_id,
+            player: caller,
+            correct,
+            reward,
+        });
+        world.emit_event(@AnswerRevealed {
+            game_id: game.game_id,
+            player: caller,
+            question_id: payload_question_id,
+            selected_option: payload_selected_option,
+            correct,
+            reward,
+        });
         correct
     }
 
@@ -456,7 +442,7 @@ pub mod turn_system {
 
         sync_turn_with_dice(ref turn, dice_state);
 
-        let landed_on_shop = apply_move_step(
+        apply_move_step(
             ref world,
             game,
             runtime,
@@ -476,14 +462,6 @@ pub mod turn_system {
             });
         }
 
-        if landed_on_shop && DEFAULT_MAX_SHOP_PURCHASES_PER_TURN > 0 {
-            let token_after: Token = world.read_model((game.game_id, caller, move_input.token_id));
-            let player_state: GamePlayer = world.read_model((game.game_id, caller));
-            turn.shop_enabled = true;
-            turn.shop_square_ref = square_ref_for_token(player_state.seat, token_after);
-            turn.deadline = now + runtime.turn_time_limit_secs.into();
-        }
-
         world.write_model(@dice_state);
         world.write_model(@bonus_state);
         world.write_model(@turn);
@@ -501,32 +479,18 @@ pub mod turn_system {
         ref world: dojo::world::WorldStorage, ref game: Game, ref turn: TurnState,
         runtime: GameRuntimeConfig, now: u64, enforce_moves: bool,
     ) {
-        if turn.phase == turn_phase::MOVE_PENDING {
-            if enforce_moves {
-                let game_snapshot: Game = world.read_model(game.game_id);
-                let turn_snapshot: TurnState = world.read_model(game.game_id);
-                let legal =
-                    compute_legal_moves_internal(
-                        ref world,
-                        game_snapshot,
-                        runtime,
-                        game.active_player,
-                        turn_snapshot,
-                    );
-                assert(legal.len() == 0, 'moves_pending');
-            }
-
-            if turn.shop_enabled && DEFAULT_MAX_SHOP_PURCHASES_PER_TURN > 0 {
-                turn.phase = turn_phase::SHOP_PENDING;
-                turn.deadline = now + runtime.turn_time_limit_secs.into();
-                world.write_model(@turn);
-                world.emit_event(@ShopUnlocked {
-                    game_id: game.game_id,
-                    player: game.active_player,
-                    square_ref: turn.shop_square_ref,
-                });
-                return;
-            }
+        if turn.phase == turn_phase::MOVE_PENDING && enforce_moves {
+            let game_snapshot: Game = world.read_model(game.game_id);
+            let turn_snapshot: TurnState = world.read_model(game.game_id);
+            let legal =
+                compute_legal_moves_internal(
+                    ref world,
+                    game_snapshot,
+                    runtime,
+                    game.active_player,
+                    turn_snapshot,
+                );
+            assert(legal.len() == 0, 'moves_pending');
         }
 
         end_turn_and_advance(ref world, ref game, ref turn, runtime, now);
@@ -650,6 +614,10 @@ pub mod turn_system {
         }
 
         if token.token_state == token_state::IN_BASE {
+            if !can_use_single_die_to_exit_home(source_move_type) {
+                return;
+            }
+
             if !can_exit_home(runtime.exit_home_rule, steps) {
                 return;
             }
@@ -824,7 +792,7 @@ pub mod turn_system {
     }
 
     fn consume_exit_home_resource(
-        _runtime: GameRuntimeConfig, ref dice_state: DiceState, ref bonus_state: BonusState, steps: u8,
+        _runtime: GameRuntimeConfig, ref dice_state: DiceState, ref _bonus_state: BonusState, steps: u8,
     ) -> (u8, u8) {
         if !dice_state.die_a_used && dice_state.die_a == steps {
             dice_state.die_a_used = true;
@@ -834,25 +802,6 @@ pub mod turn_system {
         if !dice_state.die_b_used && dice_state.die_b == steps {
             dice_state.die_b_used = true;
             return (steps, bonus_type::NONE);
-        }
-
-        if DEFAULT_ALLOW_SUM_DICE && !dice_state.sum_used && !dice_state.die_a_used && !dice_state.die_b_used && (dice_state.die_a + dice_state.die_b) == steps {
-            dice_state.sum_used = true;
-            dice_state.die_a_used = true;
-            dice_state.die_b_used = true;
-            return (steps, bonus_type::NONE);
-        }
-
-        if bonus_state.pending_bonus_10 > 0 && steps == 10 {
-            bonus_state.pending_bonus_10 -= 1;
-            bonus_state.bonus_consumed = true;
-            return (10, bonus_type::BONUS_10);
-        }
-
-        if bonus_state.pending_bonus_20 > 0 && steps == 20 {
-            bonus_state.pending_bonus_20 -= 1;
-            bonus_state.bonus_consumed = true;
-            return (20, bonus_type::BONUS_20);
         }
 
         assert(false, 'exit_steps');
@@ -924,7 +873,7 @@ pub mod turn_system {
     fn apply_move_step(
         ref world: dojo::world::WorldStorage, game: Game, runtime: GameRuntimeConfig,
         player: ContractAddress, token_id: u8, die_value: u8, ref bonus_state: BonusState,
-    ) -> bool {
+    ) {
         assert(die_value > 0, 'die_zero');
 
         let mut player_state: GamePlayer = world.read_model((game.game_id, player));
@@ -1033,15 +982,8 @@ pub mod turn_system {
         });
 
         if token.token_state != token_state::ON_TRACK {
-            return false;
+            return;
         }
-
-        is_track_square_shop(
-            ref world,
-            game.config_id,
-            token.track_pos,
-            runtime.shop_enabled_on_safe_squares,
-        )
     }
 
     fn resolve_capture_if_any(
@@ -1085,17 +1027,10 @@ pub mod turn_system {
         }
 
         let mut rival_token: Token = world.read_model((game.game_id, captured_player, captured_token_id));
-        if rival_token.has_shield {
-            rival_token.has_shield = false;
-            world.write_model(@rival_token);
-            return;
-        }
-
         rival_token.token_state = token_state::IN_BASE;
         rival_token.track_pos = 0;
         rival_token.home_lane_pos = 0;
         rival_token.steps_total = 0;
-        rival_token.has_shield = false;
         world.write_model(@rival_token);
 
         let mut rival_player: GamePlayer = world.read_model((game.game_id, captured_player));
@@ -1500,6 +1435,10 @@ pub mod turn_system {
         die_value == 5
     }
 
+    fn can_use_single_die_to_exit_home(move_type_value: u8) -> bool {
+        move_type_value == move_type::DIE_A || move_type_value == move_type::DIE_B
+    }
+
     fn start_index_for_seat(seat: u8) -> u16 {
         if seat == 0 {
             return 0;
@@ -1519,34 +1458,18 @@ pub mod turn_system {
             return square.is_safe;
         }
 
-        is_default_safe_shop_track(track_pos)
+        is_default_safe_track(track_pos)
     }
 
-    fn is_track_square_shop(
-        ref world: dojo::world::WorldStorage, config_id: u64, track_pos: u16,
-        shop_enabled_on_safe_squares: bool,
-    ) -> bool {
-        let square: BoardSquare = world.read_model((config_id, track_pos));
-        if square.config_id == config_id {
-            if square.is_shop {
-                return true;
-            }
-
-            return shop_enabled_on_safe_squares && square.is_safe;
-        }
-
-        shop_enabled_on_safe_squares && is_default_safe_shop_track(track_pos)
-    }
-
-    fn is_default_safe_shop_track(track_pos: u16) -> bool {
-        track_pos == 11
-            || track_pos == 16
-            || track_pos == 28
-            || track_pos == 33
-            || track_pos == 45
-            || track_pos == 50
-            || track_pos == 62
-            || track_pos == 67
+    fn is_default_safe_track(track_pos: u16) -> bool {
+        track_pos == 7
+            || track_pos == 12
+            || track_pos == 24
+            || track_pos == 29
+            || track_pos == 41
+            || track_pos == 46
+            || track_pos == 58
+            || track_pos == 63
     }
 
     fn square_ref_for_token(seat: u8, token: Token) -> u32 {
@@ -1620,9 +1543,6 @@ pub mod turn_system {
         turn.question_id = 0;
         turn.question_answered = false;
         turn.question_correct = false;
-        turn.shop_enabled = false;
-        turn.shop_square_ref = 0;
-        turn.purchases_this_turn = 0;
         turn.has_moved_token = false;
         turn.first_moved_token_id = 0;
         turn.deadline = now + runtime.turn_time_limit_secs.into();
@@ -1677,15 +1597,42 @@ pub mod turn_system {
         reduced.try_into().unwrap()
     }
 
-    fn build_question_leaf_hash(
-        question_index: u32, category: u8, difficulty: u8, correct_option: u8,
-    ) -> felt252 {
-        let fields = array![
-            question_index.into(),
-            category.into(),
-            difficulty.into(),
-            correct_option.into(),
-        ];
+    fn should_skip_question_for_trapped_player(
+        ref world: dojo::world::WorldStorage, game_id: u64, player: ContractAddress,
+        exit_home_rule: u8, dice_1: u8, dice_2: u8,
+    ) -> bool {
+        if player_has_token_outside_base(ref world, game_id, player) {
+            return false;
+        }
+
+        let can_exit_with_die_1 = can_exit_home(exit_home_rule, dice_1);
+        let can_exit_with_die_2 = can_exit_home(exit_home_rule, dice_2);
+        !can_exit_with_die_1 && !can_exit_with_die_2
+    }
+
+    fn player_has_token_outside_base(
+        ref world: dojo::world::WorldStorage, game_id: u64, player: ContractAddress,
+    ) -> bool {
+        let mut token_id: u8 = 0;
+
+        loop {
+            if token_id >= TOKENS_PER_PLAYER {
+                break;
+            }
+
+            let token: Token = world.read_model((game_id, player, token_id));
+            if token.token_state != token_state::IN_BASE {
+                return true;
+            }
+
+            token_id += 1;
+        }
+
+        false
+    }
+
+    fn build_question_leaf_hash(question_index: u32, category: u8, correct_option: u8) -> felt252 {
+        let fields = array![question_index.into(), category.into(), correct_option.into()];
 
         poseidon_hash_span(fields.span())
     }
@@ -1728,6 +1675,16 @@ pub mod turn_system {
         poseidon_hash_span(array![sibling, current].span())
     }
 
+    fn load_vrf_provider_address(ref world: dojo::world::WorldStorage) -> ContractAddress {
+        let config: VrfConfig = world.read_model(VRF_CONFIG_SINGLETON_ID);
+
+        if config.singleton_id == VRF_CONFIG_SINGLETON_ID && config.provider_address != zero_address() {
+            return config.provider_address;
+        }
+
+        DEFAULT_VRF_PROVIDER_ADDRESS.try_into().unwrap()
+    }
+
     fn zero_address() -> ContractAddress {
         0.try_into().unwrap()
     }
@@ -1740,7 +1697,7 @@ pub mod turn_system {
         use starknet::ContractAddress;
         use super::{
             advance_from_home_lane, advance_from_track, award_capture_bonus, award_home_bonus,
-            build_question_leaf_hash, can_exit_home,
+            build_question_leaf_hash, can_exit_home, can_use_single_die_to_exit_home,
             consume_move_resource, hash_pair_with_direction, path_crosses_track_pos,
             verify_merkle_proof, wrapped_track_pos,
         };
@@ -1756,7 +1713,6 @@ pub mod turn_system {
                 turn_time_limit_secs: 90,
                 exit_home_rule: 0,
                 difficulty_level: 0,
-                shop_enabled_on_safe_squares: true,
             }
         }
 
@@ -1782,6 +1738,15 @@ pub mod turn_system {
         fn exit_rule_stays_classic_five() {
             assert(can_exit_home(0, 5), 'five_required_accepts_5');
             assert(!can_exit_home(0, 6), 'five_required_rejects_6');
+        }
+
+        #[test]
+        fn exit_home_requires_single_die_resource() {
+            assert(can_use_single_die_to_exit_home(move_type::DIE_A), 'die_a_allowed');
+            assert(can_use_single_die_to_exit_home(move_type::DIE_B), 'die_b_allowed');
+            assert(!can_use_single_die_to_exit_home(move_type::SUM), 'sum_disallowed');
+            assert(!can_use_single_die_to_exit_home(move_type::BONUS_10), 'bonus10_disallowed');
+            assert(!can_use_single_die_to_exit_home(move_type::BONUS_20), 'bonus20_disallowed');
         }
 
         #[test]
@@ -1852,7 +1817,6 @@ pub mod turn_system {
                 track_pos: 3,
                 home_lane_pos: 0,
                 steps_total: 70,
-                has_shield: false,
             };
 
             advance_from_track(ref token, 2, false);
@@ -1867,7 +1831,6 @@ pub mod turn_system {
                 track_pos: 0,
                 home_lane_pos: 6,
                 steps_total: 70,
-                has_shield: false,
             };
 
             advance_from_home_lane(ref lane_token, 2, false);
@@ -1877,7 +1840,7 @@ pub mod turn_system {
 
         #[test]
         fn merkle_verification_with_direction_works() {
-            let leaf = build_question_leaf_hash(12, 0, 2, 3);
+            let leaf = build_question_leaf_hash(12, 0, 3);
             let root = hash_pair_with_direction(leaf, 12345, 0);
 
             let proof = array![12345];
@@ -1889,7 +1852,7 @@ pub mod turn_system {
 
         #[test]
         fn merkle_verification_rejects_length_mismatch() {
-            let leaf = build_question_leaf_hash(0, 0, 0, 1);
+            let leaf = build_question_leaf_hash(0, 0, 1);
             let root = hash_pair_with_direction(leaf, 7, 1);
 
             let proof = array![7, 8];

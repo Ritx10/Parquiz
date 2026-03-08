@@ -66,6 +66,8 @@ export const playerSkins: PlayerSkin[] = [
   },
 ]
 
+export const playerSkinIdOrder: PlayerSkinId[] = playerSkins.map((skin) => skin.id)
+
 export const starterSkinIds: PlayerSkinId[] = ['capi-princess', 'capi-ninja', 'capi-astronaut']
 
 const playerSkinById = playerSkins.reduce<Record<PlayerSkinId, PlayerSkin>>((acc, skin) => {
@@ -112,3 +114,18 @@ export const getPlayerSkin = (skinId: null | string) => {
 export const getStarterPlayerSkins = () => starterSkinIds.map((id) => playerSkinById[id])
 
 export const isSkinAvatar = (avatar: string) => avatar.startsWith('/skins/parquiz/')
+
+export const playerSkinIndexFromId = (skinId: null | string) => {
+  const normalized = normalizePlayerSkinId(skinId)
+
+  if (!normalized) {
+    return 0
+  }
+
+  const index = playerSkinIdOrder.indexOf(normalized)
+  return index >= 0 ? index : 0
+}
+
+export const playerSkinIdFromIndex = (index: number): PlayerSkinId => {
+  return playerSkinIdOrder[index] || playerSkinIdOrder[0]
+}

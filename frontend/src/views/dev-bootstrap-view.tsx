@@ -83,7 +83,12 @@ export function DevBootstrapView() {
     setIsLoadingState(true)
 
     try {
-      const nextSnapshot = gameId ? await readDojoGameSnapshot(gameId) : null
+      const nextSnapshot = gameId
+        ? await readDojoGameSnapshot(gameId, {
+            includeBoardSquares: true,
+            includePlayerCustomizations: true,
+          })
+        : null
       setSnapshot(nextSnapshot)
     } catch (error) {
       setStatusMessage(mapErrorToUserMessage(error))
@@ -130,17 +135,16 @@ export function DevBootstrapView() {
   const onCreateDefaultConfig = useCallback(() => {
     void runTransaction(
       'Create config',
-      () =>
+        () =>
         createGameConfig(account!, {
           answerTimeLimitSecs: 30,
           turnTimeLimitSecs: 45,
           exitHomeRule: 0,
           difficultyLevel: 1,
-          shopEnabledOnSafeSquares: true,
         }),
       async () => {
         setStatusMessage(
-          'Config created. If this local world only had katana0 config 1 before, your first Controller config is likely 2. Confirm with `sozo model get ... parchis_trivia-GlobalState 1` if needed, then lock it.',
+          'Config created. If this local world only had katana0 config 1 before, your first Controller config is likely 2. Confirm with `sozo model get ... parquiz-GlobalState 1` if needed, then lock it.',
         )
       },
     )
@@ -168,7 +172,7 @@ export function DevBootstrapView() {
         setStatusMessage(
           gameId
             ? `Joined public matchmaking. If game_id ${gameId.toString()} is the active lobby, press Ready now.`
-            : 'Joined public matchmaking. If you need the game id, inspect `parchis_trivia-PublicLobbyIndex` for this config from CLI, then enter it here and press Ready.',
+            : 'Joined public matchmaking. If you need the game id, inspect `parquiz-PublicLobbyIndex` for this config from CLI, then enter it here and press Ready.',
         )
       },
     )
@@ -185,7 +189,7 @@ export function DevBootstrapView() {
       () => createLobby(account!, privateLobbyCodeHash, configId),
       async () => {
         setStatusMessage(
-          'Private lobby created. If you need the game id, inspect `parchis_trivia-LobbyCodeIndex` with the code hash from this page, then enter it here and wait for player two.',
+          'Private lobby created. If you need the game id, inspect `parquiz-LobbyCodeIndex` with the code hash from this page, then enter it here and wait for player two.',
         )
       },
     )
@@ -542,9 +546,9 @@ export function DevBootstrapView() {
           <div className="mt-4 rounded-2xl border border-white/10 bg-[#091729] p-4 text-xs font-bold text-[#d9ebff]">
             <p className="font-black uppercase tracking-[0.18em] text-[#9fd7ff]">Useful CLI checks</p>
             <div className="mt-3 space-y-2 break-all">
-              <p>{`sozo model get --rpc-url http://127.0.0.1:5050 --world ${appEnv.dojoWorldAddress} parchis_trivia-GlobalState 1`}</p>
-              <p>{`sozo model get --rpc-url http://127.0.0.1:5050 --world ${appEnv.dojoWorldAddress} parchis_trivia-PublicLobbyIndex <config_id>`}</p>
-              <p>{`sozo model get --rpc-url http://127.0.0.1:5050 --world ${appEnv.dojoWorldAddress} parchis_trivia-LobbyCodeIndex ${privateLobbyCodeHash ? privateLobbyCodeHash.toString() : '<code_hash>'}`}</p>
+              <p>{`sozo model get --rpc-url http://127.0.0.1:5050 --world ${appEnv.dojoWorldAddress} parquiz-GlobalState 1`}</p>
+              <p>{`sozo model get --rpc-url http://127.0.0.1:5050 --world ${appEnv.dojoWorldAddress} parquiz-PublicLobbyIndex <config_id>`}</p>
+              <p>{`sozo model get --rpc-url http://127.0.0.1:5050 --world ${appEnv.dojoWorldAddress} parquiz-LobbyCodeIndex ${privateLobbyCodeHash ? privateLobbyCodeHash.toString() : '<code_hash>'}`}</p>
             </div>
           </div>
         </article>

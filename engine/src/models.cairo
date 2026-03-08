@@ -48,6 +48,35 @@ pub struct AdminAccount {
 
 #[derive(Copy, Drop, Serde)]
 #[dojo::model]
+pub struct VrfConfig {
+    #[key]
+    pub singleton_id: u8,
+    pub provider_address: ContractAddress,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct PlayerCustomization {
+    #[key]
+    pub player: ContractAddress,
+    pub avatar_skin_id: u8,
+    pub token_skin_id: u8,
+    pub updated_at: u64,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct GamePlayerCustomization {
+    #[key]
+    pub game_id: u64,
+    #[key]
+    pub player: ContractAddress,
+    pub avatar_skin_id: u8,
+    pub token_skin_id: u8,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
 pub struct GameSeat {
     #[key]
     pub game_id: u64,
@@ -105,7 +134,6 @@ pub struct Token {
     pub track_pos: u16,
     pub home_lane_pos: u8,
     pub steps_total: u16,
-    pub has_shield: bool,
 }
 
 #[derive(Copy, Drop, Serde)]
@@ -122,9 +150,6 @@ pub struct TurnState {
     pub question_id: u64,
     pub question_answered: bool,
     pub question_correct: bool,
-    pub shop_enabled: bool,
-    pub shop_square_ref: u32,
-    pub purchases_this_turn: u8,
     pub has_moved_token: bool,
     pub first_moved_token_id: u8,
     pub deadline: u64,
@@ -181,29 +206,6 @@ pub struct PendingQuestion {
 
 #[derive(Copy, Drop, Serde)]
 #[dojo::model]
-pub struct ItemDef {
-    #[key]
-    pub item_id: u16,
-    pub price: u32,
-    pub effect_type: u8,
-    pub effect_value: u32,
-    pub enabled: bool,
-}
-
-#[derive(Copy, Drop, Serde)]
-#[dojo::model]
-pub struct PlayerItem {
-    #[key]
-    pub game_id: u64,
-    #[key]
-    pub player: ContractAddress,
-    #[key]
-    pub item_id: u16,
-    pub amount: u16,
-}
-
-#[derive(Copy, Drop, Serde)]
-#[dojo::model]
 pub struct GameConfig {
     #[key]
     pub config_id: u64,
@@ -213,7 +215,6 @@ pub struct GameConfig {
     pub turn_time_limit_secs: u32,
     pub exit_home_rule: u8,
     pub difficulty_level: u8,
-    pub shop_enabled_on_safe_squares: bool,
     pub created_at: u64,
     pub updated_at: u64,
 }
@@ -227,7 +228,6 @@ pub struct GameRuntimeConfig {
     pub turn_time_limit_secs: u32,
     pub exit_home_rule: u8,
     pub difficulty_level: u8,
-    pub shop_enabled_on_safe_squares: bool,
 }
 
 #[derive(Copy, Drop, Serde)]
@@ -239,7 +239,6 @@ pub struct BoardSquare {
     pub square_index: u16,
     pub square_type: u8,
     pub is_safe: bool,
-    pub is_shop: bool,
 }
 
 #[derive(Copy, Drop, Serde)]

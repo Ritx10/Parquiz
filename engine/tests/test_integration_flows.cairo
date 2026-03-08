@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod tests {
 use dojo::model::{ModelStorage, ModelStorageTest};
 use dojo::utils::bytearray_hash;
 use dojo::world::WorldStorageTrait;
@@ -5,26 +7,28 @@ use dojo_cairo_test::{
     ContractDef, ContractDefTrait, NamespaceDef, TestResource, WorldStorageTestTrait,
     spawn_test_world,
 };
-use parchis_trivia_engine::constants::{game_status, lobby_kind, move_type, token_state, turn_phase};
-use parchis_trivia_engine::events::{
-    e_BlockadeBroken, e_BlockadeCreated, e_BonusAwarded, e_BridgeBroken, e_BridgeFormed,
-    e_GameStarted, e_GameWon, e_LobbyCreated, e_PlayerJoined, e_PlayerReadyChanged,
-    e_TokenCaptured, e_TokenMoved, e_TokenReachedHome, e_TurnEnded, e_TurnStarted,
+use parquiz_engine::constants::{game_status, lobby_kind, move_type, token_state, turn_phase};
+use parquiz_engine::events::{
+    e_AnswerRevealed, e_BlockadeBroken, e_BlockadeCreated, e_BonusAwarded, e_BridgeBroken,
+    e_BridgeFormed, e_GameStarted, e_GameWon, e_LobbyCreated, e_PlayerJoined,
+    e_PlayerReadyChanged, e_TokenCaptured, e_TokenMoved, e_TokenReachedHome, e_TurnEnded,
+    e_TurnStarted,
 };
-use parchis_trivia_engine::models::{
+use parquiz_engine::models::{
     BonusState, DiceState, Game, GameConfig, GamePlayer, GlobalState, PublicLobbyIndex, Token,
-    TurnState, m_BonusState, m_BoardSquare, m_DiceState, m_Game, m_GameConfig, m_GamePlayer,
-    m_GameRuntimeConfig, m_GameSeat, m_GlobalState, m_LobbyCodeIndex, m_PublicLobbyIndex,
-    m_SquareOccupancy, m_Token, m_TurnState,
+    TurnState, m_BonusState, m_BoardSquare, m_DiceState, m_Game, m_GameConfig,
+    m_GamePlayer, m_GamePlayerCustomization, m_GameRuntimeConfig, m_GameSeat, m_GlobalState,
+    m_LobbyCodeIndex, m_PlayerCustomization, m_PublicLobbyIndex, m_SquareOccupancy, m_Token,
+    m_TurnState,
 };
-use parchis_trivia_engine::systems::config_system::IConfigSystemDispatcher;
-use parchis_trivia_engine::systems::lobby_system::{
+use parquiz_engine::systems::config_system::IConfigSystemDispatcher;
+use parquiz_engine::systems::lobby_system::{
     ILobbySystemDispatcher, ILobbySystemDispatcherTrait, lobby_system,
 };
-use parchis_trivia_engine::systems::turn_system::{
+use parquiz_engine::systems::turn_system::{
     ITurnSystemDispatcher, ITurnSystemDispatcherTrait, turn_system,
 };
-use parchis_trivia_engine::types::{LegalMove, MoveInput};
+use parquiz_engine::types::{LegalMove, MoveInput};
 use snforge_std::{DeclareResultTrait, declare, start_cheat_caller_address, stop_cheat_caller_address};
 use starknet::{ClassHash, ContractAddress, contract_address_const};
 
@@ -40,7 +44,7 @@ fn namespace_def(
     config_system_hash: ClassHash, lobby_system_hash: ClassHash, turn_system_hash: ClassHash,
 ) -> NamespaceDef {
     NamespaceDef {
-        namespace: "parchis_trivia",
+        namespace: "parquiz",
         resources: [
             TestResource::Model(m_GlobalState::TEST_CLASS_HASH),
             TestResource::Model(m_Game::TEST_CLASS_HASH),
@@ -56,9 +60,12 @@ fn namespace_def(
             TestResource::Model(m_GameRuntimeConfig::TEST_CLASS_HASH),
             TestResource::Model(m_BoardSquare::TEST_CLASS_HASH),
             TestResource::Model(m_SquareOccupancy::TEST_CLASS_HASH),
+            TestResource::Model(m_PlayerCustomization::TEST_CLASS_HASH),
+            TestResource::Model(m_GamePlayerCustomization::TEST_CLASS_HASH),
             TestResource::Event(e_LobbyCreated::TEST_CLASS_HASH),
             TestResource::Event(e_PlayerJoined::TEST_CLASS_HASH),
             TestResource::Event(e_PlayerReadyChanged::TEST_CLASS_HASH),
+            TestResource::Event(e_AnswerRevealed::TEST_CLASS_HASH),
             TestResource::Event(e_GameStarted::TEST_CLASS_HASH),
             TestResource::Event(e_TurnStarted::TEST_CLASS_HASH),
             TestResource::Event(e_TokenMoved::TEST_CLASS_HASH),
@@ -80,13 +87,13 @@ fn namespace_def(
 }
 
 fn contract_defs() -> Span<ContractDef> {
-    let namespace_selector = bytearray_hash(@"parchis_trivia");
+    let namespace_selector = bytearray_hash(@"parquiz");
     [
-        ContractDefTrait::new(@"parchis_trivia", @"config_system")
+        ContractDefTrait::new(@"parquiz", @"config_system")
             .with_writer_of([namespace_selector].span()),
-        ContractDefTrait::new(@"parchis_trivia", @"lobby_system")
+        ContractDefTrait::new(@"parquiz", @"lobby_system")
             .with_writer_of([namespace_selector].span()),
-        ContractDefTrait::new(@"parchis_trivia", @"turn_system")
+        ContractDefTrait::new(@"parquiz", @"turn_system")
             .with_writer_of([namespace_selector].span()),
     ]
         .span()
@@ -112,9 +119,12 @@ fn setup_world() -> (
     let runtime_config_model = declare("m_GameRuntimeConfig").unwrap().contract_class();
     let board_square_model = declare("m_BoardSquare").unwrap().contract_class();
     let square_occupancy_model = declare("m_SquareOccupancy").unwrap().contract_class();
+    let player_customization_model = declare("m_PlayerCustomization").unwrap().contract_class();
+    let game_player_customization_model = declare("m_GamePlayerCustomization").unwrap().contract_class();
     let lobby_created_event = declare("e_LobbyCreated").unwrap().contract_class();
     let player_joined_event = declare("e_PlayerJoined").unwrap().contract_class();
     let player_ready_changed_event = declare("e_PlayerReadyChanged").unwrap().contract_class();
+    let answer_revealed_event = declare("e_AnswerRevealed").unwrap().contract_class();
     let game_started_event = declare("e_GameStarted").unwrap().contract_class();
     let turn_started_event = declare("e_TurnStarted").unwrap().contract_class();
     let token_moved_event = declare("e_TokenMoved").unwrap().contract_class();
@@ -133,7 +143,7 @@ fn setup_world() -> (
     let turn_class = declare("turn_system").unwrap().contract_class();
 
     let namespace = NamespaceDef {
-        namespace: "parchis_trivia",
+        namespace: "parquiz",
         resources: [
             TestResource::Model(*global_state_model.class_hash),
             TestResource::Model(*game_model.class_hash),
@@ -149,9 +159,12 @@ fn setup_world() -> (
             TestResource::Model(*runtime_config_model.class_hash),
             TestResource::Model(*board_square_model.class_hash),
             TestResource::Model(*square_occupancy_model.class_hash),
+            TestResource::Model(*player_customization_model.class_hash),
+            TestResource::Model(*game_player_customization_model.class_hash),
             TestResource::Event(*lobby_created_event.class_hash),
             TestResource::Event(*player_joined_event.class_hash),
             TestResource::Event(*player_ready_changed_event.class_hash),
+            TestResource::Event(*answer_revealed_event.class_hash),
             TestResource::Event(*game_started_event.class_hash),
             TestResource::Event(*turn_started_event.class_hash),
             TestResource::Event(*token_moved_event.class_hash),
@@ -199,7 +212,6 @@ fn seed_locked_config(ref world: dojo::world::WorldStorage) -> u64 {
             turn_time_limit_secs: 45,
             exit_home_rule: 0,
             difficulty_level: 1,
-            shop_enabled_on_safe_squares: true,
             created_at: 1,
             updated_at: 1,
         },
@@ -259,8 +271,6 @@ fn seed_move_phase(
     turn.die2_used = false;
     turn.has_moved_token = false;
     turn.first_moved_token_id = 0;
-    turn.shop_enabled = false;
-    turn.shop_square_ref = 0;
     world.write_model_test(@turn);
 
     world.write_model_test(
@@ -292,7 +302,6 @@ fn place_track_token(
             track_pos,
             home_lane_pos: 0,
             steps_total,
-            has_shield: false,
         },
     );
 }
@@ -478,4 +487,52 @@ fn bridge_blocks_path_until_broken() {
 
     assert(!has_legal_move(legal_moves.clone(), 0, 4), 'bridge should block path');
     assert(has_legal_move(legal_moves, 0, 1), 'short move should stay legal');
+}
+
+#[test]
+fn reaching_the_fourth_goal_token_finishes_the_game() {
+    let (mut world, _, lobby_system, turn_system) = setup_world();
+    let config_id = seed_locked_config(ref world);
+
+    let game_id = create_private_game(ref world, lobby_system, config_id, 1111);
+    join_private_game(lobby_system, 1111);
+    ready_private_players(lobby_system, game_id);
+    start_private_game(lobby_system, game_id);
+
+    let host_address = host();
+    let mut host_state: GamePlayer = world.read_model((game_id, host_address));
+    host_state.tokens_in_base = 0;
+    host_state.tokens_in_goal = 3;
+    world.write_model_test(@host_state);
+
+    let finishing_token = Token {
+        game_id,
+        player: host_address,
+        token_id: 0,
+        token_state: token_state::IN_HOME_LANE,
+        track_pos: 0,
+        home_lane_pos: 6,
+        steps_total: 70,
+    };
+    world.write_model_test(@finishing_token);
+
+    seed_move_phase(ref world, game_id, host_address, 1, 2);
+
+    start_cheat_caller_address(turn_system.contract_address, host_address);
+    turn_system.apply_move(
+        game_id, MoveInput { move_type: move_type::DIE_A, token_id: 0, steps: 1 },
+    );
+    stop_cheat_caller_address(turn_system.contract_address);
+
+    let game: Game = world.read_model(game_id);
+    let turn: TurnState = world.read_model(game_id);
+    let refreshed_host: GamePlayer = world.read_model((game_id, host_address));
+    let goal_token: Token = world.read_model((game_id, host_address, 0));
+
+    assert(goal_token.token_state == token_state::IN_CENTER, 'goal token missing');
+    assert(refreshed_host.tokens_in_goal == 4, 'goal counter missing');
+    assert(game.status == game_status::FINISHED, 'game not finished');
+    assert(game.winner == host_address, 'winner missing');
+    assert(turn.phase == turn_phase::TURN_ENDED, 'turn should be closed');
+}
 }

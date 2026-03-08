@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useAccount } from '@starknet-react/core'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { setPlayerCustomization } from '../api'
 import { GameAvatar } from '../components/game/game-avatar'
 import { GameDie } from '../components/game/game-die'
 import { boardThemeCatalog, type BoardThemeId } from '../lib/board-themes'
 import { TokenChip } from '../components/game/token-chip'
 import { diceSkinCatalog, type DiceSkinId } from '../lib/dice-cosmetics'
+import { appEnv } from '../config/env'
 import { getPlayerVisualTheme } from '../lib/player-color-themes'
-import { tokenSkinCatalog, type TokenSkinId } from '../lib/token-cosmetics'
-import { getPlayerSkinSrc, playerSkins } from '../lib/player-skins'
+import { tokenSkinCatalog, tokenSkinIndexFromId, type TokenSkinId } from '../lib/token-cosmetics'
+import { getPlayerSkinSrc, playerSkinIndexFromId, playerSkins } from '../lib/player-skins'
 import { useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import { usePlayerProfile } from '../lib/use-player-profile'
 import { GameConfigView } from './game-config-view'
@@ -182,6 +185,9 @@ const homeCopyByLanguage = {
     starterSkin: 'INICIAL',
     premiumSkin: 'CATALOGO',
     tokenEquippedBadge: 'EQUIPADA',
+    cosmeticsSynced: 'Cosmeticos sincronizados on-chain.',
+    cosmeticsSyncing: 'Sincronizando cosmeticos...',
+    cosmeticsLocalOnly: 'Cosmeticos guardados localmente. Falta sincronizacion on-chain.',
   },
   en: {
     shop: 'SHOP',
@@ -215,6 +221,9 @@ const homeCopyByLanguage = {
     starterSkin: 'STARTER',
     premiumSkin: 'CATALOG',
     tokenEquippedBadge: 'EQUIPPED',
+    cosmeticsSynced: 'Cosmetics synced on-chain.',
+    cosmeticsSyncing: 'Syncing cosmetics...',
+    cosmeticsLocalOnly: 'Cosmetics saved locally. On-chain sync is still pending.',
   },
 } as const
 
@@ -287,6 +296,7 @@ const initialLobbies: LobbyEntry[] = [
 ]
 
 export function HomeView() {
+  const { account } = useAccount()
   const navigate = useNavigate()
   const selectedLobby = initialLobbies[0]
   const activePlayers = selectedLobby.seats
@@ -315,7 +325,7 @@ export function HomeView() {
   const unlockBoardTheme = useAppSettingsStore((state) => state.unlockBoardTheme)
   const unlockDiceSkin = useAppSettingsStore((state) => state.unlockDiceSkin)
   const unlockTokenSkin = useAppSettingsStore((state) => state.unlockTokenSkin)
-  const { username } = useControllerWallet()
+  const { isConnected, username } = useControllerWallet()
   const playerProfile = usePlayerProfile()
   const ui = homeCopyByLanguage[language]
   const selectedSkinSrc = getPlayerSkinSrc(selectedSkinId)
@@ -329,6 +339,35 @@ export function HomeView() {
   const shopItems = shopItemsByTab[activeShopTab]
   const coinBalance = playerProfile.coins
   const coinLabel = coinBalance.toLocaleString('en-US')
+  const [cosmeticsSyncMessage, setCosmeticsSyncMessage] = useState<null | string>(null)
+  const [cosmeticsSyncPending, setCosmeticsSyncPending] = useState(false)
+
+  const syncCustomization = useCallback(
+    async (nextSkinId: null | string, nextTokenSkinId: TokenSkinId) => {
+      if (!isConnected || !account || !appEnv.customizationSystemAddress) {
+        setCosmeticsSyncMessage(isConnected ? ui.cosmeticsLocalOnly : null)
+        return
+      }
+
+      setCosmeticsSyncPending(true)
+      setCosmeticsSyncMessage(ui.cosmeticsSyncing)
+
+      try {
+        const transactionHash = await setPlayerCustomization(
+          account,
+          playerSkinIndexFromId(nextSkinId),
+          tokenSkinIndexFromId(nextTokenSkinId),
+        )
+        await account.waitForTransaction(transactionHash)
+        setCosmeticsSyncMessage(ui.cosmeticsSynced)
+      } catch {
+        setCosmeticsSyncMessage(ui.cosmeticsLocalOnly)
+      } finally {
+        setCosmeticsSyncPending(false)
+      }
+    },
+    [account, isConnected, ui.cosmeticsLocalOnly, ui.cosmeticsSynced, ui.cosmeticsSyncing],
+  )
 
   const onOnlinePlay = () => {
     navigate('/lobby')
@@ -430,6 +469,12 @@ export function HomeView() {
                     <span className="text-[#ffca75]">|</span>
                     <span>{prestigeLabel}</span>
                   </div>
+
+                  {cosmeticsSyncMessage ? (
+                    <p className="mt-1 text-[11px] font-black uppercase tracking-[0.12em] text-[#d8edff]">
+                      {cosmeticsSyncMessage}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -731,6 +776,7 @@ export function HomeView() {
 
                           if (item.isSkinItem) {
                             setSelectedSkinId(item.id)
+                            void syncCustomization(item.id, selectedTokenSkinId)
                             return
                           }
 
@@ -752,6 +798,7 @@ export function HomeView() {
                           }
 
                           setSelectedTokenSkinId(item.tokenSkinId)
+                          void syncCustomization(selectedSkinId, item.tokenSkinId)
                         }
 
                         const actionLabel = item.isSkinItem
@@ -859,6 +906,7 @@ export function HomeView() {
                                 ? 'border-[#2a6719] bg-gradient-to-b from-[#73df58] to-[#3f9f22] text-white shadow-[inset_0_2px_0_rgba(210,255,195,0.8),0_4px_0_rgba(38,95,22,0.85)]'
                                 : 'border-[#8f562f] bg-gradient-to-b from-[#a46539] to-[#7a4727] text-[#f7ddad] shadow-[inset_0_1px_0_rgba(255,225,189,0.45),0_4px_0_rgba(102,58,29,0.88)] hover:brightness-105'
                             }`}
+                            disabled={cosmeticsSyncPending}
                             onClick={handleItemAction}
                             type="button"
                           >

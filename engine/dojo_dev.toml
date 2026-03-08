@@ -1,10 +1,10 @@
 [world]
-name = "Parchis Trivia Engine (Dev)"
-description = "Authoritative on-chain game engine for Parchis Trivia built with Dojo."
-seed = "parchis_trivia"
+name = "ParQuiz Engine (Dev)"
+description = "Authoritative on-chain game engine for ParQuiz built with Dojo."
+seed = "parquiz"
 
 [namespace]
-default = "parchis_trivia"
+default = "parquiz"
 
 [env]
 rpc_url = "http://localhost:5050/"
@@ -14,25 +14,28 @@ private_key = "0xc5b2fcab997346f3ea1c00b002ecf6f382c5f9c9659a3894eb783c5320f912"
 # world_address = "0x..."
 
 [writers]
-"parchis_trivia" = ["parchis_trivia-lobby_system", "parchis_trivia-turn_system", "parchis_trivia-shop_system", "parchis_trivia-egs_system"]
-"parchis_trivia-GameConfig" = ["parchis_trivia-config_system", "parchis_trivia-admin_system"]
-"parchis_trivia-BoardSquare" = ["parchis_trivia-config_system", "parchis_trivia-admin_system"]
-"parchis_trivia-GlobalState" = ["parchis_trivia-config_system", "parchis_trivia-lobby_system"]
-"parchis_trivia-Game" = ["parchis_trivia-lobby_system", "parchis_trivia-turn_system"]
-"parchis_trivia-GameSeat" = ["parchis_trivia-lobby_system"]
-"parchis_trivia-LobbyCodeIndex" = ["parchis_trivia-lobby_system"]
-"parchis_trivia-GameRuntimeConfig" = ["parchis_trivia-lobby_system"]
-"parchis_trivia-GamePlayer" = ["parchis_trivia-lobby_system", "parchis_trivia-turn_system", "parchis_trivia-shop_system"]
-"parchis_trivia-Token" = ["parchis_trivia-turn_system", "parchis_trivia-shop_system"]
-"parchis_trivia-TurnState" = ["parchis_trivia-turn_system", "parchis_trivia-shop_system"]
-"parchis_trivia-DiceState" = ["parchis_trivia-lobby_system", "parchis_trivia-turn_system"]
-"parchis_trivia-BonusState" = ["parchis_trivia-lobby_system", "parchis_trivia-turn_system"]
-"parchis_trivia-EgsConfig" = ["parchis_trivia-admin_system"]
-"parchis_trivia-EgsSessionBinding" = ["parchis_trivia-egs_system", "parchis_trivia-turn_system", "parchis_trivia-lobby_system", "parchis_trivia-shop_system"]
-"parchis_trivia-EgsTokenGameLink" = ["parchis_trivia-egs_system", "parchis_trivia-turn_system", "parchis_trivia-lobby_system", "parchis_trivia-shop_system"]
-"parchis_trivia-PendingQuestion" = ["parchis_trivia-turn_system"]
-"parchis_trivia-PlayerItem" = ["parchis_trivia-shop_system", "parchis_trivia-turn_system"]
-"parchis_trivia-SquareOccupancy" = ["parchis_trivia-turn_system"]
+"parquiz" = ["parquiz-lobby_system", "parquiz-turn_system", "parquiz-egs_system", "parquiz-customization_system"]
+"parquiz-GameConfig" = ["parquiz-config_system", "parquiz-admin_system"]
+"parquiz-BoardSquare" = ["parquiz-config_system", "parquiz-admin_system"]
+"parquiz-PlayerCustomization" = ["parquiz-customization_system"]
+"parquiz-GamePlayerCustomization" = ["parquiz-lobby_system"]
+"parquiz-GlobalState" = ["parquiz-config_system", "parquiz-lobby_system"]
+"parquiz-Game" = ["parquiz-lobby_system", "parquiz-turn_system"]
+"parquiz-GameSeat" = ["parquiz-lobby_system"]
+"parquiz-LobbyCodeIndex" = ["parquiz-lobby_system"]
+"parquiz-GameRuntimeConfig" = ["parquiz-lobby_system"]
+"parquiz-GamePlayer" = ["parquiz-lobby_system", "parquiz-turn_system"]
+"parquiz-Token" = ["parquiz-turn_system"]
+"parquiz-TurnState" = ["parquiz-turn_system"]
+"parquiz-DiceState" = ["parquiz-lobby_system", "parquiz-turn_system"]
+"parquiz-BonusState" = ["parquiz-lobby_system", "parquiz-turn_system"]
+"parquiz-EgsConfig" = ["parquiz-admin_system"]
+"parquiz-VrfConfig" = ["parquiz-admin_system"]
+"parquiz-EgsSessionBinding" = ["parquiz-egs_system", "parquiz-turn_system", "parquiz-lobby_system"]
+"parquiz-EgsTokenGameLink" = ["parquiz-egs_system", "parquiz-turn_system", "parquiz-lobby_system"]
+"parquiz-PendingQuestion" = ["parquiz-turn_system"]
+"parquiz-PlayerItem" = ["parquiz-turn_system"]
+"parquiz-SquareOccupancy" = ["parquiz-turn_system"]
 
 [owners]
-"parchis_trivia" = ["parchis_trivia-admin_system", "parchis_trivia-config_system"]
+"parquiz" = ["parquiz-admin_system", "parquiz-config_system", "parquiz-customization_system"]

@@ -99,6 +99,8 @@ export const tokenSkinCatalog: TokenSkinDefinition[] = [
   },
 ]
 
+export const tokenSkinIdOrder: TokenSkinId[] = tokenSkinCatalog.map((skin) => skin.id)
+
 export const defaultOwnedTokenSkinIds: TokenSkinId[] = ['pink', 'red', 'blue', 'green', 'yellow']
 
 const tokenSkinById = tokenSkinCatalog.reduce<Record<TokenSkinId, TokenSkinDefinition>>((acc, skin) => {
@@ -132,3 +134,12 @@ export const normalizeOwnedTokenSkinIds = (value: unknown, selectedSkinId?: Toke
 }
 
 export const getTokenSkinDefinition = (skinId: TokenSkinId) => tokenSkinById[skinId] || tokenSkinById.blue
+
+export const tokenSkinIndexFromId = (skinId: TokenSkinId): number => {
+  const index = tokenSkinIdOrder.indexOf(skinId)
+  return index >= 0 ? index : tokenSkinIdOrder.indexOf('blue')
+}
+
+export const tokenSkinIdFromIndex = (index: number): TokenSkinId => {
+  return tokenSkinIdOrder[index] || 'blue'
+}

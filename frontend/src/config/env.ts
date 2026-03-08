@@ -8,36 +8,15 @@ const isBrowser = typeof window !== 'undefined'
 
 const isInsecureLocalUrl = (value: string) => /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/.*)?$/i.test(value)
 
-const normalizeLocalToriiGrpcUrl = (value: string) => {
-  if (!isInsecureLocalUrl(value)) {
-    return value
-  }
+const normalizeUrl = (value: string) => value.replace(/\/$/, '')
 
-  try {
-    const url = new URL(value)
-
-    if (url.port === '8080') {
-      url.port = '50051'
-      return url.toString().replace(/\/$/, '')
-    }
-  } catch {
-    return value
-  }
-
-  return value
-}
-
-const resolveSecureLocalProxyUrl = (value: string, proxyPath: string) => {
+const resolveLocalProxyUrl = (value: string, proxyPath: string) => {
   if (!isBrowser) {
     return value
   }
 
-  if (window.location.protocol !== 'https:') {
-    return value
-  }
-
   if (!isInsecureLocalUrl(value)) {
-    return value
+    return normalizeUrl(value)
   }
 
   return `${window.location.origin}${proxyPath}`
@@ -76,7 +55,7 @@ const mainnetRpcUrl =
   import.meta.env.VITE_STARKNET_MAINNET_RPC_URL || defaultRpcUrls.mainnet
 const sepoliaRpcUrl =
   import.meta.env.VITE_STARKNET_SEPOLIA_RPC_URL || defaultRpcUrls.sepolia
-const katanaRpcUrl = resolveSecureLocalProxyUrl(
+const katanaRpcUrl = resolveLocalProxyUrl(
   import.meta.env.VITE_STARKNET_KATANA_RPC_URL || defaultRpcUrls.katana,
   '/rpc',
 )
@@ -88,8 +67,11 @@ const activeRpcUrlMap: Record<StarknetNetwork, string> = {
 }
 
 export const appEnv = {
-  appName: 'Parchis Trivia',
-  namespace: import.meta.env.VITE_PARCHIS_NAMESPACE || 'parchis_trivia',
+  appName: 'ParQuiz',
+  namespace:
+    import.meta.env.VITE_PARQUIZ_NAMESPACE ||
+    import.meta.env.VITE_PARCHIS_NAMESPACE ||
+    'parquiz',
   defaultNetwork,
   liveRpcEnabled: parseBoolean(import.meta.env.VITE_USE_LIVE_RPC),
   mainnetRpcUrl,
@@ -100,15 +82,15 @@ export const appEnv = {
   configSystemAddress: parseAddress(import.meta.env.VITE_CONFIG_SYSTEM_ADDRESS),
   lobbySystemAddress: parseAddress(import.meta.env.VITE_LOBBY_SYSTEM_ADDRESS),
   turnSystemAddress: parseAddress(import.meta.env.VITE_TURN_SYSTEM_ADDRESS),
-  shopSystemAddress: parseAddress(import.meta.env.VITE_SHOP_SYSTEM_ADDRESS),
+  customizationSystemAddress: parseAddress(import.meta.env.VITE_CUSTOMIZATION_SYSTEM_ADDRESS),
   adminSystemAddress: parseAddress(import.meta.env.VITE_ADMIN_SYSTEM_ADDRESS),
   egsSystemAddress: parseAddress(import.meta.env.VITE_EGS_SYSTEM_ADDRESS),
   egsTokenDataSystemAddress: parseAddress(import.meta.env.VITE_EGS_TOKEN_DATA_SYSTEM_ADDRESS),
   vrfProviderAddress:
     parseAddress(import.meta.env.VITE_VRF_PROVIDER_ADDRESS) ||
     '0x051fea4450da9d6aee758bdeba88b2f665bcbf549d2c61421aa724e9ac0ced8f',
-  dojoToriiUrl: resolveSecureLocalProxyUrl(
-    normalizeLocalToriiGrpcUrl(import.meta.env.VITE_DOJO_TORII_URL || 'http://127.0.0.1:50051'),
+  dojoToriiUrl: resolveLocalProxyUrl(
+    import.meta.env.VITE_DOJO_TORII_URL || 'http://127.0.0.1:8080',
     '/torii',
   ),
   dojoRelayUrl: import.meta.env.VITE_DOJO_RELAY_URL || '/ip4/127.0.0.1/tcp/9090',

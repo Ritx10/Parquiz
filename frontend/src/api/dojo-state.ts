@@ -4,6 +4,7 @@ import { dojoRuntimeConfig, isDojoConfigured } from '../config/dojo'
 import { appEnv } from '../config/env'
 import type {
   DojoBoardSquareModel,
+  DojoGamePlayerCustomizationModel,
   DojoBonusStateModel,
   DojoEgsTokenGameLinkModel,
   DojoGameConfigModel,
@@ -32,7 +33,10 @@ import type {
 type RawModel = Record<string, unknown>
 
 type OnchainEventModelName =
+  | 'AnswerResolved'
+  | 'AnswerRevealed'
   | 'DiceRolled'
+  | 'QuestionDrawn'
   | 'TokenMoved'
   | 'TokenCaptured'
   | 'TokenReachedHome'
@@ -41,6 +45,11 @@ type OnchainEventModelName =
   | 'TurnEnded'
   | 'GameWon'
 
+const SAFE_SPACE_SQUARE_TYPE = 1
+const MAX_SEATS = 4
+const TOKENS_PER_PLAYER = 4
+const MAIN_TRACK_LEN = 68
+
 export type DojoGameSnapshot = {
   game: DojoGameModel | null
   turn_state: DojoTurnStateModel | null
@@ -48,10 +57,16 @@ export type DojoGameSnapshot = {
   runtime_config: DojoGameRuntimeConfigModel | null
   pending_question: DojoPendingQuestionModel | null
   players: DojoGamePlayerModel[]
+  player_customizations: DojoGamePlayerCustomizationModel[]
   tokens: DojoTokenModel[]
   bonus_states: DojoBonusStateModel[]
   occupancies: DojoSquareOccupancyModel[]
   safe_track_square_refs: number[]
+}
+
+export type ReadDojoGameSnapshotOptions = {
+  includeBoardSquares?: boolean
+  includePlayerCustomizations?: boolean
 }
 
 export type SubscribeDojoGameParams = {
@@ -72,6 +87,7 @@ const emptySnapshot: DojoGameSnapshot = {
   runtime_config: null,
   pending_question: null,
   players: [],
+  player_customizations: [],
   tokens: [],
   bonus_states: [],
   occupancies: [],
@@ -79,7 +95,10 @@ const emptySnapshot: DojoGameSnapshot = {
 }
 
 const trackedEventModelNames: readonly OnchainEventModelName[] = [
+  'AnswerResolved',
+  'AnswerRevealed',
   'DiceRolled',
+  'QuestionDrawn',
   'TokenMoved',
   'TokenCaptured',
   'TokenReachedHome',
@@ -255,6 +274,15 @@ const buildKeysClause = (modelName: string, keys: Array<bigint | number | string
   (KeysClause as any)([modelTag(modelName)], keys.map((value) => `${value}`), 'FixedLen').build()
 
 let toriiClientPromise: null | Promise<ToriiClient> = null
+const boardSquareCache = new Map<string, Promise<DojoBoardSquareModel[]>>()
+
+const withFallback = async <T,>(promise: Promise<T>, fallback: T): Promise<T> => {
+  try {
+    return await promise
+  } catch {
+    return fallback
+  }
+}
 
 export const getToriiClient = async (): Promise<ToriiClient> => {
   if (!isDojoConfigured) {
@@ -284,6 +312,19 @@ const fetchModelByKeys = async (
   const response = await client.getEntities(query.build())
   const models = extractModels(response.items, modelName)
   return models[0] ?? null
+}
+
+const fetchModelsByKeys = async (
+  client: ToriiClient,
+  modelName: string,
+  keysList: Array<Array<bigint | number | string>>,
+): Promise<RawModel[]> => {
+  if (keysList.length === 0) {
+    return []
+  }
+
+  const rows = await Promise.all(keysList.map((keys) => fetchModelByKeys(client, modelName, keys)))
+  return rows.filter((row): row is RawModel => Boolean(row))
 }
 
 const fetchModelsByMember = async (
@@ -347,9 +388,6 @@ const normalizeTurnStateModel = (raw: RawModel): DojoTurnStateModel => ({
   question_id: toBigInt(raw.question_id),
   question_answered: toBoolean(raw.question_answered),
   question_correct: toBoolean(raw.question_correct),
-  shop_enabled: toBoolean(raw.shop_enabled),
-  shop_square_ref: toNumber(raw.shop_square_ref),
-  purchases_this_turn: toNumber(raw.purchases_this_turn),
   has_moved_token: toBoolean(raw.has_moved_token),
   first_moved_token_id: toNumber(raw.first_moved_token_id),
   deadline: toBigInt(raw.deadline),
@@ -376,7 +414,6 @@ const normalizeTokenModel = (raw: RawModel): DojoTokenModel => ({
   track_pos: toNumber(raw.track_pos),
   home_lane_pos: toNumber(raw.home_lane_pos),
   steps_total: toNumber(raw.steps_total),
-  has_shield: toBoolean(raw.has_shield),
 })
 
 const normalizeDiceStateModel = (raw: RawModel): DojoDiceStateModel => ({
@@ -396,24 +433,12 @@ const normalizeBonusStateModel = (raw: RawModel): DojoBonusStateModel => ({
   bonus_consumed: toBoolean(raw.bonus_consumed),
 })
 
-const normalizeSquareOccupancyModel = (raw: RawModel): DojoSquareOccupancyModel => ({
-  game_id: toBigInt(raw.game_id),
-  square_ref: toNumber(raw.square_ref),
-  seat_0_count: toNumber(raw.seat_0_count),
-  seat_1_count: toNumber(raw.seat_1_count),
-  seat_2_count: toNumber(raw.seat_2_count),
-  seat_3_count: toNumber(raw.seat_3_count),
-  has_blockade: toBoolean(raw.has_blockade),
-  blockade_owner_seat: toNumber(raw.blockade_owner_seat),
-})
-
 const normalizeRuntimeConfigModel = (raw: RawModel): DojoGameRuntimeConfigModel => ({
   game_id: toBigInt(raw.game_id),
   answer_time_limit_secs: toNumber(raw.answer_time_limit_secs),
   turn_time_limit_secs: toNumber(raw.turn_time_limit_secs),
   exit_home_rule: toNumber(raw.exit_home_rule),
   difficulty_level: toNumber(raw.difficulty_level),
-  shop_enabled_on_safe_squares: toBoolean(raw.shop_enabled_on_safe_squares),
 })
 
 const normalizePendingQuestionModel = (raw: RawModel): DojoPendingQuestionModel => ({
@@ -432,6 +457,13 @@ const normalizeQuestionSetModel = (raw: RawModel): DojoQuestionSetModel => ({
   question_count: toNumber(raw.question_count),
   version: toNumber(raw.version),
   enabled: toBoolean(raw.enabled),
+})
+
+const normalizeGamePlayerCustomizationModel = (raw: RawModel): DojoGamePlayerCustomizationModel => ({
+  game_id: toBigInt(raw.game_id),
+  player: normalizeAddress(raw.player),
+  avatar_skin_id: toNumber(raw.avatar_skin_id),
+  token_skin_id: toNumber(raw.token_skin_id),
 })
 
 const normalizeGlobalStateModel = (raw: RawModel): DojoGlobalStateModel => ({
@@ -457,7 +489,6 @@ const normalizeBoardSquareModel = (raw: RawModel): DojoBoardSquareModel => ({
   square_index: toNumber(raw.square_index),
   square_type: toNumber(raw.square_type),
   is_safe: toBoolean(raw.is_safe),
-  is_shop: toBoolean(raw.is_shop),
 })
 
 const normalizeGameConfigModel = (raw: RawModel): DojoGameConfigModel => ({
@@ -468,7 +499,6 @@ const normalizeGameConfigModel = (raw: RawModel): DojoGameConfigModel => ({
   turn_time_limit_secs: toNumber(raw.turn_time_limit_secs),
   exit_home_rule: toNumber(raw.exit_home_rule),
   difficulty_level: toNumber(raw.difficulty_level),
-  shop_enabled_on_safe_squares: toBoolean(raw.shop_enabled_on_safe_squares),
   created_at: toBigInt(raw.created_at),
   updated_at: toBigInt(raw.updated_at),
 })
@@ -497,6 +527,41 @@ const normalizeTrackedEvent = (
     }
 
     return { type: 'DiceRolled', payload }
+  }
+
+  if (eventName === 'QuestionDrawn') {
+    const payload = {
+      game_id: toBigInt(raw.game_id),
+      turn_index: toNumber(raw.turn_index),
+      question_id: toBigInt(raw.question_id),
+      difficulty: toNumber(raw.difficulty),
+    }
+
+    return { type: 'QuestionDrawn', payload }
+  }
+
+  if (eventName === 'AnswerResolved') {
+    const payload = {
+      game_id: toBigInt(raw.game_id),
+      player: normalizeAddress(raw.player),
+      correct: toBoolean(raw.correct),
+      reward: toNumber(raw.reward),
+    }
+
+    return { type: 'AnswerResolved', payload }
+  }
+
+  if (eventName === 'AnswerRevealed') {
+    const payload = {
+      game_id: toBigInt(raw.game_id),
+      player: normalizeAddress(raw.player),
+      question_id: toBigInt(raw.question_id),
+      selected_option: toNumber(raw.selected_option),
+      correct: toBoolean(raw.correct),
+      reward: toNumber(raw.reward),
+    }
+
+    return { type: 'AnswerRevealed', payload }
   }
 
   if (eventName === 'TokenMoved') {
@@ -579,6 +644,27 @@ const normalizeTrackedEvent = (
   return null
 }
 
+const readBoardSquaresForConfig = async (client: ToriiClient, configId: bigint) => {
+  const cacheKey = configId.toString()
+
+  if (!boardSquareCache.has(cacheKey)) {
+    const pendingSquares = fetchModelsByKeys(
+        client,
+        'BoardSquare',
+        Array.from({ length: MAIN_TRACK_LEN }, (_, squareIndex) => [configId, squareIndex]),
+      )
+      .then((rows) => rows.map((row) => normalizeBoardSquareModel(row)))
+      .catch((error) => {
+        boardSquareCache.delete(cacheKey)
+        throw error
+      })
+
+    boardSquareCache.set(cacheKey, pendingSquares)
+  }
+
+  return boardSquareCache.get(cacheKey)!
+}
+
 const readCallbackEntity = (callbackArgs: unknown[]): Entity | null => {
   for (const argument of callbackArgs) {
     if (isRecord(argument) && 'models' in argument) {
@@ -589,7 +675,10 @@ const readCallbackEntity = (callbackArgs: unknown[]): Entity | null => {
   return null
 }
 
-export const readDojoGameSnapshot = async (gameId: bigint): Promise<DojoGameSnapshot> => {
+export const readDojoGameSnapshot = async (
+  gameId: bigint,
+  options: ReadDojoGameSnapshotOptions = {},
+): Promise<DojoGameSnapshot> => {
   const client = await getToriiClient()
   const gameRaw = await fetchModelByKeys(client, 'Game', [gameId])
 
@@ -598,27 +687,48 @@ export const readDojoGameSnapshot = async (gameId: bigint): Promise<DojoGameSnap
   }
 
   const game = normalizeGameModel(gameRaw)
+  const seatRows = await fetchModelsByKeys(
+    client,
+    'GameSeat',
+    Array.from({ length: MAX_SEATS }, (_, seat) => [gameId, seat]),
+  )
+
+  const occupiedPlayers = seatRows
+    .filter((row) => toBoolean(row.occupied))
+    .map((row) => normalizeAddress(row.player))
+    .filter((value, index, collection) => collection.indexOf(value) === index)
+
+  const playerKeys = occupiedPlayers.map((player) => [gameId, player])
+  const tokenKeys = occupiedPlayers.flatMap((player) =>
+    Array.from({ length: TOKENS_PER_PLAYER }, (_, tokenId) => [gameId, player, tokenId]),
+  )
+  const includeBoardSquares = options.includeBoardSquares ?? false
+  const includePlayerCustomizations = options.includePlayerCustomizations ?? false
 
   const [
     turnStateRaw,
     diceStateRaw,
     runtimeConfigRaw,
     playerRows,
+    playerCustomizationRows,
     tokenRows,
     bonusRows,
-    occupancyRows,
     boardSquareRows,
     pendingQuestionRaw,
   ] = await Promise.all([
-    fetchModelByKeys(client, 'TurnState', [gameId]),
-    fetchModelByKeys(client, 'DiceState', [gameId]),
-    fetchModelByKeys(client, 'GameRuntimeConfig', [gameId]),
-    fetchModelsByMember(client, 'GamePlayer', 'game_id', gameId, 16),
-    fetchModelsByMember(client, 'Token', 'game_id', gameId, 64),
-    fetchModelsByMember(client, 'BonusState', 'game_id', gameId, 16),
-    fetchModelsByMember(client, 'SquareOccupancy', 'game_id', gameId, 128),
-    fetchModelsByMember(client, 'BoardSquare', 'config_id', game.config_id, 256),
-    fetchModelByKeys(client, 'PendingQuestion', [gameId, game.turn_index]),
+    withFallback(fetchModelByKeys(client, 'TurnState', [gameId]), null),
+    withFallback(fetchModelByKeys(client, 'DiceState', [gameId]), null),
+    withFallback(fetchModelByKeys(client, 'GameRuntimeConfig', [gameId]), null),
+    withFallback(fetchModelsByKeys(client, 'GamePlayer', playerKeys), []),
+    includePlayerCustomizations
+      ? withFallback(fetchModelsByKeys(client, 'GamePlayerCustomization', playerKeys), [])
+      : Promise.resolve([]),
+    withFallback(fetchModelsByKeys(client, 'Token', tokenKeys), []),
+    withFallback(fetchModelsByKeys(client, 'BonusState', playerKeys), []),
+    includeBoardSquares
+      ? withFallback(readBoardSquaresForConfig(client, game.config_id), [])
+      : Promise.resolve([]),
+    withFallback(fetchModelByKeys(client, 'PendingQuestion', [gameId, game.turn_index]), null),
   ])
 
   const turn_state = turnStateRaw ? normalizeTurnStateModel(turnStateRaw) : null
@@ -627,6 +737,9 @@ export const readDojoGameSnapshot = async (gameId: bigint): Promise<DojoGameSnap
   const pending_question = pendingQuestionRaw ? normalizePendingQuestionModel(pendingQuestionRaw) : null
 
   const players = playerRows.map((row) => normalizeGamePlayerModel(row)).sort((left, right) => left.seat - right.seat)
+  const player_customizations = playerCustomizationRows
+    .map((row) => normalizeGamePlayerCustomizationModel(row))
+    .sort((left, right) => left.player.localeCompare(right.player))
   const tokens = tokenRows
     .map((row) => normalizeTokenModel(row))
     .sort((left, right) =>
@@ -635,13 +748,9 @@ export const readDojoGameSnapshot = async (gameId: bigint): Promise<DojoGameSnap
   const bonus_states = bonusRows
     .map((row) => normalizeBonusStateModel(row))
     .sort((left, right) => left.player.localeCompare(right.player))
-  const occupancies = occupancyRows
-    .map((row) => normalizeSquareOccupancyModel(row))
-    .sort((left, right) => left.square_ref - right.square_ref)
 
   const safe_track_square_refs = boardSquareRows
-    .map((row) => normalizeBoardSquareModel(row))
-    .filter((square) => square.is_safe)
+    .filter((square) => square.square_type === SAFE_SPACE_SQUARE_TYPE)
     .map((square) => square.square_index + 1)
     .filter((value, index, collection) => collection.indexOf(value) === index)
     .sort((left, right) => left - right)
@@ -653,9 +762,10 @@ export const readDojoGameSnapshot = async (gameId: bigint): Promise<DojoGameSnap
     runtime_config,
     pending_question,
     players,
+    player_customizations,
     tokens,
     bonus_states,
-    occupancies,
+    occupancies: [],
     safe_track_square_refs,
   }
 }
@@ -708,16 +818,27 @@ export const readLobbyCodeIndex = async (codeHash: bigint | string): Promise<Doj
 
 export const readLatestGameIdByPlayer = async (playerAddress: string): Promise<bigint | null> => {
   const client = await getToriiClient()
-  const rows = await fetchModelsByMember(client, 'GamePlayer', 'player', playerAddress, 64)
+  const globalStateRow = await fetchModelByKeys(client, 'GlobalState', [1])
+  const nextGameId = globalStateRow ? toBigInt(globalStateRow.next_game_id) : 0n
 
-  if (rows.length === 0) {
+  if (nextGameId <= 1n) {
     return null
   }
 
-  const latest = rows
-    .map((row) => normalizeGamePlayerModel(row))
-    .filter((row) => row.is_active)
-    .sort((left, right) => Number(right.game_id - left.game_id))[0]
+  const probeCount = 16n
+  const minGameId = nextGameId > probeCount ? nextGameId - probeCount : 1n
+  const candidateKeys: Array<Array<bigint | number | string>> = []
+
+  for (let currentGameId = nextGameId - 1n; currentGameId >= minGameId; currentGameId -= 1n) {
+    candidateKeys.push([currentGameId, playerAddress])
+
+    if (currentGameId === 1n) {
+      break
+    }
+  }
+
+  const rows = await fetchModelsByKeys(client, 'GamePlayer', candidateKeys)
+  const latest = rows.map((row) => normalizeGamePlayerModel(row)).find((row) => row.is_active)
 
   return latest?.game_id ?? null
 }
@@ -760,8 +881,6 @@ export const subscribeDojoGame = async (params: SubscribeDojoGameParams): Promis
     { modelName: 'GamePlayer', member: 'game_id', value: params.gameId },
     { modelName: 'Token', member: 'game_id', value: params.gameId },
     { modelName: 'BonusState', member: 'game_id', value: params.gameId },
-    { modelName: 'SquareOccupancy', member: 'game_id', value: params.gameId },
-    ...(params.configId !== undefined ? [{ modelName: 'BoardSquare', member: 'config_id', value: params.configId }] : []),
   ]
 
   try {

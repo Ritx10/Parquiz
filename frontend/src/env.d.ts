@@ -1,4 +1,5 @@
 interface ImportMetaEnv {
+  readonly VITE_PARQUIZ_NAMESPACE?: string
   readonly VITE_PARCHIS_NAMESPACE?: string
   readonly VITE_STARKNET_NETWORK?: 'mainnet' | 'sepolia' | 'katana'
   readonly VITE_USE_LIVE_RPC?: string
@@ -9,7 +10,7 @@ interface ImportMetaEnv {
   readonly VITE_CONFIG_SYSTEM_ADDRESS?: string
   readonly VITE_LOBBY_SYSTEM_ADDRESS?: string
   readonly VITE_TURN_SYSTEM_ADDRESS?: string
-  readonly VITE_SHOP_SYSTEM_ADDRESS?: string
+  readonly VITE_CUSTOMIZATION_SYSTEM_ADDRESS?: string
   readonly VITE_ADMIN_SYSTEM_ADDRESS?: string
   readonly VITE_EGS_SYSTEM_ADDRESS?: string
   readonly VITE_EGS_TOKEN_DATA_SYSTEM_ADDRESS?: string

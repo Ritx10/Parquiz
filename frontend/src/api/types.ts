@@ -3,7 +3,6 @@ export type GameConfigApiPayload = {
   turnTimeLimitSecs: number
   exitHomeRule: 0 | 1 | 2
   difficultyLevel: 0 | 1 | 2
-  shopEnabledOnSafeSquares: boolean
 }
 
 export type GameStatus = 0 | 1 | 2 | 3
@@ -77,9 +76,6 @@ export type DojoTurnStateModel = {
   question_id: bigint
   question_answered: boolean
   question_correct: boolean
-  shop_enabled: boolean
-  shop_square_ref: number
-  purchases_this_turn: number
   has_moved_token: boolean
   first_moved_token_id: number
   deadline: bigint
@@ -106,7 +102,6 @@ export type DojoTokenModel = {
   track_pos: number
   home_lane_pos: number
   steps_total: number
-  has_shield: boolean
 }
 
 export type DojoDiceStateModel = {
@@ -143,7 +138,6 @@ export type DojoGameRuntimeConfigModel = {
   turn_time_limit_secs: number
   exit_home_rule: number
   difficulty_level: number
-  shop_enabled_on_safe_squares: boolean
 }
 
 export type DojoPendingQuestionModel = {
@@ -162,6 +156,20 @@ export type DojoQuestionSetModel = {
   question_count: number
   version: number
   enabled: boolean
+}
+
+export type DojoPlayerCustomizationModel = {
+  player: string
+  avatar_skin_id: number
+  token_skin_id: number
+  updated_at: bigint
+}
+
+export type DojoGamePlayerCustomizationModel = {
+  game_id: bigint
+  player: string
+  avatar_skin_id: number
+  token_skin_id: number
 }
 
 export type DojoGlobalStateModel = {
@@ -187,7 +195,6 @@ export type DojoBoardSquareModel = {
   square_index: number
   square_type: number
   is_safe: boolean
-  is_shop: boolean
 }
 
 export type DojoGameConfigModel = {
@@ -198,7 +205,6 @@ export type DojoGameConfigModel = {
   turn_time_limit_secs: number
   exit_home_rule: number
   difficulty_level: number
-  shop_enabled_on_safe_squares: boolean
   created_at: bigint
   updated_at: bigint
 }
@@ -219,6 +225,29 @@ export type DojoDiceRolledEvent = {
   turn_index: number
   dice_1: number
   dice_2: number
+}
+
+export type DojoQuestionDrawnEvent = {
+  game_id: bigint
+  turn_index: number
+  question_id: bigint
+  difficulty: number
+}
+
+export type DojoAnswerResolvedEvent = {
+  game_id: bigint
+  player: string
+  correct: boolean
+  reward: number
+}
+
+export type DojoAnswerRevealedEvent = {
+  game_id: bigint
+  player: string
+  question_id: bigint
+  selected_option: number
+  correct: boolean
+  reward: number
 }
 
 export type DojoTokenMovedEvent = {
@@ -266,6 +295,9 @@ export type DojoGameWonEvent = {
 
 export type DojoTrackedEvent =
   | { type: 'DiceRolled'; payload: DojoDiceRolledEvent }
+  | { type: 'QuestionDrawn'; payload: DojoQuestionDrawnEvent }
+  | { type: 'AnswerResolved'; payload: DojoAnswerResolvedEvent }
+  | { type: 'AnswerRevealed'; payload: DojoAnswerRevealedEvent }
   | { type: 'TokenMoved'; payload: DojoTokenMovedEvent }
   | { type: 'TokenCaptured'; payload: DojoTokenCapturedEvent }
   | { type: 'TokenReachedHome'; payload: DojoTokenReachedHomeEvent }
@@ -273,16 +305,3 @@ export type DojoTrackedEvent =
   | { type: 'BridgeBroken'; payload: DojoBridgeEvent }
   | { type: 'TurnEnded'; payload: DojoTurnEndedEvent }
   | { type: 'GameWon'; payload: DojoGameWonEvent }
-
-export type BuyItemApiPayload = {
-  itemId: number
-  targetTokenId?: number
-}
-
-export type UseItemApiPayload = {
-  gameId: bigint
-  itemId: number
-  targetPlayer: string
-  targetTokenId: number
-  effectValue: number
-}
