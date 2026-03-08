@@ -22,7 +22,6 @@ const resolveToriiTarget = (configuredValue?: string) => {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const isTest = mode === 'test' || process.env.VITEST === 'true'
-  const isKatanaNetwork = (env.VITE_STARKNET_NETWORK || '').toLowerCase() === 'katana'
   const toriiTarget = resolveToriiTarget(env.VITE_DOJO_TORII_URL)
   const plugins = [wasm(), topLevelAwait(), react()]
 
@@ -87,7 +86,7 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
-    plugins: isTest || isKatanaNetwork ? plugins : [...plugins, mkcert()],
+    plugins: isTest ? plugins : [...plugins, mkcert()],
     server: {
       cors: true,
       host: '0.0.0.0',
