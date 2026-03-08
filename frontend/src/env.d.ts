@@ -13,7 +13,6 @@ interface ImportMetaEnv {
   readonly VITE_CUSTOMIZATION_SYSTEM_ADDRESS?: string
   readonly VITE_ADMIN_SYSTEM_ADDRESS?: string
   readonly VITE_EGS_SYSTEM_ADDRESS?: string
-  readonly VITE_EGS_TOKEN_DATA_SYSTEM_ADDRESS?: string
   readonly VITE_VRF_PROVIDER_ADDRESS?: string
   readonly VITE_DOJO_TORII_URL?: string
   readonly VITE_DOJO_RELAY_URL?: string

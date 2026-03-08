@@ -128,7 +128,6 @@ Capture these values from the output or generated manifest:
 - `turn_system` address
 - `admin_system` address
 - `egs_system` address
-- `egs_token_data_system` address
 
 ### 5. Start Torii against Sepolia
 
@@ -153,7 +152,6 @@ VITE_LOBBY_SYSTEM_ADDRESS=<LOBBY_SYSTEM_ADDRESS>
 VITE_TURN_SYSTEM_ADDRESS=<TURN_SYSTEM_ADDRESS>
 VITE_ADMIN_SYSTEM_ADDRESS=<ADMIN_SYSTEM_ADDRESS>
 VITE_EGS_SYSTEM_ADDRESS=<EGS_SYSTEM_ADDRESS>
-VITE_EGS_TOKEN_DATA_SYSTEM_ADDRESS=<EGS_TOKEN_DATA_SYSTEM_ADDRESS>
 VITE_VRF_PROVIDER_ADDRESS=0x051fea4450da9d6aee758bdeba88b2f665bcbf549d2c61421aa724e9ac0ced8f
 VITE_DOJO_TORII_URL=<YOUR_TORII_URL>
 VITE_DOJO_MANIFEST_PATH=../manifest_release.json
@@ -161,6 +159,7 @@ VITE_DOJO_MANIFEST_PATH=../manifest_release.json
 
 Notes:
 
+- `egs_system` is the only EGS game address the frontend and tournament platforms should use; it exposes `IMinigameTokenData` directly.
 - `VITE_VRF_PROVIDER_ADDRESS` already matches the Cartridge Sepolia VRF provider.
 - The frontend already submits VRF as a multicall in `frontend/src/api/parchis-api.ts` by calling `request_random` before `roll_two_dice_and_draw_question`.
 
