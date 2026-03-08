@@ -375,6 +375,37 @@ const fetchModelsByMember = async (
   return matches.slice(0, limit)
 }
 
+const fetchAllModels = async (
+  client: ToriiClient,
+  modelName: string,
+  limit = 256,
+): Promise<RawModel[]> => {
+  const pageSize = Math.min(Math.max(limit, 32), 256)
+  const matches: RawModel[] = []
+  let cursor: string | undefined
+
+  while (matches.length < limit) {
+    const query = new ToriiQueryBuilder<ToriiSchema>()
+      .withEntityModels([modelTag(modelName) as QueryEntityModelTag])
+      .withLimit(pageSize)
+
+    if (cursor) {
+      query.withCursor(cursor)
+    }
+
+    const response = await client.getEntities(query.build())
+    matches.push(...extractModels(response.items, modelName))
+
+    if (!response.next_cursor || response.items.length === 0) {
+      break
+    }
+
+    cursor = response.next_cursor
+  }
+
+  return matches.slice(0, limit)
+}
+
 const normalizeGameModel = (raw: RawModel): DojoGameModel => ({
   game_id: toBigInt(raw.game_id),
   status: toNumber(raw.status) as DojoGameModel['status'],
@@ -806,6 +837,15 @@ export const readLatestGameConfigByCreator = async (
   return rows
     .map((row) => normalizeGameConfigModel(row))
     .sort((left, right) => Number(right.config_id - left.config_id))[0] || null
+}
+
+export const readGameConfigs = async (limit = 96): Promise<DojoGameConfigModel[]> => {
+  const client = await getToriiClient()
+  const rows = await fetchAllModels(client, 'GameConfig', limit)
+
+  return rows
+    .map((row) => normalizeGameConfigModel(row))
+    .sort((left, right) => Number(right.config_id - left.config_id))
 }
 
 export const readGlobalState = async (): Promise<DojoGlobalStateModel | null> => {

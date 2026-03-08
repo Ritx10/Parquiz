@@ -154,6 +154,7 @@ const homeCopyByLanguage = {
   es: {
     shop: 'TIENDA',
     settings: 'CONFIGURACION',
+    configs: 'CONFIGS',
     center: 'CENTRO DE PARTIDAS',
     playOnline: 'JUGAR ONLINE',
     friendsMode: 'CREAR/UNIRSE CON AMIGOS',
@@ -194,6 +195,7 @@ const homeCopyByLanguage = {
   en: {
     shop: 'SHOP',
     settings: 'SETTINGS',
+    configs: 'CONFIGS',
     center: 'MATCH CENTER',
     playOnline: 'PLAY ONLINE',
     friendsMode: 'CREATE/JOIN WITH FRIENDS',
@@ -449,6 +451,10 @@ export function HomeView() {
     navigate('/lobby-friends')
   }
 
+  const onBrowseConfigs = () => {
+    navigate('/configs')
+  }
+
   const onPracticeWithAi = () => {
     navigate(`/board-mock?mode=ai&difficulty=${aiDifficulty}`)
   }
@@ -575,6 +581,18 @@ export function HomeView() {
                 <path d="M33.5 29.8v5.4M30.8 32.5h5.4" stroke="#734216" strokeLinecap="round" strokeWidth="2.2" />
               </svg>
             </button>
+
+            <div className="flex flex-col items-center gap-1">
+              <button
+                className="rounded-full border border-[#8e5b32] bg-gradient-to-b from-[#f4f6ff] to-[#a1b4d9] p-4 text-3xl shadow-[inset_0_2px_0_rgba(255,255,255,0.85),0_8px_14px_rgba(42,37,30,0.35)] transition hover:-translate-y-0.5"
+                onClick={onBrowseConfigs}
+                title={ui.configs}
+                type="button"
+              >
+                📘
+              </button>
+              <span className="text-[12px] font-black uppercase tracking-wide text-white">{ui.configs}</span>
+            </div>
 
             <div className="flex flex-col items-center gap-1">
               <button

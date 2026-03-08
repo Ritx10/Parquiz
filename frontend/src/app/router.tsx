@@ -36,6 +36,13 @@ export const appRouter = createBrowserRouter([
         },
       },
       {
+        path: 'configs',
+        lazy: async () => {
+          const module = await import('../pages/config-browser-page')
+          return { Component: module.ConfigBrowserPage }
+        },
+      },
+      {
         path: 'board',
         lazy: async () => {
           const module = await import('../pages/game-board-page')
