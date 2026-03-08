@@ -1,16 +1,16 @@
 import { localizeShopText, type LocalizedText, type ShopLanguage } from './shop-i18n'
 
-const freeSkinModules = import.meta.glob('../assets/capis/CapisGratis/*.{png,jpg,jpeg,webp,avif}', {
+const freeSkinModules = import.meta.glob('../assets/player-skins/free/*.{png,jpg,jpeg,webp,avif}', {
   eager: true,
   import: 'default',
 }) as Record<string, string>
 
-const premiumSkinModules = import.meta.glob('../assets/capis/CapisPago/*.{png,jpg,jpeg,webp,avif}', {
+const premiumSkinModules = import.meta.glob('../assets/player-skins/premium/*.{png,jpg,jpeg,webp,avif}', {
   eager: true,
   import: 'default',
 }) as Record<string, string>
 
-const rewardSkinModules = import.meta.glob('../assets/capis/CapiEspecial/*.{png,jpg,jpeg,webp,avif}', {
+const rewardSkinModules = import.meta.glob('../assets/player-skins/reward/*.{png,jpg,jpeg,webp,avif}', {
   eager: true,
   import: 'default',
 }) as Record<string, string>
@@ -154,7 +154,9 @@ const freeSkins = sortEntries(freeSkinModules).map<PlayerSkin>(([modulePath, src
   }
 })
 
-const premiumSkins = sortEntries(premiumSkinModules).map<PlayerSkin>(([modulePath, src], index) => {
+const premiumSkins = sortEntries(premiumSkinModules)
+  .filter(([modulePath]) => getPathSlug(modulePath) !== 'pasted-graphic-9')
+  .map<PlayerSkin>(([modulePath, src], index) => {
   const presentation = resolvePresentation(getPathSlug(modulePath), 'premium', index)
 
   return {

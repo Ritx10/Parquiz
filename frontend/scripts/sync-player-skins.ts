@@ -1,7 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, copyFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { basename, extname, join, resolve } from 'node:path'
 
 const SUPPORTED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.avif', '.gif', '.heic'])
@@ -32,17 +31,15 @@ const listFilesRecursive = (directoryPath: string): string[] => {
   })
 }
 
-const findDownloadsDirectory = (name: string) => {
-  const downloadsRoot = join(homedir(), 'Downloads')
-
-  if (!existsSync(downloadsRoot)) {
+const findProjectDirectory = (name: string) => {
+  if (!existsSync(projectRoot)) {
     return null
   }
 
   const normalizedTarget = name.toLowerCase()
-  const directMatch = readdirSync(downloadsRoot).find((entryName) => entryName.toLowerCase() === normalizedTarget)
+  const directMatch = readdirSync(projectRoot).find((entryName) => entryName.toLowerCase() === normalizedTarget)
 
-  return directMatch ? join(downloadsRoot, directMatch) : null
+  return directMatch ? join(projectRoot, directMatch) : null
 }
 
 const ensureEmptyDirectory = (directoryPath: string) => {
@@ -113,25 +110,24 @@ const syncSkinGroup = ({
 }
 
 const projectRoot = resolve(import.meta.dir, '..')
-const assetsRoot = join(projectRoot, 'src', 'assets', 'capis')
-const freeDestination = join(assetsRoot, 'CapisGratis')
-const premiumDestination = join(assetsRoot, 'CapisPago')
-const rewardDestination = join(assetsRoot, 'CapiEspecial')
+const assetsRoot = join(projectRoot, 'src', 'assets', 'player-skins')
+const freeDestination = join(assetsRoot, 'free')
+const premiumDestination = join(assetsRoot, 'premium')
+const rewardDestination = join(assetsRoot, 'reward')
 
-const freeSource = findDownloadsDirectory('CapisGratis')
-const premiumSource = findDownloadsDirectory('CapisPago')
-const extraPremiumSource = findDownloadsDirectory('Capi')
-const rewardSource = findDownloadsDirectory('CapiEspecial')
+const freeSource = findProjectDirectory('CapisGratis')
+const premiumSource = findProjectDirectory('CapisPago')
+const specialPremiumSource = findProjectDirectory('CapiEspecial')
 
 if (!freeSource) {
-  throw new Error('Missing source folder in Downloads: CapisGratis')
+  throw new Error('Missing source folder in repository: frontend/CapisGratis')
 }
 
 if (!premiumSource) {
-  throw new Error('Missing source folder in Downloads: CapisPago')
+  throw new Error('Missing source folder in repository: frontend/CapisPago')
 }
 
-const premiumSourceDirectories = [premiumSource, extraPremiumSource].filter((entry): entry is string => Boolean(entry))
+const premiumSourceDirectories = [premiumSource, specialPremiumSource].filter((entry): entry is string => Boolean(entry))
 
 const freeCount = syncSkinGroup({
   destinationDirectory: freeDestination,
@@ -145,23 +141,23 @@ const premiumCount = syncSkinGroup({
   sourceDirectories: premiumSourceDirectories,
 })
 
-const rewardCount = rewardSource
+const rewardCount = specialPremiumSource
   ? syncSkinGroup({
       destinationDirectory: rewardDestination,
       groupName: 'especial',
-      sourceDirectories: [rewardSource],
+      sourceDirectories: [specialPremiumSource],
     })
   : 0
 
-console.log(`Synced ${freeCount} free capi skins from Downloads/CapisGratis`)
-console.log(`Synced ${premiumCount} premium capi skins from ${premiumSourceDirectories.map((path) => path.replace(`${homedir()}/`, '~/')).join(', ')}`)
+console.log(`Synced ${freeCount} free capi skins from ${freeSource.replace(`${projectRoot}/`, '')}`)
+console.log(`Synced ${premiumCount} premium capi skins from ${premiumSource.replace(`${projectRoot}/`, '')}`)
 
-if (rewardSource) {
-  console.log(`Synced ${rewardCount} reward capi skins from ${rewardSource.replace(`${homedir()}/`, '~/')}`)
+if (specialPremiumSource) {
+  console.log(`Synced ${rewardCount} reward capi skins from ${specialPremiumSource.replace(`${projectRoot}/`, '')}`)
 } else {
-  console.log('Optional Downloads/CapiEspecial folder was not found; no reward skins were imported.')
+  console.log('Optional frontend/CapiEspecial folder was not found; no reward skins were imported.')
 }
 
-if (!extraPremiumSource) {
-  console.log('Optional Downloads/Capi folder was not found; no extra premium skins were imported.')
+if (!specialPremiumSource) {
+  console.log('Optional frontend/CapiEspecial folder was not found; no extra premium skins were imported.')
 }
