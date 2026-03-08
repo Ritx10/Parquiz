@@ -415,8 +415,10 @@ const formatPendingActionLabel = (
       ? 'move'
       : label === 'Roll + question (VRF)'
         ? 'roll-question'
-        : label === 'Submitting answer'
+      : label === 'Submitting answer'
           ? 'answer'
+          : label === 'Force skip timeout'
+            ? 'force-skip'
           : 'end-turn'
 
   const phrases = {
@@ -425,6 +427,11 @@ const formatPendingActionLabel = (
         confirming: 'Confirming answer...',
         submitting: 'Submitting answer...',
         syncing: 'Syncing answer...',
+      },
+      'force-skip': {
+        confirming: 'Confirming timeout skip...',
+        submitting: 'Submitting timeout skip...',
+        syncing: 'Syncing timeout skip...',
       },
       'end-turn': {
         confirming: 'Confirming end turn...',
@@ -447,6 +454,11 @@ const formatPendingActionLabel = (
         confirming: 'Confirmando respuesta...',
         submitting: 'Enviando respuesta...',
         syncing: 'Sincronizando respuesta...',
+      },
+      'force-skip': {
+        confirming: 'Confirmando salto por tiempo...',
+        submitting: 'Enviando salto por tiempo...',
+        syncing: 'Sincronizando salto por tiempo...',
       },
       'end-turn': {
         confirming: 'Confirmando fin de turno...',
@@ -2709,12 +2721,8 @@ export function MatchOnchainView() {
       return null
     }
 
-    if (txPendingLabel !== 'Roll + question (VRF)' || modalQuestion) {
-      return null
-    }
-
     return formatPendingActionLabel(txPendingLabel, txPendingPhase, language)
-  }, [language, modalQuestion, txPendingLabel, txPendingPhase])
+  }, [language, txPendingLabel, txPendingPhase])
   const visualSkinByColor = useMemo(() => {
     return players.reduce<Partial<Record<PlayerColor, MatchPlayer['visualSkinId']>>>((acc, player) => {
       acc[player.color] = player.visualSkinId
@@ -3067,7 +3075,7 @@ export function MatchOnchainView() {
             question={modalQuestion}
             secondsLeft={questionSecondsLeft}
             selectedOption={selectedAnswerIndex}
-            statusText={null}
+            statusText={pendingStatusMessage}
           />
         ) : resolvedAnswerDisplay ? (
           <TriviaQuestionModal
