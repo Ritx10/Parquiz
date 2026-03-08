@@ -2,6 +2,12 @@
 name = "ParQuiz Engine (Dev)"
 description = "Authoritative on-chain game engine for ParQuiz built with Dojo."
 seed = "parquiz"
+icon_uri = "https://raw.githubusercontent.com/Ritx10/Parquiz/main/engine/assets/icon.png"
+cover_uri = "https://raw.githubusercontent.com/Ritx10/Parquiz/main/engine/assets/cover.png"
+website = "https://github.com/Ritx10/Parquiz"
+
+[world.socials]
+github = "https://github.com/Ritx10/Parquiz"
 
 [namespace]
 default = "parquiz"
@@ -11,6 +17,10 @@ rpc_url = "http://localhost:5050/"
 # Default account for katana with seed = 0
 account_address = "0x127fd5f1fe78a71f8bcd1fec63e3fe2f0486b6ecd5c86a0466c3a21fa5cfcec"
 private_key = "0xc5b2fcab997346f3ea1c00b002ecf6f382c5f9c9659a3894eb783c5320f912"
+# Optional: configure IPFS publishing so `sozo migrate` uploads world metadata.
+# ipfs_config.url = "https://ipfs.infura.io:5001"
+# ipfs_config.username = "YOUR_IPFS_USERNAME"
+# ipfs_config.password = "YOUR_IPFS_PASSWORD"
 # world_address = "0x..."
 
 [writers]

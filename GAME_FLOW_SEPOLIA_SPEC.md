@@ -160,9 +160,20 @@ VITE_DOJO_MANIFEST_PATH=../manifest_release.json
 Notes:
 
 - `egs_system` is the only EGS game address the frontend and tournament platforms should use; it exposes `IMinigameTokenData` directly.
+- Configure `EgsConfig.adapter_address` with the deployed `egs_system` address so published EGS settings reference the correct game adapter.
+- Configure `EgsConfig.settings_address` with the deployed `egs_system` address because it now exposes the ParQuiz EGS settings views.
+- The current Denshokan registry address on Sepolia is `0x040f1ed9880611bb7273bf51fd67123ebbba04c282036e2f81314061f6f9b1a1`; configure `EgsConfig.registry_address` with this value before calling `register_egs_game`.
 - The current Denshokan token address on Sepolia is `0x0142712722e62a38f9c40fcc904610e1a14c70125876ecaaf25d803556734467`; configure `EgsConfig.token_address` with this value for live EGS lifecycle checks.
 - `VITE_VRF_PROVIDER_ADDRESS` already matches the Cartridge Sepolia VRF provider.
 - The frontend already submits VRF as a multicall in `frontend/src/api/parchis-api.ts` by calling `request_random` before `roll_two_dice_and_draw_question`.
+
+After `set_egs_config` is updated with the live Sepolia addresses, you can backfill EGS discovery metadata with:
+
+```bash
+cd engine
+sozo execute parquiz-egs_system register_egs_game <CREATOR_ADDRESS> --profile release
+sozo execute parquiz-egs_system publish_all_egs_settings --profile release
+```
 
 ### 7. Run the frontend against Sepolia
 

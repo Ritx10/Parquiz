@@ -90,6 +90,7 @@ pub struct GlobalDefaultsPayload {
 #[derive(Copy, Drop, Serde)]
 pub struct EgsConfigPayload {
     pub adapter_address: ContractAddress,
+    pub registry_address: ContractAddress,
     pub token_address: ContractAddress,
     pub settings_address: ContractAddress,
     pub objectives_address: ContractAddress,

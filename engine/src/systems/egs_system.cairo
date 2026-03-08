@@ -1,6 +1,11 @@
+use starknet::ContractAddress;
+
 #[starknet::interface]
 pub trait IEgsSystem<T> {
     fn bind_egs_token(ref self: T, game_id: u64, token_id: felt252);
+    fn register_egs_game(ref self: T, creator_address: ContractAddress) -> u64;
+    fn publish_egs_settings(ref self: T, settings_id: u64);
+    fn publish_all_egs_settings(ref self: T);
 }
 
 #[starknet::interface]
@@ -9,6 +14,32 @@ pub trait IMinigameTokenData<T> {
     fn game_over(self: @T, token_id: felt252) -> bool;
     fn score_batch(self: @T, token_ids: Span<felt252>) -> Array<u64>;
     fn game_over_batch(self: @T, token_ids: Span<felt252>) -> Array<bool>;
+}
+
+#[derive(Drop, Serde, Copy)]
+pub struct GameSetting {
+    pub name: felt252,
+    pub value: felt252,
+}
+
+#[derive(Drop, Serde)]
+pub struct GameSettingDetails {
+    pub name: ByteArray,
+    pub description: ByteArray,
+    pub settings: Span<GameSetting>,
+}
+
+#[starknet::interface]
+pub trait IMinigameSettings<T> {
+    fn settings_exist(self: @T, settings_id: u32) -> bool;
+    fn settings_exist_batch(self: @T, settings_ids: Span<u32>) -> Array<bool>;
+}
+
+#[starknet::interface]
+pub trait IMinigameSettingsDetails<T> {
+    fn settings_count(self: @T) -> u32;
+    fn settings_details(self: @T, settings_id: u32) -> GameSettingDetails;
+    fn settings_details_batch(self: @T, settings_ids: Span<u32>) -> Array<GameSettingDetails>;
 }
 
 #[starknet::interface]
@@ -21,6 +52,8 @@ pub trait IMinigameToken<T> {
 
 pub const IMINIGAME_ID: felt252 =
     0x1050f9a792acfa175e26783e365e1b0b38ff3440b960d0ffdfc0ff9d7dc9f2a;
+pub const IMINIGAME_SETTINGS_ID: felt252 =
+    0x1a58ab3ee416cc018f93236fd0bb995de89ee536626c268491121e51a46a0f4;
 
 #[starknet::interface]
 pub trait ISRC5<T> {
@@ -32,24 +65,64 @@ pub trait IERC721<T> {
     fn owner_of(self: @T, token_id: core::integer::u256) -> starknet::ContractAddress;
 }
 
+#[starknet::interface]
+pub trait IMinigameTokenSettingsPublisher<T> {
+    fn create_settings(
+        ref self: T,
+        game_address: ContractAddress,
+        creator_address: ContractAddress,
+        settings_id: u32,
+        settings_details: GameSettingDetails,
+    );
+}
+
+#[starknet::interface]
+pub trait IMinigameRegistry<T> {
+    fn is_game_registered(self: @T, contract_address: ContractAddress) -> bool;
+    fn game_id_from_address(self: @T, contract_address: ContractAddress) -> u64;
+    fn register_game(
+        ref self: T,
+        creator_address: ContractAddress,
+        name: ByteArray,
+        description: ByteArray,
+        developer: ByteArray,
+        publisher: ByteArray,
+        genre: ByteArray,
+        image: ByteArray,
+        color: Option<ByteArray>,
+        client_url: Option<ByteArray>,
+        renderer_address: Option<ContractAddress>,
+        royalty_fraction: Option<u128>,
+        skills_address: Option<ContractAddress>,
+        version: u64,
+    ) -> u64;
+}
+
 #[dojo::contract]
 pub mod egs_system {
-    use crate::constants::{EGS_CONFIG_SINGLETON_ID, MAX_SEATS, egs_link_status};
+    use crate::constants::{
+        EGS_CONFIG_SINGLETON_ID, GLOBAL_STATE_SINGLETON_ID, MAX_SEATS, config_status,
+        difficulty_level, egs_link_status,
+    };
     use crate::models::{
-        BonusState, EgsConfig, EgsSessionBinding, EgsTokenGameLink, Game, GameConfig, GamePlayer,
-        GameSeat,
+        AdminAccount, BonusState, EgsConfig, EgsSessionBinding, EgsTokenGameLink, Game,
+        GameConfig, GamePlayer, GameSeat, GlobalState,
     };
     use dojo::model::ModelStorage;
-    use starknet::{ContractAddress, get_caller_address};
+    use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use super::{
-        IERC721Dispatcher, IERC721DispatcherTrait, IEgsSystem, IMinigameTokenData,
-        IMinigameTokenDispatcher, IMinigameTokenDispatcherTrait, IMINIGAME_ID, ISRC5,
+        GameSetting, GameSettingDetails, IERC721Dispatcher, IERC721DispatcherTrait, IEgsSystem,
+        IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait, IMinigameSettings,
+        IMinigameSettingsDetails, IMinigameTokenData, IMinigameTokenDispatcher,
+        IMinigameTokenDispatcherTrait, IMinigameTokenSettingsPublisherDispatcher,
+        IMinigameTokenSettingsPublisherDispatcherTrait, IMINIGAME_ID, IMINIGAME_SETTINGS_ID,
+        ISRC5,
     };
 
     #[abi(embed_v0)]
     impl SRC5Impl of ISRC5<ContractState> {
         fn supports_interface(self: @ContractState, interface_id: felt252) -> bool {
-            interface_id == IMINIGAME_ID
+            interface_id == IMINIGAME_ID || interface_id == IMINIGAME_SETTINGS_ID
         }
     }
 
@@ -101,6 +174,62 @@ pub mod egs_system {
     }
 
     #[abi(embed_v0)]
+    impl MinigameSettingsImpl of IMinigameSettings<ContractState> {
+        fn settings_exist(self: @ContractState, settings_id: u32) -> bool {
+            let world = self.world_default();
+            settings_exists_internal(@world, settings_id)
+        }
+
+        fn settings_exist_batch(self: @ContractState, settings_ids: Span<u32>) -> Array<bool> {
+            let mut results = array![];
+            let mut index = 0;
+
+            loop {
+                if index >= settings_ids.len() {
+                    break;
+                }
+
+                results.append(self.settings_exist(*settings_ids.at(index)));
+                index += 1;
+            }
+
+            results
+        }
+    }
+
+    #[abi(embed_v0)]
+    impl MinigameSettingsDetailsImpl of IMinigameSettingsDetails<ContractState> {
+        fn settings_count(self: @ContractState) -> u32 {
+            let world = self.world_default();
+            settings_count_internal(@world)
+        }
+
+        fn settings_details(self: @ContractState, settings_id: u32) -> GameSettingDetails {
+            let world = self.world_default();
+            let config = load_locked_settings_config(@world, settings_id);
+            setting_details_from_config(config)
+        }
+
+        fn settings_details_batch(
+            self: @ContractState, settings_ids: Span<u32>,
+        ) -> Array<GameSettingDetails> {
+            let mut results = array![];
+            let mut index = 0;
+
+            loop {
+                if index >= settings_ids.len() {
+                    break;
+                }
+
+                results.append(self.settings_details(*settings_ids.at(index)));
+                index += 1;
+            }
+
+            results
+        }
+    }
+
+    #[abi(embed_v0)]
     impl EgsSystemImpl of IEgsSystem<ContractState> {
         fn bind_egs_token(ref self: ContractState, game_id: u64, token_id: felt252) {
             assert(token_id != 0, 'token_id');
@@ -144,6 +273,77 @@ pub mod egs_system {
             world.write_model(@binding);
             write_token_link(ref world, binding);
             sync_token_contract_state(binding, token);
+        }
+
+        fn register_egs_game(ref self: ContractState, creator_address: ContractAddress) -> u64 {
+            let mut world = self.world_default();
+            let caller = get_caller_address();
+            assert_admin_or_init(ref world, caller);
+
+            let config: EgsConfig = world.read_model(EGS_CONFIG_SINGLETON_ID);
+            assert(config.enabled, 'egs_disabled');
+            assert(config.registry_address != zero_address(), 'registry_missing');
+            assert(config.token_address != zero_address(), 'token_missing');
+
+            let game_address = get_contract_address();
+            if config.adapter_address != zero_address() {
+                assert(config.adapter_address == game_address, 'adapter_mismatch');
+            }
+
+            let registry = IMinigameRegistryDispatcher { contract_address: config.registry_address };
+            if registry.is_game_registered(game_address) {
+                return registry.game_id_from_address(game_address);
+            }
+
+            registry.register_game(
+                creator_address,
+                egs_game_name(),
+                egs_game_description(),
+                egs_game_developer(),
+                egs_game_publisher(),
+                egs_game_genre(),
+                egs_game_image(),
+                Option::Some(egs_game_color()),
+                Option::None,
+                Option::None,
+                Option::None,
+                Option::None,
+                egs_game_version(),
+            )
+        }
+
+        fn publish_egs_settings(ref self: ContractState, settings_id: u64) {
+            let mut world = self.world_default();
+            let caller = get_caller_address();
+            assert_admin_or_init(ref world, caller);
+
+            let config: GameConfig = load_locked_settings_config(@world, settings_id.try_into().unwrap());
+            publish_settings_to_token(ref world, config);
+        }
+
+        fn publish_all_egs_settings(ref self: ContractState) {
+            let mut world = self.world_default();
+            let caller = get_caller_address();
+            assert_admin_or_init(ref world, caller);
+
+            let state: GlobalState = world.read_model(GLOBAL_STATE_SINGLETON_ID);
+            if state.singleton_id != GLOBAL_STATE_SINGLETON_ID || state.next_config_id == 0 {
+                return;
+            }
+
+            let mut config_id: u64 = 1;
+            loop {
+                if config_id >= state.next_config_id {
+                    break;
+                }
+
+                let config: GameConfig = world.read_model(config_id);
+                if is_publishable_settings_config(config) {
+                    publish_settings_to_token(ref world, config);
+                }
+
+                config_id += 1;
+            }
         }
     }
 
@@ -243,7 +443,12 @@ pub mod egs_system {
         }
     }
 
-    pub fn maybe_publish_settings(ref _world: dojo::world::WorldStorage, _config: GameConfig) {
+    pub fn maybe_publish_settings(ref world: dojo::world::WorldStorage, config: GameConfig) {
+        if !is_publishable_settings_config(config) {
+            return;
+        }
+
+        publish_settings_to_token(ref world, config);
     }
 
     pub fn maybe_disable_settings(ref _world: dojo::world::WorldStorage, _config_id: u64) {
@@ -266,6 +471,12 @@ pub mod egs_system {
 
     fn token_dispatcher(config: EgsConfig) -> IMinigameTokenDispatcher {
         IMinigameTokenDispatcher { contract_address: config.token_address }
+    }
+
+    fn token_settings_dispatcher(
+        config: EgsConfig,
+    ) -> IMinigameTokenSettingsPublisherDispatcher {
+        IMinigameTokenSettingsPublisherDispatcher { contract_address: config.token_address }
     }
 
     fn maybe_sync_token_contract_state(
@@ -298,6 +509,146 @@ pub mod egs_system {
     fn assert_token_contract_ready(config: EgsConfig) {
         assert(config.enabled, 'egs_disabled');
         assert(config.token_address != zero_address(), 'token_missing');
+    }
+
+    fn settings_exists_internal(world: @dojo::world::WorldStorage, settings_id: u32) -> bool {
+        let config_id: u64 = settings_id.into();
+        let config: GameConfig = world.read_model(config_id);
+        is_publishable_settings_config(config)
+    }
+
+    fn settings_count_internal(world: @dojo::world::WorldStorage) -> u32 {
+        let state: GlobalState = world.read_model(GLOBAL_STATE_SINGLETON_ID);
+        if state.singleton_id != GLOBAL_STATE_SINGLETON_ID || state.next_config_id == 0 {
+            return 0;
+        }
+
+        let mut count: u32 = 0;
+        let mut config_id: u64 = 1;
+        loop {
+            if config_id >= state.next_config_id {
+                break;
+            }
+
+            let config: GameConfig = world.read_model(config_id);
+            if is_publishable_settings_config(config) {
+                count += 1;
+            }
+
+            config_id += 1;
+        }
+
+        count
+    }
+
+    fn load_locked_settings_config(
+        world: @dojo::world::WorldStorage, settings_id: u32,
+    ) -> GameConfig {
+        let config_id: u64 = settings_id.into();
+        let config: GameConfig = world.read_model(config_id);
+        assert(is_publishable_settings_config(config), 'settings_missing');
+        config
+    }
+
+    fn is_publishable_settings_config(config: GameConfig) -> bool {
+        config.config_id != 0 && config.status == config_status::LOCKED
+    }
+
+    fn setting_details_from_config(config: GameConfig) -> GameSettingDetails {
+        GameSettingDetails {
+            name: settings_name(config.difficulty_level),
+            description: settings_description(config.difficulty_level),
+            settings: array![
+                GameSetting { name: 'difficulty', value: config.difficulty_level.into() },
+                GameSetting { name: 'answer_secs', value: config.answer_time_limit_secs.into() },
+                GameSetting { name: 'turn_secs', value: config.turn_time_limit_secs.into() },
+                GameSetting { name: 'exit_rule', value: config.exit_home_rule.into() },
+            ]
+                .span(),
+        }
+    }
+
+    fn settings_name(difficulty: u8) -> ByteArray {
+        if difficulty == difficulty_level::EASY {
+            return "ParQuiz Easy";
+        }
+        if difficulty == difficulty_level::MEDIUM {
+            return "ParQuiz Medium";
+        }
+
+        "ParQuiz Hard"
+    }
+
+    fn settings_description(difficulty: u8) -> ByteArray {
+        if difficulty == difficulty_level::EASY {
+            return "Accessible trivia pacing for relaxed board races.";
+        }
+        if difficulty == difficulty_level::MEDIUM {
+            return "Balanced trivia pacing for standard ParQuiz matches.";
+        }
+
+        "Demanding trivia pacing for competitive ParQuiz matches."
+    }
+
+    fn publish_settings_to_token(ref world: dojo::world::WorldStorage, game_config: GameConfig) {
+        let config: EgsConfig = world.read_model(EGS_CONFIG_SINGLETON_ID);
+        if !config.enabled || config.token_address == zero_address() {
+            return;
+        }
+        if config.adapter_address == zero_address() {
+            return;
+        }
+
+        token_settings_dispatcher(config)
+            .create_settings(
+                config.adapter_address,
+                game_config.creator,
+                game_config.config_id.try_into().unwrap(),
+                setting_details_from_config(game_config),
+            );
+    }
+
+    fn assert_admin_or_init(ref world: dojo::world::WorldStorage, caller: ContractAddress) {
+        let mut admin: AdminAccount = world.read_model(GLOBAL_STATE_SINGLETON_ID);
+
+        if admin.singleton_id != GLOBAL_STATE_SINGLETON_ID || admin.account == zero_address() {
+            admin = AdminAccount { singleton_id: GLOBAL_STATE_SINGLETON_ID, account: caller };
+            world.write_model(@admin);
+        }
+
+        assert(admin.account == caller, 'not_admin');
+    }
+
+    fn egs_game_name() -> ByteArray {
+        "ParQuiz"
+    }
+
+    fn egs_game_description() -> ByteArray {
+        "A multiplayer Starknet board race where every turn is powered by trivia."
+    }
+
+    fn egs_game_developer() -> ByteArray {
+        "ParQuiz"
+    }
+
+    fn egs_game_publisher() -> ByteArray {
+        "ParQuiz"
+    }
+
+    fn egs_game_genre() -> ByteArray {
+        "Trivia Board Game"
+    }
+
+    fn egs_game_image() -> ByteArray {
+        "https://raw.githubusercontent.com/Ritx10/Parquiz/main/engine/assets/cover.png"
+    }
+
+    fn egs_game_color() -> ByteArray {
+        "#F59E0B"
+    }
+
+    fn egs_game_version() -> u64 {
+        1
     }
 
     fn zero_address() -> ContractAddress {

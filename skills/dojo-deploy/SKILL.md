@@ -166,6 +166,31 @@ katana --fork.provider https://api.cartridge.gg/x/starknet/mainnet --fork.block 
 
 ## Sozo Commands
 
+### World Metadata
+
+Dojo can publish world/resource metadata during `sozo migrate` when metadata is defined in `dojo_<profile>.toml`.
+
+Example:
+
+```toml
+[world]
+name = "ParQuiz Engine"
+description = "Authoritative on-chain game engine for ParQuiz built with Dojo."
+icon_uri = "https://example.com/icon.png"
+cover_uri = "https://example.com/cover.png"
+website = "https://example.com"
+
+[world.socials]
+github = "https://github.com/example/repo"
+
+[env]
+ipfs_config.url = "https://ipfs.infura.io:5001"
+ipfs_config.username = "YOUR_IPFS_USERNAME"
+ipfs_config.password = "YOUR_IPFS_PASSWORD"
+```
+
+If `sozo migrate` prints `IPFS credentials not found. Metadata upload skipped.`, the deployment still works, but Dojo world/resource metadata will not be uploaded or registered on-chain.
+
 ### Build
 ```bash
 sozo build

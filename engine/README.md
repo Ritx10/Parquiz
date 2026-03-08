@@ -91,4 +91,4 @@ sozo --profile release model get parquiz-QuestionSet 1
 2. Implement full movement legality (spawn rules, blockades, safe squares, captures, center exact).
 3. Add occupancy recomputation and victory detection from real token movement.
 4. Extend tests from smoke to contract integration/invariant scenarios listed in the spec.
-5. Complete the remaining EGS adapter work (`mint`, settings exposure, registry/metadata lifecycle, ownership/lifecycle parity with full EGS flows).
+5. Complete the remaining EGS adapter work (`mint`, objectives exposure, registry reconciliation on-chain, and full lifecycle parity with production EGS flows).

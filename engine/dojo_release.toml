@@ -2,6 +2,12 @@
 name = "ParQuiz Engine"
 description = "Authoritative on-chain game engine for ParQuiz built with Dojo."
 seed = "parquiz"
+icon_uri = "https://raw.githubusercontent.com/Ritx10/Parquiz/main/engine/assets/icon.png"
+cover_uri = "https://raw.githubusercontent.com/Ritx10/Parquiz/main/engine/assets/cover.png"
+website = "https://github.com/Ritx10/Parquiz"
+
+[world.socials]
+github = "https://github.com/Ritx10/Parquiz"
 
 [namespace]
 default = "parquiz"
@@ -10,6 +16,10 @@ default = "parquiz"
 rpc_url = "https://api.cartridge.gg/x/starknet/sepolia"
 account_address = "0x01770f40f587204e78841750be5d78e15f1c37932afb6bfbb1c0bfc1f5fd66dd"
 keystore_path = "/Users/bitfalt/.starknet_accounts/parquiz-sepolia.keystore.json"
+# Optional: configure IPFS publishing so `sozo migrate` uploads world metadata.
+# ipfs_config.url = "https://ipfs.infura.io:5001"
+# ipfs_config.username = "YOUR_IPFS_USERNAME"
+# ipfs_config.password = "YOUR_IPFS_PASSWORD"
 
 
 [writers]

@@ -67,6 +67,7 @@ pub mod admin_system {
             let config = EgsConfig {
                 singleton_id: EGS_CONFIG_SINGLETON_ID,
                 adapter_address: payload.adapter_address,
+                registry_address: payload.registry_address,
                 token_address: payload.token_address,
                 settings_address: payload.settings_address,
                 objectives_address: payload.objectives_address,
