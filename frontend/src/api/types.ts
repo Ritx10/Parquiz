@@ -229,6 +229,10 @@ export type DojoQuestionDrawnEvent = {
   game_id: bigint
   turn_index: number
   question_id: bigint
+  question_index: number
+  category: number
+  seed_nonce: string
+  deadline: bigint
 }
 
 export type DojoAnswerResolvedEvent = {

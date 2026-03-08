@@ -137,6 +137,10 @@ pub mod turn_system {
                 game_id,
                 turn_index: game.turn_index,
                 question_id,
+                question_index,
+                category: pending.category,
+                seed_nonce: pending.seed_nonce,
+                deadline: turn.deadline,
             });
             post_bound_token_action(ref world, game_id, caller);
         }

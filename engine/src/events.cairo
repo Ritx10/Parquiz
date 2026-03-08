@@ -79,6 +79,10 @@ pub struct QuestionDrawn {
     #[key]
     pub turn_index: u32,
     pub question_id: u64,
+    pub question_index: u32,
+    pub category: u8,
+    pub seed_nonce: felt252,
+    pub deadline: u64,
 }
 
 #[derive(Copy, Drop, Serde)]

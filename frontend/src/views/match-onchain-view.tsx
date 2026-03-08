@@ -8,7 +8,7 @@ import {
   subscribeDojoGame,
   type DojoGameSnapshot,
 } from '../api/dojo-state'
-import type { DojoTrackedEvent, LegalMoveApi, MoveType } from '../api/types'
+import type { DojoQuestionDrawnEvent, DojoTrackedEvent, LegalMoveApi, MoveType } from '../api/types'
 import { Board3D } from '../components/game/board3d'
 import FinalRankingScreen from '../components/game/FinalRankingScreen'
 import { GameAvatar } from '../components/game/game-avatar'
@@ -936,6 +936,8 @@ type OptimisticAnswerFeedback = {
   selectedOption: number
 }
 
+type PendingQuestionPreview = Pick<DojoQuestionDrawnEvent, 'category' | 'deadline' | 'question_id' | 'question_index' | 'seed_nonce' | 'turn_index'>
+
 const cloneSnapshot = (snapshot: DojoGameSnapshot): DojoGameSnapshot => ({
   ...snapshot,
   game: snapshot.game ? { ...snapshot.game } : null,
@@ -1089,10 +1091,43 @@ const applyOptimisticEndTurnToSnapshot = (snapshot: DojoGameSnapshot): DojoGameS
   return nextSnapshot
 }
 
+const applyQuestionDrawEventToSnapshot = (
+  snapshot: DojoGameSnapshot,
+  event: PendingQuestionPreview,
+): DojoGameSnapshot => {
+  const nextSnapshot = cloneSnapshot(snapshot)
+
+  if (nextSnapshot.game && nextSnapshot.game.turn_index < event.turn_index) {
+    nextSnapshot.game.turn_index = event.turn_index
+  }
+
+  if (nextSnapshot.turn_state) {
+    nextSnapshot.turn_state.phase = 1
+    nextSnapshot.turn_state.question_id = event.question_id
+    nextSnapshot.turn_state.deadline = event.deadline
+    nextSnapshot.turn_state.question_answered = false
+    nextSnapshot.turn_state.question_correct = false
+    nextSnapshot.turn_state.has_moved_token = false
+    nextSnapshot.turn_state.exited_home_this_turn = false
+    nextSnapshot.turn_state.first_moved_token_id = 0
+  }
+
+  nextSnapshot.pending_question = {
+    game_id: nextSnapshot.game?.game_id ?? snapshot.game?.game_id ?? 0n,
+    turn_index: event.turn_index,
+    set_id: 1n,
+    question_index: event.question_index,
+    category: event.category,
+    seed_nonce: event.seed_nonce,
+  }
+
+  return nextSnapshot
+}
+
 const stabilizeSnapshot = (
   nextSnapshot: DojoGameSnapshot,
   previousSnapshot: DojoGameSnapshot | null,
-  latestQuestionDraw?: null | { questionId: bigint; turnIndex: number },
+  latestQuestionDraw?: null | PendingQuestionPreview,
 ): DojoGameSnapshot => {
   if (!previousSnapshot) {
     return nextSnapshot
@@ -1121,8 +1156,8 @@ const stabilizeSnapshot = (
 
     if (
       latestQuestionDraw &&
-      (latestQuestionDraw.turnIndex > (mergedGame?.turn_index ?? 0) ||
-        latestQuestionDraw.questionId !== mergedTurnState.question_id)
+      (latestQuestionDraw.turn_index > (mergedGame?.turn_index ?? 0) ||
+        latestQuestionDraw.question_id !== mergedTurnState.question_id)
     ) {
       return false
     }
@@ -1326,6 +1361,7 @@ export function MatchOnchainView() {
   const colorBySeatRef = useRef<Record<number, PlayerColor>>(seatColorMap)
   const lastResolvedQuestionRef = useRef<null | { difficulty: number; question: NonNullable<ReturnType<typeof getHydratedQuestion>> }>(null)
   const activePlayerCardRef = useRef<MatchPlayer | undefined>(undefined)
+  const optimisticAnswerTimeoutRef = useRef<null | number>(null)
   const answerOverlayTimeoutRef = useRef<null | number>(null)
   const rollNoticeTimeoutRef = useRef<null | number>(null)
   const winnerAnnouncementTimeoutRef = useRef<null | number>(null)
@@ -1336,7 +1372,7 @@ export function MatchOnchainView() {
   const playerStatsRef = useRef<Record<string, MatchPlayerStats>>({})
   const winnerSoundPlayedRef = useRef(false)
   const podiumSoundPlayedRef = useRef(false)
-  const latestQuestionDrawRef = useRef<null | { questionId: bigint; turnIndex: number }>(null)
+  const latestQuestionDrawRef = useRef<null | PendingQuestionPreview>(null)
   const timeoutSkipKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -1845,12 +1881,12 @@ export function MatchOnchainView() {
       return false
     }
 
-    if (optimisticAnswerFeedback || txPendingLabel === 'Submitting answer') {
+    if (optimisticAnswerFeedback) {
       return true
     }
 
     return questionSecondsLeft > 0
-  }, [modalQuestion, optimisticAnswerFeedback, questionSecondsLeft, snapshot?.turn_state?.phase, txPendingLabel])
+  }, [modalQuestion, optimisticAnswerFeedback, questionSecondsLeft, snapshot?.turn_state?.phase])
 
   useEffect(() => {
     if (!snapshot?.turn_state || snapshot.turn_state.phase !== 1) {
@@ -1874,6 +1910,10 @@ export function MatchOnchainView() {
   }, [snapshot?.turn_state])
 
   useEffect(() => {
+    if (optimisticAnswerTimeoutRef.current !== null) {
+      window.clearTimeout(optimisticAnswerTimeoutRef.current)
+      optimisticAnswerTimeoutRef.current = null
+    }
     setSelectedAnswerIndex(null)
     setOptimisticAnswerFeedback(null)
   }, [snapshot?.turn_state?.question_id, snapshot?.turn_state?.phase])
@@ -1888,6 +1928,9 @@ export function MatchOnchainView() {
 
   useEffect(() => {
     return () => {
+      if (optimisticAnswerTimeoutRef.current !== null) {
+        window.clearTimeout(optimisticAnswerTimeoutRef.current)
+      }
       if (answerOverlayTimeoutRef.current !== null) {
         window.clearTimeout(answerOverlayTimeoutRef.current)
       }
@@ -1962,15 +2005,15 @@ export function MatchOnchainView() {
       }
 
       if (event.type === 'QuestionDrawn') {
-        latestQuestionDrawRef.current = {
-          questionId: event.payload.question_id,
-          turnIndex: event.payload.turn_index,
-        }
+        latestQuestionDrawRef.current = event.payload
+        setSnapshot((current) =>
+          current ? applyQuestionDrawEventToSnapshot(current, event.payload) : current,
+        )
         scheduleSnapshotRefresh()
         window.setTimeout(() => {
           if (
-            latestQuestionDrawRef.current?.questionId === event.payload.question_id &&
-            latestQuestionDrawRef.current?.turnIndex === event.payload.turn_index
+            latestQuestionDrawRef.current?.question_id === event.payload.question_id &&
+            latestQuestionDrawRef.current?.turn_index === event.payload.turn_index
           ) {
             scheduleSnapshotRefresh()
           }
@@ -1978,34 +2021,39 @@ export function MatchOnchainView() {
       }
 
       if (event.type === 'AnswerRevealed' && lastResolvedQuestionRef.current) {
-        const { difficulty, question } = lastResolvedQuestionRef.current
-        const answerState = event.payload.correct ? 'correct' : 'incorrect'
-        const player = playersByAddress[normalizeAddressForCompare(event.payload.player)] || activePlayerCardRef.current
+        if (
+          normalizeAddressForCompare(event.payload.player) !== normalizedWalletAddress ||
+          selectedAnswerIndex === null
+        ) {
+          const { difficulty, question } = lastResolvedQuestionRef.current
+          const answerState = event.payload.correct ? 'correct' : 'incorrect'
+          const player = playersByAddress[normalizeAddressForCompare(event.payload.player)] || activePlayerCardRef.current
 
-        setResolvedAnswerDisplay({
-          answerState,
-          player,
-          question: {
-            category: ui.questionCategory,
-            correctIndex: mapCanonicalOptionToDisplay(question, question.correctOption),
-            difficulty: localDifficultyToTriviaDifficulty(difficulty as 0 | 1 | 2),
-            icon: '❓',
-            id: `resolved-${event.payload.question_id.toString()}`,
-            options: question.displayOptions,
-            prompt: question.displayPrompt,
-            theme: 'blue',
-          },
-          selectedOption: mapCanonicalOptionToDisplay(question, event.payload.selected_option),
-        })
+          setResolvedAnswerDisplay({
+            answerState,
+            player,
+            question: {
+              category: ui.questionCategory,
+              correctIndex: mapCanonicalOptionToDisplay(question, question.correctOption),
+              difficulty: localDifficultyToTriviaDifficulty(difficulty as 0 | 1 | 2),
+              icon: '❓',
+              id: `resolved-${event.payload.question_id.toString()}`,
+              options: question.displayOptions,
+              prompt: question.displayPrompt,
+              theme: 'blue',
+            },
+            selectedOption: mapCanonicalOptionToDisplay(question, event.payload.selected_option),
+          })
 
-        if (answerOverlayTimeoutRef.current !== null) {
-          window.clearTimeout(answerOverlayTimeoutRef.current)
+          if (answerOverlayTimeoutRef.current !== null) {
+            window.clearTimeout(answerOverlayTimeoutRef.current)
+          }
+
+          answerOverlayTimeoutRef.current = window.setTimeout(() => {
+            setResolvedAnswerDisplay(null)
+            answerOverlayTimeoutRef.current = null
+          }, 1800)
         }
-
-        answerOverlayTimeoutRef.current = window.setTimeout(() => {
-          setResolvedAnswerDisplay(null)
-          answerOverlayTimeoutRef.current = null
-        }, 1800)
       }
 
       const normalizedAddress = normalizeAddressForCompare(address)
@@ -2122,7 +2170,7 @@ export function MatchOnchainView() {
 
       setLogEvents((current) => [nextLog, ...current].slice(0, 120))
     },
-    [address, animateTokenPath, awardXp, language, playerLabelFromAddress, playersByAddress, scheduleSnapshotRefresh, seatByAddress, ui.questionCategory],
+    [address, animateTokenPath, awardXp, language, normalizedWalletAddress, playerLabelFromAddress, playersByAddress, scheduleSnapshotRefresh, seatByAddress, selectedAnswerIndex, ui.questionCategory],
   )
 
   useEffect(() => {
@@ -2513,8 +2561,16 @@ export function MatchOnchainView() {
       const canonicalOption = mapDisplayOptionToCanonical(activePendingQuestion, optionIndex)
       const answerState = canonicalOption === activePendingQuestion.correctOption ? 'correct' : 'incorrect'
 
+      if (optimisticAnswerTimeoutRef.current !== null) {
+        window.clearTimeout(optimisticAnswerTimeoutRef.current)
+      }
+
       setSelectedAnswerIndex(optionIndex)
       setOptimisticAnswerFeedback({ answerState, selectedOption: optionIndex })
+      optimisticAnswerTimeoutRef.current = window.setTimeout(() => {
+        setOptimisticAnswerFeedback(null)
+        optimisticAnswerTimeoutRef.current = null
+      }, answerState === 'correct' ? 450 : 350)
 
       void runTransaction(
         'Submitting answer',
@@ -2653,8 +2709,12 @@ export function MatchOnchainView() {
       return null
     }
 
+    if (txPendingLabel !== 'Roll + question (VRF)' || modalQuestion) {
+      return null
+    }
+
     return formatPendingActionLabel(txPendingLabel, txPendingPhase, language)
-  }, [language, txPendingLabel, txPendingPhase])
+  }, [language, modalQuestion, txPendingLabel, txPendingPhase])
   const visualSkinByColor = useMemo(() => {
     return players.reduce<Partial<Record<PlayerColor, MatchPlayer['visualSkinId']>>>((acc, player) => {
       acc[player.color] = player.visualSkinId
@@ -3007,7 +3067,7 @@ export function MatchOnchainView() {
             question={modalQuestion}
             secondsLeft={questionSecondsLeft}
             selectedOption={selectedAnswerIndex}
-            statusText={txPendingLabel === 'Submitting answer' ? pendingStatusMessage : null}
+            statusText={null}
           />
         ) : resolvedAnswerDisplay ? (
           <TriviaQuestionModal

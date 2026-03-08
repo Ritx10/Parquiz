@@ -18,6 +18,7 @@ import type {
   DojoDiceRolledEvent,
   DojoDiceStateModel,
   DojoPendingQuestionModel,
+  DojoQuestionDrawnEvent,
   DojoQuestionSetModel,
   DojoPublicLobbyIndexModel,
   DojoSquareOccupancyModel,
@@ -573,10 +574,14 @@ const normalizeTrackedEvent = (
   }
 
   if (eventName === 'QuestionDrawn') {
-    const payload = {
+    const payload: DojoQuestionDrawnEvent = {
       game_id: toBigInt(raw.game_id),
       turn_index: toNumber(raw.turn_index),
       question_id: toBigInt(raw.question_id),
+      question_index: toNumber(raw.question_index),
+      category: toNumber(raw.category),
+      seed_nonce: typeof raw.seed_nonce === 'string' ? raw.seed_nonce : normalizeHex(raw.seed_nonce),
+      deadline: toBigInt(raw.deadline),
     }
 
     return { type: 'QuestionDrawn', payload }
