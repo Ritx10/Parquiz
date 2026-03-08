@@ -476,6 +476,7 @@ const normalizeGamePlayerCustomizationModel = (raw: RawModel): DojoGamePlayerCus
   game_id: toBigInt(raw.game_id),
   player: normalizeAddress(raw.player),
   avatar_skin_id: toNumber(raw.avatar_skin_id),
+  dice_skin_id: toNumber(raw.dice_skin_id),
   token_skin_id: toNumber(raw.token_skin_id),
 })
 

@@ -74,6 +74,7 @@ pub const GLOBAL_STATE_SINGLETON_ID: u8 = 1;
 pub const EGS_CONFIG_SINGLETON_ID: u8 = 2;
 pub const VRF_CONFIG_SINGLETON_ID: u8 = 3;
 pub const DEFAULT_AVATAR_SKIN_ID: u8 = 0;
+pub const DEFAULT_DICE_SKIN_ID: u8 = 0;
 pub const DEFAULT_TOKEN_SKIN_ID: u8 = 2;
 pub const MAIN_TRACK_LEN: u16 = 68;
 pub const HOME_LANE_LEN: u8 = 7;

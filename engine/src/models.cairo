@@ -60,6 +60,7 @@ pub struct PlayerCustomization {
     #[key]
     pub player: ContractAddress,
     pub avatar_skin_id: u8,
+    pub dice_skin_id: u8,
     pub token_skin_id: u8,
     pub updated_at: u64,
 }
@@ -72,6 +73,7 @@ pub struct GamePlayerCustomization {
     #[key]
     pub player: ContractAddress,
     pub avatar_skin_id: u8,
+    pub dice_skin_id: u8,
     pub token_skin_id: u8,
 }
 

@@ -550,6 +550,7 @@ pub mod lobby_system {
                 game_id,
                 player,
                 avatar_skin_id: profile.avatar_skin_id,
+                dice_skin_id: profile.dice_skin_id,
                 token_skin_id: profile.token_skin_id,
             },
         );

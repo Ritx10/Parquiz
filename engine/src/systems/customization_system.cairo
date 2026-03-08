@@ -1,11 +1,11 @@
 #[starknet::interface]
 pub trait ICustomizationSystem<T> {
-    fn set_player_customization(ref self: T, avatar_skin_id: u8, token_skin_id: u8);
+    fn set_player_customization(ref self: T, avatar_skin_id: u8, dice_skin_id: u8, token_skin_id: u8);
 }
 
 #[dojo::contract]
 pub mod customization_system {
-    use crate::constants::{DEFAULT_AVATAR_SKIN_ID, DEFAULT_TOKEN_SKIN_ID};
+    use crate::constants::{DEFAULT_AVATAR_SKIN_ID, DEFAULT_DICE_SKIN_ID, DEFAULT_TOKEN_SKIN_ID};
     use crate::events::PlayerCustomizationUpdated;
     use crate::models::PlayerCustomization;
     use dojo::event::EventStorage;
@@ -15,7 +15,7 @@ pub mod customization_system {
 
     #[abi(embed_v0)]
     impl CustomizationSystemImpl of ICustomizationSystem<ContractState> {
-        fn set_player_customization(ref self: ContractState, avatar_skin_id: u8, token_skin_id: u8) {
+        fn set_player_customization(ref self: ContractState, avatar_skin_id: u8, dice_skin_id: u8, token_skin_id: u8) {
             let mut world = self.world_default();
             let caller = get_caller_address();
             let now = get_block_timestamp();
@@ -23,6 +23,7 @@ pub mod customization_system {
             let profile = PlayerCustomization {
                 player: caller,
                 avatar_skin_id,
+                dice_skin_id,
                 token_skin_id,
                 updated_at: now,
             };
@@ -31,6 +32,7 @@ pub mod customization_system {
             world.emit_event(@PlayerCustomizationUpdated {
                 player: caller,
                 avatar_skin_id,
+                dice_skin_id,
                 token_skin_id,
             });
         }
@@ -55,6 +57,7 @@ pub mod customization_system {
         PlayerCustomization {
             player,
             avatar_skin_id: DEFAULT_AVATAR_SKIN_ID,
+            dice_skin_id: DEFAULT_DICE_SKIN_ID,
             token_skin_id: DEFAULT_TOKEN_SKIN_ID,
             updated_at: 0,
         }

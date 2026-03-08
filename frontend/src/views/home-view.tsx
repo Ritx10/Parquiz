@@ -6,7 +6,7 @@ import { GameAvatar } from '../components/game/game-avatar'
 import { GameDie } from '../components/game/game-die'
 import { boardThemeCatalog, type BoardThemeId } from '../lib/board-themes'
 import { TokenChip } from '../components/game/token-chip'
-import { diceSkinCatalog, type DiceSkinId } from '../lib/dice-cosmetics'
+import { diceSkinCatalog, diceSkinIndexFromId, type DiceSkinId } from '../lib/dice-cosmetics'
 import { appEnv } from '../config/env'
 import { getPlayerVisualTheme } from '../lib/player-color-themes'
 import { tokenSkinCatalog, tokenSkinIndexFromId, type TokenSkinId } from '../lib/token-cosmetics'
@@ -343,7 +343,7 @@ export function HomeView() {
   const [cosmeticsSyncPending, setCosmeticsSyncPending] = useState(false)
 
   const syncCustomization = useCallback(
-    async (nextSkinId: null | string, nextTokenSkinId: TokenSkinId) => {
+    async (nextSkinId: null | string, nextDiceSkinId: DiceSkinId, nextTokenSkinId: TokenSkinId) => {
       if (!isConnected || !account || !appEnv.customizationSystemAddress) {
         setCosmeticsSyncMessage(isConnected ? ui.cosmeticsLocalOnly : null)
         return
@@ -356,6 +356,7 @@ export function HomeView() {
         const transactionHash = await setPlayerCustomization(
           account,
           playerSkinIndexFromId(nextSkinId),
+          diceSkinIndexFromId(nextDiceSkinId),
           tokenSkinIndexFromId(nextTokenSkinId),
         )
         await account.waitForTransaction(transactionHash)
@@ -776,7 +777,7 @@ export function HomeView() {
 
                           if (item.isSkinItem) {
                             setSelectedSkinId(item.id)
-                            void syncCustomization(item.id, selectedTokenSkinId)
+                            void syncCustomization(item.id, selectedDiceSkinId, selectedTokenSkinId)
                             return
                           }
 
@@ -786,6 +787,7 @@ export function HomeView() {
                             }
 
                             setSelectedDiceSkinId(item.diceSkinId)
+                            void syncCustomization(selectedSkinId, item.diceSkinId, selectedTokenSkinId)
                             return
                           }
 
@@ -798,7 +800,7 @@ export function HomeView() {
                           }
 
                           setSelectedTokenSkinId(item.tokenSkinId)
-                          void syncCustomization(selectedSkinId, item.tokenSkinId)
+                          void syncCustomization(selectedSkinId, selectedDiceSkinId, item.tokenSkinId)
                         }
 
                         const actionLabel = item.isSkinItem

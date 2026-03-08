@@ -294,15 +294,13 @@ export function MatchmakingLobbyView() {
       const resolvedName = getUsername(player.player)
       const customization = customizationByPlayer.get(normalizeAddressForCompare(player.player))
       const avatarSkinId = customization ? playerSkinIdFromIndex(customization.avatar_skin_id) : null
+      const avatarSrc = getPlayerSkinSrc(avatarSkinId)
       const tokenSkinId = customization ? tokenSkinIdFromIndex(customization.token_skin_id) : selectedTokenSkinId
 
       return {
         id: `${player.game_id.toString()}-${player.player}`,
         name: resolvedName || (isSelf ? username || 'Tu jugador' : shortenAddress(player.player)),
-        avatar:
-          isSelf && selectedSkinSrc
-            ? selectedSkinSrc
-            : getPlayerSkinSrc(avatarSkinId) || shortenAddress(player.player).slice(2, 4).toUpperCase(),
+        avatar: avatarSrc || (isSelf && selectedSkinSrc ? selectedSkinSrc : shortenAddress(player.player).slice(2, 4).toUpperCase()),
         avatarToneClass: getPlayerVisualTheme(tokenSkinId).avatarToneClass,
         isHost: player.is_host,
         isReady: player.is_ready,

@@ -172,6 +172,7 @@ export const bindEgsToken = async (account: AccountInterface, gameId: FeltLike, 
 export const setPlayerCustomization = async (
   account: AccountInterface,
   avatarSkinId: number,
+  diceSkinId: number,
   tokenSkinId: number,
 ) => {
   return executeCall(account, {
@@ -179,6 +180,7 @@ export const setPlayerCustomization = async (
     entrypoint: 'set_player_customization',
     calldata: CallData.compile({
       avatar_skin_id: avatarSkinId,
+      dice_skin_id: diceSkinId,
       token_skin_id: tokenSkinId,
     }),
   })

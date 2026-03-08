@@ -18,7 +18,7 @@ import type { MatchLogEvent, MatchPlayer, MatchToken, PlayerColor } from '../com
 import { TriviaQuestionModal } from '../components/game/trivia-question-modal'
 import { isDojoConfigured } from '../config/dojo'
 import { getBoardThemeDefinition, getBoardThemeSurfacePalette } from '../lib/board-themes'
-import { assignDistinctDiceSkins, type DiceSkinId } from '../lib/dice-cosmetics'
+import { diceSkinIdFromIndex, getDefaultDiceSkinIdByColor, type DiceSkinId } from '../lib/dice-cosmetics'
 import { getPlayerSkinSrc, playerSkinIdFromIndex } from '../lib/player-skins'
 import { getPlayerVisualThemeByColor } from '../lib/player-color-themes'
 import { getHydratedQuestion } from '../lib/questions/local-question-bank'
@@ -1401,6 +1401,7 @@ export function MatchOnchainView() {
       const baseName = resolvedName || (isSelf ? username || 'Tu jugador' : shortenAddress(player.player))
       const customization = customizationByPlayer.get(normalizedPlayerAddress)
       const avatarSkinId = customization ? playerSkinIdFromIndex(customization.avatar_skin_id) : null
+      const avatarSrc = getPlayerSkinSrc(avatarSkinId)
       const visualSkinId = customization
         ? tokenSkinIdFromIndex(customization.token_skin_id)
         : isSelf
@@ -1411,10 +1412,7 @@ export function MatchOnchainView() {
         id: player.player,
         name: baseName,
         color,
-        avatar:
-          isSelf && selectedSkinSrc
-            ? selectedSkinSrc
-            : getPlayerSkinSrc(avatarSkinId) || color.slice(0, 2).toUpperCase(),
+        avatar: avatarSrc || (isSelf && selectedSkinSrc ? selectedSkinSrc : color.slice(0, 2).toUpperCase()),
         visualSkinId,
         tokensInBase: player.tokens_in_base,
         tokensInGoal: player.tokens_in_goal,
@@ -2246,15 +2244,22 @@ export function MatchOnchainView() {
     }, {})
   }, [players])
   const diceSkinByPlayerId = useMemo(() => {
-    return assignDistinctDiceSkins(
-      players.map((player) => ({
-        playerId: player.id,
-        color: player.color,
-        preferredSkinId:
-          normalizeAddressForCompare(player.id) === normalizedWalletAddress ? selectedDiceSkinId : undefined,
-      })),
+    const customizationByPlayer = new Map(
+      snapshot?.player_customizations.map((customization) => [normalizeAddressForCompare(customization.player), customization]) || [],
     )
-  }, [normalizedWalletAddress, players, selectedDiceSkinId])
+
+    return players.reduce<Partial<Record<string, DiceSkinId>>>((acc, player) => {
+      const customization = customizationByPlayer.get(normalizeAddressForCompare(player.id))
+
+      acc[player.id] = customization
+        ? diceSkinIdFromIndex(customization.dice_skin_id)
+        : normalizeAddressForCompare(player.id) === normalizedWalletAddress
+          ? selectedDiceSkinId
+          : getDefaultDiceSkinIdByColor(player.color)
+
+      return acc
+    }, {})
+  }, [normalizedWalletAddress, players, selectedDiceSkinId, snapshot?.player_customizations])
   const triggerHudDiceRoll = useCallback(() => {
     if (!canRoll || hudDiceRolling) {
       return

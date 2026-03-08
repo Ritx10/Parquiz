@@ -161,6 +161,7 @@ export type DojoQuestionSetModel = {
 export type DojoPlayerCustomizationModel = {
   player: string
   avatar_skin_id: number
+  dice_skin_id: number
   token_skin_id: number
   updated_at: bigint
 }
@@ -169,6 +170,7 @@ export type DojoGamePlayerCustomizationModel = {
   game_id: bigint
   player: string
   avatar_skin_id: number
+  dice_skin_id: number
   token_skin_id: number
 }
 

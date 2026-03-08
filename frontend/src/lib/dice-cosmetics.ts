@@ -125,6 +125,15 @@ export const normalizeOwnedDiceSkinIds = (value: unknown, selectedDiceSkinId: Di
 export const getDiceSkinDefinition = (skinId: DiceSkinId) =>
   diceSkinCatalog.find((skin) => skin.id === skinId) || diceSkinCatalog[0]
 
+export const diceSkinIndexFromId = (skinId: DiceSkinId): number => {
+  const index = diceSkinCatalog.findIndex((skin) => skin.id === skinId)
+  return index >= 0 ? index : 0
+}
+
+export const diceSkinIdFromIndex = (index: number): DiceSkinId => {
+  return diceSkinCatalog[index]?.id || 'blue'
+}
+
 const defaultDiceSkinIdByColor: Record<PlayerColor, DiceSkinId> = {
   blue: 'blue',
   green: 'green',
