@@ -1,3 +1,4 @@
+import type { BoardThemeSurfacePalette } from '../../lib/board-themes'
 import { getPlayerVisualThemeByColor } from '../../lib/player-color-themes'
 import type { TokenSkinId } from '../../lib/token-cosmetics'
 import type { MatchToken, PlayerColor } from './match-types'
@@ -374,6 +375,14 @@ type Board3DProps = {
   onTokenDiceChoiceHover?: (tokenId: string, choiceId: null | string) => void
   onTokenDiceChoiceSelect?: (tokenId: string, choiceId: string) => void
   onTokenClick?: (tokenId: string) => void
+  surfacePalette?: Pick<
+    BoardThemeSurfacePalette,
+    | 'boardGridOverlay'
+    | 'boardInnerBackground'
+    | 'boardOuterBackground'
+    | 'boardOuterBorder'
+    | 'neutralTrackFill'
+  >
   visualSkinByColor?: Partial<Record<PlayerColor, TokenSkinId>>
 }
 
@@ -393,6 +402,7 @@ export function Board3D({
   onTokenDiceChoiceHover,
   onTokenDiceChoiceSelect,
   onTokenClick,
+  surfacePalette: _surfacePalette,
 }: Board3DProps) {
   const playersById = players.reduce<Record<string, { avatar: string; name: string }>>((acc, player) => {
     acc[player.id] = { avatar: player.avatar, name: player.name }
