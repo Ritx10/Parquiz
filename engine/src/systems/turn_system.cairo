@@ -36,7 +36,8 @@ pub mod turn_system {
         PendingQuestion, QuestionSet, SquareOccupancy, Token, TurnState, VrfConfig,
     };
     use crate::systems::egs_system::egs_system::{
-        assert_bound_token_playable, sync_bound_player_state, sync_bound_players_terminal,
+        assert_bound_token_playable, post_bound_token_action, sync_bound_player_state,
+        sync_bound_players_terminal,
     };
     use crate::types::{AnswerPayload, LegalMove, MoveInput, MovePlan, MoveStep};
     use dojo::event::EventStorage;
@@ -87,6 +88,7 @@ pub mod turn_system {
             ) {
                 world.emit_event(@DiceRolled { game_id, turn_index: game.turn_index, dice_1, dice_2 });
                 end_turn_internal(ref world, ref game, ref turn, runtime, now, false);
+                post_bound_token_action(ref world, game_id, caller);
                 return;
             }
 
@@ -135,6 +137,7 @@ pub mod turn_system {
                 question_id,
                 difficulty,
             });
+            post_bound_token_action(ref world, game_id, caller);
         }
 
         fn submit_answer(ref self: ContractState, game_id: u64, answer_payload: AnswerPayload) {
@@ -228,6 +231,7 @@ pub mod turn_system {
             let mut turn: TurnState = world.read_model(game_id);
             let runtime: GameRuntimeConfig = world.read_model(game_id);
             end_turn_internal(ref world, ref game, ref turn, runtime, now, true);
+            post_bound_token_action(ref world, game_id, caller);
         }
 
         fn compute_legal_moves(self: @ContractState, game_id: u64) -> Array<LegalMove> {

@@ -16,6 +16,7 @@ pub trait IMinigameToken<T> {
     fn is_playable(self: @T, token_id: felt252) -> bool;
     fn assert_is_playable(self: @T, token_id: felt252);
     fn settings_id(self: @T, token_id: felt252) -> u32;
+    fn update_game(ref self: T, token_id: felt252);
 }
 
 pub const IMINIGAME_ID: felt252 =
@@ -24,6 +25,11 @@ pub const IMINIGAME_ID: felt252 =
 #[starknet::interface]
 pub trait ISRC5<T> {
     fn supports_interface(self: @T, interface_id: felt252) -> bool;
+}
+
+#[starknet::interface]
+pub trait IERC721<T> {
+    fn owner_of(self: @T, token_id: core::integer::u256) -> starknet::ContractAddress;
 }
 
 #[dojo::contract]
@@ -36,8 +42,8 @@ pub mod egs_system {
     use dojo::model::ModelStorage;
     use starknet::{ContractAddress, get_caller_address};
     use super::{
-        IEgsSystem, IMinigameTokenData, IMinigameTokenDispatcher, IMinigameTokenDispatcherTrait,
-        IMINIGAME_ID, ISRC5,
+        IERC721Dispatcher, IERC721DispatcherTrait, IEgsSystem, IMinigameTokenData,
+        IMinigameTokenDispatcher, IMinigameTokenDispatcherTrait, IMINIGAME_ID, ISRC5,
     };
 
     #[abi(embed_v0)]
@@ -118,6 +124,7 @@ pub mod egs_system {
             assert_token_contract_ready(config);
 
             let token = token_dispatcher(config);
+            assert_token_owner(config.token_address, token_id, caller);
             token.assert_is_playable(token_id);
             assert(token.settings_id(token_id).into() == game.config_id, 'config_mismatch');
 
@@ -136,6 +143,7 @@ pub mod egs_system {
 
             world.write_model(@binding);
             write_token_link(ref world, binding);
+            sync_token_contract_state(binding, token);
         }
     }
 
@@ -164,7 +172,11 @@ pub mod egs_system {
 
         let config: EgsConfig = world.read_model(EGS_CONFIG_SINGLETON_ID);
         assert_token_contract_ready(config);
-        token_dispatcher(config).assert_is_playable(binding.token_id);
+        assert_token_owner(config.token_address, binding.token_id, player);
+
+        let token = token_dispatcher(config);
+        token.assert_is_playable(binding.token_id);
+        assert(token.settings_id(binding.token_id).into() == binding.config_id, 'config_mismatch');
     }
 
     pub fn sync_bound_player_state(
@@ -189,6 +201,18 @@ pub mod egs_system {
 
         world.write_model(@binding);
         write_token_link(ref world, binding);
+        maybe_sync_token_contract_state(ref world, binding);
+    }
+
+    pub fn post_bound_token_action(
+        ref world: dojo::world::WorldStorage, game_id: u64, player: ContractAddress,
+    ) {
+        let binding: EgsSessionBinding = world.read_model((game_id, player));
+        if binding.token_id == 0 {
+            return;
+        }
+
+        maybe_sync_token_contract_state(ref world, binding);
     }
 
     pub fn sync_bound_players_terminal(
@@ -242,6 +266,33 @@ pub mod egs_system {
 
     fn token_dispatcher(config: EgsConfig) -> IMinigameTokenDispatcher {
         IMinigameTokenDispatcher { contract_address: config.token_address }
+    }
+
+    fn maybe_sync_token_contract_state(
+        ref world: dojo::world::WorldStorage,
+        binding: EgsSessionBinding,
+    ) {
+        let config: EgsConfig = world.read_model(EGS_CONFIG_SINGLETON_ID);
+        if !config.enabled || config.token_address == zero_address() {
+            return;
+        }
+
+        sync_token_contract_state(binding, token_dispatcher(config));
+    }
+
+    fn sync_token_contract_state(
+        binding: EgsSessionBinding,
+        token: IMinigameTokenDispatcher,
+    ) {
+        token.update_game(binding.token_id);
+    }
+
+    fn assert_token_owner(
+        token_address: ContractAddress, token_id: felt252, expected_owner: ContractAddress,
+    ) {
+        let erc721 = IERC721Dispatcher { contract_address: token_address };
+        let owner = erc721.owner_of(token_id.into());
+        assert(owner == expected_owner, 'not_token_owner');
     }
 
     fn assert_token_contract_ready(config: EgsConfig) {

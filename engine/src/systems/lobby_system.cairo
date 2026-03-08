@@ -24,7 +24,7 @@ pub mod lobby_system {
     };
     use crate::systems::customization_system::customization_system::load_player_customization;
     use crate::systems::egs_system::egs_system::{
-        assert_bound_token_playable, sync_bound_player_state,
+        assert_bound_token_playable, post_bound_token_action, sync_bound_player_state,
     };
     use dojo::event::EventStorage;
     use dojo::model::ModelStorage;
@@ -125,14 +125,17 @@ pub mod lobby_system {
             world.emit_event(@PlayerReadyChanged { game_id, player: caller, is_ready: ready });
 
             if game.lobby_kind != lobby_kind::PUBLIC || game.player_count < MIN_PLAYERS {
+                post_bound_token_action(ref world, game_id, caller);
                 return;
             }
 
             if !all_active_players_ready(ref world, game_id) {
+                post_bound_token_action(ref world, game_id, caller);
                 return;
             }
 
             start_waiting_game(ref world, ref game, now);
+            post_bound_token_action(ref world, game_id, caller);
         }
 
         fn start_game(ref self: ContractState, game_id: u64) {
@@ -144,6 +147,7 @@ pub mod lobby_system {
             assert(game.status == game_status::WAITING, 'not_waiting');
             assert(game.player_count >= MIN_PLAYERS, 'missing_players');
             assert(game.lobby_kind == lobby_kind::PRIVATE, 'public_auto');
+            assert_bound_token_playable(ref world, game_id, caller);
 
             let host: GamePlayer = world.read_model((game_id, caller));
             assert(host.is_active, 'not_in_lobby');
@@ -151,6 +155,7 @@ pub mod lobby_system {
             assert_all_players_ready(ref world, game_id);
 
             start_waiting_game(ref world, ref game, now);
+            post_bound_token_action(ref world, game_id, caller);
         }
 
         fn leave_lobby(ref self: ContractState, game_id: u64) {

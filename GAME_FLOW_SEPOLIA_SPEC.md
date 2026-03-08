@@ -160,6 +160,7 @@ VITE_DOJO_MANIFEST_PATH=../manifest_release.json
 Notes:
 
 - `egs_system` is the only EGS game address the frontend and tournament platforms should use; it exposes `IMinigameTokenData` directly.
+- The current Denshokan token address on Sepolia is `0x0142712722e62a38f9c40fcc904610e1a14c70125876ecaaf25d803556734467`; configure `EgsConfig.token_address` with this value for live EGS lifecycle checks.
 - `VITE_VRF_PROVIDER_ADDRESS` already matches the Cartridge Sepolia VRF provider.
 - The frontend already submits VRF as a multicall in `frontend/src/api/parchis-api.ts` by calling `request_random` before `roll_two_dice_and_draw_question`.
 
