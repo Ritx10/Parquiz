@@ -1840,6 +1840,18 @@ export function MatchOnchainView() {
     }
   }, [activePendingQuestion, ui.questionCategory])
 
+  const shouldShowQuestionModal = useMemo(() => {
+    if (!modalQuestion || snapshot?.turn_state?.phase !== 1) {
+      return false
+    }
+
+    if (optimisticAnswerFeedback || txPendingLabel === 'Submitting answer') {
+      return true
+    }
+
+    return questionSecondsLeft > 0
+  }, [modalQuestion, optimisticAnswerFeedback, questionSecondsLeft, snapshot?.turn_state?.phase, txPendingLabel])
+
   useEffect(() => {
     if (!snapshot?.turn_state || snapshot.turn_state.phase !== 1) {
       timeoutSkipKeyRef.current = null
@@ -2327,7 +2339,7 @@ export function MatchOnchainView() {
       setTxPendingLabel(label)
       setTxPendingPhase('submitting')
       setTxHash(null)
-      setIsAwaitingOnchainSync(true)
+      setIsAwaitingOnchainSync(false)
       options?.onOptimistic?.()
 
       try {
@@ -2337,21 +2349,27 @@ export function MatchOnchainView() {
 
         await account.waitForTransaction(submittedHash)
         setTxPendingPhase('syncing')
-        await options?.onConfirmed?.()
-        await refreshSnapshot()
+        setIsAwaitingOnchainSync(true)
+        await Promise.all([Promise.resolve(options?.onConfirmed?.()), refreshSnapshot()])
+        setTxPendingLabel(null)
+        setTxPendingPhase(null)
+        setIsAwaitingOnchainSync(false)
 
         if (activeTokenId !== null) {
-          const link = await readEgsTokenGameLink(activeTokenId)
-          setLinkedTokenGameId(link?.game_id ?? null)
-          setLinkedTokenStatus(
-            link
-              ? language === 'es'
-                ? `Token vinculado a game_id ${link.game_id.toString()} · score ${link.score.toString()} · status ${link.lifecycle_status}`
-                : `Token linked to game_id ${link.game_id.toString()} · score ${link.score.toString()} · status ${link.lifecycle_status}`
-              : language === 'es'
-                ? 'Token sin partida vinculada todavia.'
-                : 'Token is not linked to a match yet.',
-          )
+          void readEgsTokenGameLink(activeTokenId)
+            .then((link) => {
+              setLinkedTokenGameId(link?.game_id ?? null)
+              setLinkedTokenStatus(
+                link
+                  ? language === 'es'
+                    ? `Token vinculado a game_id ${link.game_id.toString()} · score ${link.score.toString()} · status ${link.lifecycle_status}`
+                    : `Token linked to game_id ${link.game_id.toString()} · score ${link.score.toString()} · status ${link.lifecycle_status}`
+                  : language === 'es'
+                    ? 'Token sin partida vinculada todavia.'
+                    : 'Token is not linked to a match yet.',
+              )
+            })
+            .catch(() => undefined)
         }
       } catch (error) {
         options?.onRollback?.()
@@ -2384,8 +2402,19 @@ export function MatchOnchainView() {
     }
 
     timeoutSkipKeyRef.current = turnKey
-    void runTransaction('Force skip timeout', () => forceSkipTurn(account, activeGameId))
-  }, [account, activeGameId, isMyTurn, questionSecondsLeft, runTransaction, snapshot?.turn_state, txPendingLabel])
+    const previousSnapshot = snapshot ? cloneSnapshot(snapshot) : null
+
+    void runTransaction('Force skip timeout', () => forceSkipTurn(account, activeGameId), {
+      onOptimistic: () => {
+        setSnapshot((current) => (current ? applyOptimisticEndTurnToSnapshot(current) : current))
+      },
+      onRollback: () => {
+        if (previousSnapshot) {
+          setSnapshot(previousSnapshot)
+        }
+      },
+    })
+  }, [account, activeGameId, isMyTurn, questionSecondsLeft, runTransaction, snapshot, snapshot?.turn_state, txPendingLabel])
 
   const onApplyMove = useCallback(
     (move: UiLegalMove) => {
@@ -2500,6 +2529,11 @@ export function MatchOnchainView() {
             merkleDirections: activePendingQuestion.merkleDirections,
           }),
         {
+          onOptimistic: () => {
+            if (answerState === 'incorrect') {
+              setSnapshot((current) => (current ? applyOptimisticEndTurnToSnapshot(current) : current))
+            }
+          },
           onRollback: () => {
             setOptimisticAnswerFeedback(null)
             setSelectedAnswerIndex(null)
@@ -2619,18 +2653,8 @@ export function MatchOnchainView() {
       return null
     }
 
-    const actionLabel = formatPendingActionLabel(txPendingLabel, txPendingPhase ?? 'submitting', language)
-
-    if (txPendingPhase === 'confirming') {
-      return ui.txConfirming
-    }
-
-    if (txPendingPhase === 'syncing') {
-      return ui.syncingState
-    }
-
-    return `${ui.txPendingPrefix}: ${actionLabel}...`
-  }, [language, txPendingLabel, txPendingPhase, ui.syncingState, ui.txConfirming, ui.txPendingPrefix])
+    return formatPendingActionLabel(txPendingLabel, txPendingPhase, language)
+  }, [language, txPendingLabel, txPendingPhase])
   const visualSkinByColor = useMemo(() => {
     return players.reduce<Partial<Record<PlayerColor, MatchPlayer['visualSkinId']>>>((acc, player) => {
       acc[player.color] = player.visualSkinId
@@ -2972,7 +2996,7 @@ export function MatchOnchainView() {
           </article>
         )}
 
-        {modalQuestion && snapshot?.turn_state?.phase === 1 ? (
+        {shouldShowQuestionModal && modalQuestion ? (
           <TriviaQuestionModal
             answerState={optimisticAnswerFeedback?.answerState ?? 'idle'}
             difficulty={modalQuestion.difficulty}
