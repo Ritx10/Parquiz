@@ -1,5 +1,5 @@
 import { useAccount } from '@starknet-react/core'
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { applyMove, computeLegalMoves, endTurn, rollTwoDiceAndDrawQuestion, submitAnswer } from '../api'
 import {
@@ -398,11 +398,12 @@ const mapErrorToUserMessage = (error: unknown) => {
   return raw
 }
 
-function HudDie({ skinId, value, rolling }: { skinId: DiceSkinId; value: null | number; rolling: boolean }) {
+const HudDie = memo(function HudDie({ skinId, value, rolling }: { skinId: DiceSkinId; value: null | number; rolling: boolean }) {
   return <GameDie className="h-11 w-11" rolling={rolling} skinId={skinId} value={value} />
-}
+})
+HudDie.displayName = 'OnchainHudDie'
 
-function PlayerHudCard({
+const PlayerHudCard = memo(function PlayerHudCard({
   player,
   isTurn,
   surfacePalette,
@@ -464,9 +465,10 @@ function PlayerHudCard({
       </div>
     </article>
   )
-}
+})
+PlayerHudCard.displayName = 'OnchainPlayerHudCard'
 
-function TurnDiceLauncher({
+const TurnDiceLauncher = memo(function TurnDiceLauncher({
   isActive,
   canRoll,
   diceSkinId,
@@ -526,9 +528,10 @@ function TurnDiceLauncher({
       </span>
     </div>
   )
-}
+})
+TurnDiceLauncher.displayName = 'OnchainTurnDiceLauncher'
 
-function PlayerHudSlot({
+const PlayerHudSlot = memo(function PlayerHudSlot({
   player,
   turnPlayerId,
   canRoll,
@@ -576,7 +579,10 @@ function PlayerHudSlot({
       />
     </div>
   )
-}
+})
+PlayerHudSlot.displayName = 'OnchainPlayerHudSlot'
+
+const hudSlotColors: PlayerColor[] = ['green', 'red', 'yellow', 'blue']
 
 const hudSlotPositionClassByColor: Record<PlayerColor, string> = {
   green: 'left-2 top-2 lg:left-4 lg:top-[17%] lg:-translate-y-1/2',
@@ -584,6 +590,117 @@ const hudSlotPositionClassByColor: Record<PlayerColor, string> = {
   yellow: 'bottom-2 left-2 lg:bottom-[17%] lg:left-4 lg:translate-y-1/2',
   blue: 'bottom-2 right-2 lg:bottom-[17%] lg:right-4 lg:translate-y-1/2',
 }
+
+type OnchainBoardStageProps = {
+  activePlayerAddress: string
+  animatedTokenIds: string[]
+  blockedSquares: number[]
+  canRollAction: boolean
+  diceSkinByPlayerId: Partial<Record<string, DiceSkinId>>
+  dieA: null | number
+  dieB: null | number
+  expandedTokenId: null | string
+  highlightedSquares: number[]
+  highlightedTokenIds: string[]
+  hudDicePreview: { dieA: DiceFaceValue; dieB: DiceFaceValue }
+  hudDiceRolling: boolean
+  onTokenClick: (tokenId: string) => void
+  onTokenDiceChoiceHover: (tokenId: string, choiceId: null | string) => void
+  onTokenDiceChoiceSelect: (_tokenId: string, choiceId: string) => void
+  onTokenHover: (tokenId: string | null) => void
+  players: MatchPlayer[]
+  playersByColor: Partial<Record<PlayerColor, MatchPlayer>>
+  safeSquares: number[]
+  selectedDiceSkinId: DiceSkinId
+  selectedTokenId: null | string
+  surfacePalette: ReturnType<typeof getBoardThemeSurfacePalette>
+  tokenDiceChoices: Record<string, Array<{ id: string; label: string; value: number }>>
+  tokenHints: Record<string, string>
+  tokens: MatchToken[]
+  triggerHudDiceRoll: () => void
+  ui: OnchainUiCopy
+  visualSkinByColor: Partial<Record<PlayerColor, MatchPlayer['visualSkinId']>>
+}
+
+const OnchainBoardStage = memo(function OnchainBoardStage({
+  activePlayerAddress,
+  animatedTokenIds,
+  blockedSquares,
+  canRollAction,
+  diceSkinByPlayerId,
+  dieA,
+  dieB,
+  expandedTokenId,
+  highlightedSquares,
+  highlightedTokenIds,
+  hudDicePreview,
+  hudDiceRolling,
+  onTokenClick,
+  onTokenDiceChoiceHover,
+  onTokenDiceChoiceSelect,
+  onTokenHover,
+  players,
+  playersByColor,
+  safeSquares,
+  selectedDiceSkinId,
+  selectedTokenId,
+  surfacePalette,
+  tokenDiceChoices,
+  tokenHints,
+  tokens,
+  triggerHudDiceRoll,
+  ui,
+  visualSkinByColor,
+}: OnchainBoardStageProps) {
+  return (
+    <div className="relative mx-auto max-w-[980px] pb-16 pt-16 lg:px-[150px] lg:pb-0 lg:pt-0">
+      <Board3D
+        animatingTokenIds={animatedTokenIds}
+        blockedSquares={blockedSquares}
+        expandedTokenId={expandedTokenId}
+        highlightedSquares={highlightedSquares}
+        movableTokenIds={highlightedTokenIds}
+        onTokenClick={onTokenClick}
+        onTokenDiceChoiceHover={onTokenDiceChoiceHover}
+        onTokenHover={onTokenHover}
+        onTokenDiceChoiceSelect={onTokenDiceChoiceSelect}
+        players={players}
+        safeSquares={safeSquares}
+        selectedTokenId={selectedTokenId}
+        surfacePalette={surfacePalette}
+        tokenDiceChoices={tokenDiceChoices}
+        tokenHints={tokenHints}
+        tokens={tokens}
+        visualSkinByColor={visualSkinByColor}
+      />
+
+      <div className="pointer-events-none absolute inset-0">
+        {hudSlotColors.map((color) => {
+          const player = playersByColor[color]
+
+          return (
+            <div className={`absolute ${hudSlotPositionClassByColor[color]}`} key={`hud-slot-${color}`}>
+              <PlayerHudSlot
+                canRoll={canRollAction}
+                diceSkinId={player ? diceSkinByPlayerId[player.id] || selectedDiceSkinId : selectedDiceSkinId}
+                dieA={dieA}
+                dieB={dieB}
+                onRoll={triggerHudDiceRoll}
+                player={player}
+                preview={hudDicePreview}
+                rolling={hudDiceRolling}
+                surfacePalette={surfacePalette}
+                turnPlayerId={activePlayerAddress}
+                ui={ui}
+              />
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+})
+OnchainBoardStage.displayName = 'OnchainBoardStage'
 
 const tokenUiId = (owner: string, tokenId: number) => `${owner}-${tokenId}`
 
@@ -2204,7 +2321,6 @@ export function MatchOnchainView() {
     : ''
   const activeAnnouncementPlaceNumber = activeAnnouncementPlacement ? Math.min(activeAnnouncementPlacement.place, 3) : null
   const activeAnnouncementSubtitle = activeAnnouncementPlacement ? `${ui.congrats}, ${activeAnnouncementPlacement.name}.` : ''
-  const hudSlotColors: PlayerColor[] = ['green', 'red', 'yellow', 'blue']
 
   return (
     <section
@@ -2320,51 +2436,36 @@ export function MatchOnchainView() {
               </div>
             ) : null}
 
-            <div className="relative mx-auto max-w-[980px] pb-16 pt-16 lg:px-[150px] lg:pb-0 lg:pt-0">
-              <Board3D
-                animatingTokenIds={animatedTokenIds}
-                blockedSquares={blockedSquares}
-                expandedTokenId={expandedTokenId}
-                highlightedSquares={highlightedSquares}
-                movableTokenIds={highlightedTokenIds}
-                onTokenClick={onTokenClick}
-                onTokenDiceChoiceHover={onTokenDiceChoiceHover}
-                onTokenHover={onTokenHover}
-                onTokenDiceChoiceSelect={onTokenDiceChoiceSelect}
-                players={players}
-                safeSquares={safeSquares}
-                selectedTokenId={selectedTokenId}
-                surfacePalette={surfacePalette}
-                tokenDiceChoices={tokenDiceChoices}
-                tokenHints={tokenHints}
-                tokens={uiTokens}
-                visualSkinByColor={visualSkinByColor}
-              />
-
-              <div className="pointer-events-none absolute inset-0">
-                {hudSlotColors.map((color) => {
-                  const player = playersByColor[color]
-
-                  return (
-                    <div className={`absolute ${hudSlotPositionClassByColor[color]}`} key={`hud-slot-${color}`}>
-                      <PlayerHudSlot
-                        canRoll={canRollAction}
-                        diceSkinId={player ? diceSkinByPlayerId[player.id] : selectedDiceSkinId}
-                        dieA={snapshot?.dice_state?.die_a ?? null}
-                        dieB={snapshot?.dice_state?.die_b ?? null}
-                        onRoll={triggerHudDiceRoll}
-                        player={player}
-                        preview={hudDicePreview}
-                        rolling={hudDiceRolling}
-                        surfacePalette={surfacePalette}
-                        turnPlayerId={activePlayerAddress}
-                        ui={ui}
-                      />
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
+            <OnchainBoardStage
+              activePlayerAddress={activePlayerAddress}
+              animatedTokenIds={animatedTokenIds}
+              blockedSquares={blockedSquares}
+              canRollAction={canRollAction}
+              diceSkinByPlayerId={diceSkinByPlayerId}
+              dieA={snapshot?.dice_state?.die_a ?? null}
+              dieB={snapshot?.dice_state?.die_b ?? null}
+              expandedTokenId={expandedTokenId}
+              highlightedSquares={highlightedSquares}
+              highlightedTokenIds={highlightedTokenIds}
+              hudDicePreview={hudDicePreview}
+              hudDiceRolling={hudDiceRolling}
+              onTokenClick={onTokenClick}
+              onTokenDiceChoiceHover={onTokenDiceChoiceHover}
+              onTokenDiceChoiceSelect={onTokenDiceChoiceSelect}
+              onTokenHover={onTokenHover}
+              players={players}
+              playersByColor={playersByColor}
+              safeSquares={safeSquares}
+              selectedDiceSkinId={selectedDiceSkinId}
+              selectedTokenId={selectedTokenId}
+              surfacePalette={surfacePalette}
+              tokenDiceChoices={tokenDiceChoices}
+              tokenHints={tokenHints}
+              tokens={uiTokens}
+              triggerHudDiceRoll={triggerHudDiceRoll}
+              ui={ui}
+              visualSkinByColor={visualSkinByColor}
+            />
           </article>
         ) : (
           <article

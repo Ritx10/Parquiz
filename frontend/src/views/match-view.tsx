@@ -1,4 +1,4 @@
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Board3D } from '../components/game/board3d'
 import FinalRankingScreen from '../components/game/FinalRankingScreen'
@@ -770,7 +770,7 @@ type PlayerHudCardProps = {
   isTurn: boolean
 }
 
-function PlayerHudCard({ player, isTurn }: PlayerHudCardProps) {
+const PlayerHudCard = memo(function PlayerHudCard({ player, isTurn }: PlayerHudCardProps) {
   const language = useAppSettingsStore((state) => state.language)
   const selectedBoardThemeId = useAppSettingsStore((state) => state.selectedBoardThemeId)
   const ui = matchCopyByLanguage[language]
@@ -826,16 +826,17 @@ function PlayerHudCard({ player, isTurn }: PlayerHudCardProps) {
       </div>
     </article>
   )
-}
+})
+PlayerHudCard.displayName = 'MockPlayerHudCard'
 
 type DiceFaceValue = 1 | 2 | 3 | 4 | 5 | 6
 
-function HudDie({ skinId, value, rolling }: { skinId: DiceSkinId; value: null | number; rolling: boolean }) {
-
+const HudDie = memo(function HudDie({ skinId, value, rolling }: { skinId: DiceSkinId; value: null | number; rolling: boolean }) {
   return (
     <GameDie className="h-11 w-11" rolling={rolling} skinId={skinId} value={value} />
   )
-}
+})
+HudDie.displayName = 'MockHudDie'
 
 type TurnDiceLauncherProps = {
   isActive: boolean
@@ -848,7 +849,7 @@ type TurnDiceLauncherProps = {
   onRoll: () => void
 }
 
-function TurnDiceLauncher({
+const TurnDiceLauncher = memo(function TurnDiceLauncher({
   isActive,
   canRoll,
   diceSkinId,
@@ -905,7 +906,8 @@ function TurnDiceLauncher({
       </span>
     </div>
   )
-}
+})
+TurnDiceLauncher.displayName = 'MockTurnDiceLauncher'
 
 type PlayerHudSlotProps = {
   player?: MatchPlayer
@@ -919,7 +921,7 @@ type PlayerHudSlotProps = {
   onRoll: () => void
 }
 
-function PlayerHudSlot({
+const PlayerHudSlot = memo(function PlayerHudSlot({
   player,
   turnPlayerId,
   canRoll,
@@ -951,7 +953,10 @@ function PlayerHudSlot({
       />
     </div>
   )
-}
+})
+PlayerHudSlot.displayName = 'MockPlayerHudSlot'
+
+const hudSlotColors: PlayerColor[] = ['green', 'red', 'yellow', 'blue']
 
 const hudSlotPositionClassByColor: Record<PlayerColor, string> = {
   green: 'left-2 top-2 lg:left-4 lg:top-[17%] lg:-translate-y-1/2',
@@ -959,6 +964,111 @@ const hudSlotPositionClassByColor: Record<PlayerColor, string> = {
   yellow: 'bottom-2 left-2 lg:bottom-[17%] lg:left-4 lg:translate-y-1/2',
   blue: 'bottom-2 right-2 lg:bottom-[17%] lg:right-4 lg:translate-y-1/2',
 }
+
+type MockBoardStageProps = {
+  activeExpandedTokenId: null | string
+  animatingTokenIds: string[]
+  blockedSquares: number[]
+  boardTokenDiceChoices: Record<string, Array<{ id: string; label: string; value: number }>>
+  canRollAction: boolean
+  currentTurnPlayerId: string
+  dice: MatchDiceState
+  diceSkinByPlayerId: Partial<Record<string, DiceSkinId>>
+  highlightedSquares: number[]
+  highlightedTokenIds: string[]
+  hudDicePreview: { dieA: DiceFaceValue; dieB: DiceFaceValue }
+  hudDiceRolling: boolean
+  onTokenClick: (tokenId: string) => void
+  onTokenDiceChoiceHover: (tokenId: string, choiceId: null | string) => void
+  onTokenDiceChoiceSelect: (tokenId: string, choiceId: string) => void
+  onTokenHover: (tokenId: string | null) => void
+  players: MatchPlayer[]
+  playersByColor: Partial<Record<PlayerColor, MatchPlayer>>
+  safeSquares: readonly number[]
+  selectedDiceSkinId: DiceSkinId
+  selectedTokenId: null | string
+  surfacePalette: ReturnType<typeof getBoardThemeSurfacePalette>
+  tokens: MatchToken[]
+  tooltipByTokenId: Record<string, string>
+  triggerHudDiceRoll: () => void
+  visualSkinByColor: Partial<Record<PlayerColor, MatchPlayer['visualSkinId']>>
+}
+
+const MockBoardStage = memo(function MockBoardStage({
+  activeExpandedTokenId,
+  animatingTokenIds,
+  blockedSquares,
+  boardTokenDiceChoices,
+  canRollAction,
+  currentTurnPlayerId,
+  dice,
+  diceSkinByPlayerId,
+  highlightedSquares,
+  highlightedTokenIds,
+  hudDicePreview,
+  hudDiceRolling,
+  onTokenClick,
+  onTokenDiceChoiceHover,
+  onTokenDiceChoiceSelect,
+  onTokenHover,
+  players,
+  playersByColor,
+  safeSquares,
+  selectedDiceSkinId,
+  selectedTokenId,
+  surfacePalette,
+  tokens,
+  tooltipByTokenId,
+  triggerHudDiceRoll,
+  visualSkinByColor,
+}: MockBoardStageProps) {
+  return (
+    <div className="relative mx-auto max-w-[980px] pb-16 pt-16 lg:px-[150px] lg:pb-0 lg:pt-0">
+      <Board3D
+        animatingTokenIds={animatingTokenIds}
+        blockedSquares={blockedSquares}
+        expandedTokenId={activeExpandedTokenId}
+        highlightedSquares={highlightedSquares}
+        movableTokenIds={highlightedTokenIds}
+        onTokenClick={onTokenClick}
+        onTokenDiceChoiceHover={onTokenDiceChoiceHover}
+        onTokenDiceChoiceSelect={onTokenDiceChoiceSelect}
+        onTokenHover={onTokenHover}
+        players={players}
+        safeSquares={safeSquares}
+        selectedTokenId={selectedTokenId}
+        surfacePalette={surfacePalette}
+        tokenDiceChoices={boardTokenDiceChoices}
+        tokenHints={tooltipByTokenId}
+        tokens={tokens}
+        visualSkinByColor={visualSkinByColor}
+      />
+
+      <div className="pointer-events-none absolute inset-0">
+        {hudSlotColors.map((color) => {
+          const player = playersByColor[color]
+
+          return (
+            <div className={`absolute ${hudSlotPositionClassByColor[color]}`} key={`hud-slot-${color}`}>
+              <PlayerHudSlot
+                canRoll={canRollAction}
+                diceSkinId={player ? diceSkinByPlayerId[player.id] || selectedDiceSkinId : selectedDiceSkinId}
+                dieA={dice.dieA}
+                dieB={dice.dieB}
+                onRoll={triggerHudDiceRoll}
+                player={player}
+                preview={hudDicePreview}
+                rolling={hudDiceRolling}
+                turnPlayerId={currentTurnPlayerId}
+              />
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+})
+MockBoardStage.displayName = 'MockBoardStage'
 
 type TokenDiceChoiceWithMove = {
   id: MoveResource
@@ -2801,7 +2911,6 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
       ? `${ui.congrats}, ${activeAnnouncementPlacement.name}.`
       : `${ui.congrats}, ${activeAnnouncementPlacement.name}.`
     : ''
-  const hudSlotColors: PlayerColor[] = ['green', 'red', 'yellow', 'blue']
 
   const previewWinnerPlayer = playersById[currentTurnPlayerId] ?? players[0] ?? null
 
@@ -2875,49 +2984,34 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
             </span>
           </div>
 
-          <div className="relative mx-auto max-w-[980px] pb-16 pt-16 lg:px-[150px] lg:pb-0 lg:pt-0">
-            <Board3D
-              animatingTokenIds={animatingTokenIds}
-              blockedSquares={blockedSquares}
-              expandedTokenId={activeExpandedTokenId}
-              highlightedSquares={highlightedSquares}
-              movableTokenIds={highlightedTokenIds}
-              onTokenClick={onTokenClick}
-              onTokenDiceChoiceHover={onTokenDiceChoiceHover}
-              onTokenDiceChoiceSelect={onTokenDiceChoiceSelect}
-              onTokenHover={onTokenHover}
-              players={players}
-              safeSquares={activeSessionState.safeSquares}
-              selectedTokenId={selectedTokenId}
-              surfacePalette={surfacePalette}
-              tokenDiceChoices={boardTokenDiceChoices}
-              tokenHints={tooltipByTokenId}
-              tokens={tokens}
-              visualSkinByColor={visualSkinByColor}
-            />
-
-            <div className="pointer-events-none absolute inset-0">
-              {hudSlotColors.map((color) => {
-                const player = playersByColor[color]
-
-                return (
-                  <div className={`absolute ${hudSlotPositionClassByColor[color]}`} key={`hud-slot-${color}`}>
-                    <PlayerHudSlot
-                      canRoll={canRollAction}
-                      diceSkinId={player ? diceSkinByPlayerId[player.id] : selectedDiceSkinId}
-                      dieA={dice.dieA}
-                      dieB={dice.dieB}
-                      onRoll={triggerHudDiceRoll}
-                      player={player}
-                      preview={hudDicePreview}
-                      rolling={hudDiceRolling}
-                      turnPlayerId={currentTurnPlayerId}
-                    />
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+          <MockBoardStage
+            activeExpandedTokenId={activeExpandedTokenId}
+            animatingTokenIds={animatingTokenIds}
+            blockedSquares={blockedSquares}
+            boardTokenDiceChoices={boardTokenDiceChoices}
+            canRollAction={canRollAction}
+            currentTurnPlayerId={currentTurnPlayerId}
+            dice={dice}
+            diceSkinByPlayerId={diceSkinByPlayerId}
+            highlightedSquares={highlightedSquares}
+            highlightedTokenIds={highlightedTokenIds}
+            hudDicePreview={hudDicePreview}
+            hudDiceRolling={hudDiceRolling}
+            onTokenClick={onTokenClick}
+            onTokenDiceChoiceHover={onTokenDiceChoiceHover}
+            onTokenDiceChoiceSelect={onTokenDiceChoiceSelect}
+            onTokenHover={onTokenHover}
+            players={players}
+            playersByColor={playersByColor}
+            safeSquares={activeSessionState.safeSquares}
+            selectedDiceSkinId={selectedDiceSkinId}
+            selectedTokenId={selectedTokenId}
+            surfacePalette={surfacePalette}
+            tokens={tokens}
+            tooltipByTokenId={tooltipByTokenId}
+            triggerHudDiceRoll={triggerHudDiceRoll}
+            visualSkinByColor={visualSkinByColor}
+          />
         </article>
       </div>
 
