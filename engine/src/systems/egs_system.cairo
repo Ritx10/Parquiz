@@ -4,10 +4,26 @@ pub trait IEgsSystem<T> {
 }
 
 #[starknet::interface]
+pub trait IMinigameTokenData<T> {
+    fn score(self: @T, token_id: felt252) -> u64;
+    fn game_over(self: @T, token_id: felt252) -> bool;
+    fn score_batch(self: @T, token_ids: Span<felt252>) -> Array<u64>;
+    fn game_over_batch(self: @T, token_ids: Span<felt252>) -> Array<bool>;
+}
+
+#[starknet::interface]
 pub trait IMinigameToken<T> {
     fn is_playable(self: @T, token_id: felt252) -> bool;
     fn assert_is_playable(self: @T, token_id: felt252);
     fn settings_id(self: @T, token_id: felt252) -> u32;
+}
+
+pub const IMINIGAME_ID: felt252 =
+    0x1050f9a792acfa175e26783e365e1b0b38ff3440b960d0ffdfc0ff9d7dc9f2a;
+
+#[starknet::interface]
+pub trait ISRC5<T> {
+    fn supports_interface(self: @T, interface_id: felt252) -> bool;
 }
 
 #[dojo::contract]
@@ -19,7 +35,64 @@ pub mod egs_system {
     };
     use dojo::model::ModelStorage;
     use starknet::{ContractAddress, get_caller_address};
-    use super::{IEgsSystem, IMinigameTokenDispatcher, IMinigameTokenDispatcherTrait};
+    use super::{
+        IEgsSystem, IMinigameTokenData, IMinigameTokenDispatcher, IMinigameTokenDispatcherTrait,
+        IMINIGAME_ID, ISRC5,
+    };
+
+    #[abi(embed_v0)]
+    impl SRC5Impl of ISRC5<ContractState> {
+        fn supports_interface(self: @ContractState, interface_id: felt252) -> bool {
+            interface_id == IMINIGAME_ID
+        }
+    }
+
+    #[abi(embed_v0)]
+    impl MinigameTokenDataImpl of IMinigameTokenData<ContractState> {
+        fn score(self: @ContractState, token_id: felt252) -> u64 {
+            let world = self.world_default();
+            let link: EgsTokenGameLink = world.read_model(token_id);
+            link.score
+        }
+
+        fn game_over(self: @ContractState, token_id: felt252) -> bool {
+            let world = self.world_default();
+            let link: EgsTokenGameLink = world.read_model(token_id);
+            link.game_over
+        }
+
+        fn score_batch(self: @ContractState, token_ids: Span<felt252>) -> Array<u64> {
+            let mut scores = array![];
+            let mut index = 0;
+
+            loop {
+                if index >= token_ids.len() {
+                    break;
+                }
+
+                scores.append(self.score(*token_ids.at(index)));
+                index += 1;
+            }
+
+            scores
+        }
+
+        fn game_over_batch(self: @ContractState, token_ids: Span<felt252>) -> Array<bool> {
+            let mut results = array![];
+            let mut index = 0;
+
+            loop {
+                if index >= token_ids.len() {
+                    break;
+                }
+
+                results.append(self.game_over(*token_ids.at(index)));
+                index += 1;
+            }
+
+            results
+        }
+    }
 
     #[abi(embed_v0)]
     impl EgsSystemImpl of IEgsSystem<ContractState> {
