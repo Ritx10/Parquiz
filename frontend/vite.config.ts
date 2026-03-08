@@ -2,13 +2,14 @@ import { URL } from 'node:url'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import mkcert from 'vite-plugin-mkcert'
+import { loadEnv } from 'vite'
 import topLevelAwait from 'vite-plugin-top-level-await'
 import wasm from 'vite-plugin-wasm'
 
 const isLocalHttpUrl = (value: string) => /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/.*)?$/i.test(value)
 
-const resolveToriiTarget = () => {
-  const configured = process.env.VITE_DOJO_TORII_URL || 'http://127.0.0.1:8080'
+const resolveToriiTarget = (configuredValue?: string) => {
+  const configured = configuredValue || 'http://127.0.0.1:8080'
 
   if (!isLocalHttpUrl(configured)) {
     return configured.replace(/\/$/, '')
@@ -19,9 +20,10 @@ const resolveToriiTarget = () => {
 }
 
 export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
   const isTest = mode === 'test' || process.env.VITEST === 'true'
-  const isKatanaNetwork = (process.env.VITE_STARKNET_NETWORK || '').toLowerCase() === 'katana'
-  const toriiTarget = resolveToriiTarget()
+  const isKatanaNetwork = (env.VITE_STARKNET_NETWORK || '').toLowerCase() === 'katana'
+  const toriiTarget = resolveToriiTarget(env.VITE_DOJO_TORII_URL)
   const plugins = [wasm(), topLevelAwait(), react()]
 
   const manualChunks = (id: string) => {
