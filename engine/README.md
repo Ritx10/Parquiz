@@ -1,10 +1,10 @@
-# Parchis Trivia - Dojo Engine
+# ParQuiz - Dojo Engine
 
-This directory contains the on-chain game engine for Parchis Trivia using Dojo + Cairo.
+This directory contains the on-chain game engine for ParQuiz using Dojo + Cairo.
 
 ## Current Scope
 
-- Base Dojo project scaffold configured for namespace `parchis_trivia`.
+- Base Dojo project scaffold configured for namespace `parquiz`.
 - Core models aligned with the v2 spec (`Game`, `GameConfig`, `GamePlayer`, `Token`, `TurnState`, etc.).
 - Implemented on-chain baseline for:
   - `config_system`
@@ -15,11 +15,9 @@ This directory contains the on-chain game engine for Parchis Trivia using Dojo +
     - token initialization and runtime config snapshot at game start
   - `turn_system`
     - roll + question draw, answer resolution, turn advancement, timeout skip
-  - `shop_system`
-    - buy/use item flow with per-turn purchase limits
   - `admin_system`
-    - global defaults, question set, and item definition writes
-- Event definitions for lobby, turn flow, movement, captures, shop, and win lifecycle.
+    - global defaults and question set writes
+ - Event definitions for lobby, turn flow, movement, captures, and win lifecycle.
 
 ## Local Setup
 
@@ -41,6 +39,50 @@ sozo migrate
 
 ```bash
 torii --world <WORLD_ADDRESS> --indexing.controllers
+```
+
+5. Seed the local VRF provider and question set before testing dice rolls:
+
+```bash
+sozo execute --profile dev --wait parquiz-admin_system set_vrf_provider 0x15f542e25a4ce31481f986888c179b6e57412be340b8095f72f75a328fbb27b
+sozo execute --profile dev --wait parquiz-admin_system set_question_set 1 0x3a1ec27286ab0b11fb3e34e1266c3977349e39fc2f2fcf42ebd117b6e78e786 63 1 1
+```
+
+### Full Local Reset
+
+With a fresh Katana instance, this sequence brings the whole stack back up:
+
+```bash
+# terminal 1
+katana --dev --dev.no-fee
+
+# terminal 2
+sozo build --profile dev
+sozo migrate --profile dev
+sozo execute --profile dev --wait parquiz-admin_system set_vrf_provider 0x15f542e25a4ce31481f986888c179b6e57412be340b8095f72f75a328fbb27b
+sozo execute --profile dev --wait parquiz-admin_system set_question_set 1 0x3a1ec27286ab0b11fb3e34e1266c3977349e39fc2f2fcf42ebd117b6e78e786 63 1 1
+torii --world 0x92c575ff3ab5a8cd02e3d59856bab57570516f518816f2436252eb86e8953d --indexing.controllers --http.cors_origins "*"
+
+# terminal 3
+cd ../frontend
+cp .env.katana .env
+bun run dev
+```
+
+## Sepolia Bootstrap
+
+After a fresh Sepolia deployment, seed the question set before testing live dice rolls. Otherwise the turn system can fail with `q_disabled` or `q_count` during `roll_two_dice_and_draw_question`.
+
+From `frontend/` run:
+
+```bash
+DOJO_KEYSTORE_PASSWORD='<your-keystore-password>' bun run questions:seed:release
+```
+
+Then verify the world state:
+
+```bash
+sozo --profile release model get parquiz-QuestionSet 1
 ```
 
 ## Next Implementation Targets

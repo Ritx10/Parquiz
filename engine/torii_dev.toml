@@ -6,9 +6,9 @@ contracts = [
 
 [sql]
 historical = [
-  "parchis_trivia-Game",
-  "parchis_trivia-TurnState",
-  "parchis_trivia-Token",
-  "parchis_trivia-TokenMoved",
-  "parchis_trivia-GameWon",
+  "parquiz-Game",
+  "parquiz-TurnState",
+  "parquiz-Token",
+  "parquiz-TokenMoved",
+  "parquiz-GameWon",
 ]

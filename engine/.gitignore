@@ -2,3 +2,4 @@ target
 dojo_mainnet.toml
 manifest_*.json
 dojo_*_secrets.toml
+.snfoundry_cache/

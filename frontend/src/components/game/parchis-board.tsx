@@ -78,7 +78,7 @@ const startSquares = new Map<number, TokenColor>([
   [56, 'yellow'],
 ])
 
-const shopNumbers = new Set([12, 17, 29, 34, 46, 51, 63, 68])
+const safeNumbers = new Set([12, 17, 29, 34, 46, 51, 63, 68])
 
 const demoTokens: BoardToken[] = [
   { id: 'token-red-1', color: 'red', position: 22 },
@@ -197,9 +197,9 @@ function CornerBase({ color }: { color: TokenColor }) {
   )
 }
 
-function ShopMarker() {
+function SafeMarker() {
   return (
-    <span className="absolute right-[2px] top-[2px] inline-flex h-[15px] w-[15px] items-center justify-center rounded-full border border-[#5c3d16] bg-[#f6d068] p-[1px] shadow-[0_1px_0_rgba(0,0,0,0.25)]">
+    <span className="pointer-events-none absolute left-1/2 top-1/2 inline-flex h-[15px] w-[15px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-[#5c3d16] bg-[#f6d068] p-[1px] shadow-[0_1px_0_rgba(0,0,0,0.25)]">
       <svg className="h-full w-full" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
         <path d="M1 5h10v6H1z" fill="#2b2217" />
         <path d="M1 4l1.2-2h7.6L11 4" fill="#2b2217" />
@@ -378,7 +378,7 @@ export function ParchisBoard({ tokens = demoTokens, blockedSquares }: ParchisBoa
 
         {trackCells.map((cell) => {
           const startColor = startSquares.get(cell.number)
-          const isShop = shopNumbers.has(cell.number) && !startColor
+          const isSafe = safeNumbers.has(cell.number) && !startColor
 
           return (
             <div
@@ -389,13 +389,13 @@ export function ParchisBoard({ tokens = demoTokens, blockedSquares }: ParchisBoa
               }`}
               key={`track-${cell.number}`}
               style={cellPlacement(cell.row, cell.col)}
-              title={isShop ? 'SAFE_SHOP' : undefined}
+              title={isSafe ? 'SAFE' : undefined}
             >
-              <span className="text-[11px] font-semibold drop-shadow-[0_1px_0_rgba(255,255,255,0.55)]">
+              <span className="relative z-10 text-[11px] font-semibold drop-shadow-[0_1px_0_rgba(255,255,255,0.55)]">
                 {cell.number}
               </span>
 
-              {isShop ? <ShopMarker /> : null}
+              {isSafe ? <SafeMarker /> : null}
             </div>
           )
         })}

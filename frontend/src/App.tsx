@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { appRouter } from './app/router'
-import { ParquizSplashScreen } from './components/splash/parquiz-splash-screen'
+import { ParQuizSplashScreen } from './components/splash/parquiz-splash-screen'
 import { useAppSettingsStore } from './store/app-settings-store'
 
 function App() {
@@ -19,7 +19,7 @@ function App() {
   }, [])
 
   if (showSplash) {
-    return <ParquizSplashScreen onEnterHome={handleEnterHome} />
+    return <ParQuizSplashScreen onEnterHome={handleEnterHome} />
   }
 
   return <RouterProvider router={appRouter} />

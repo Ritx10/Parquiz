@@ -15,13 +15,13 @@ pub mod egs_token_data_system {
     #[abi(embed_v0)]
     impl MinigameTokenDataImpl of IMinigameTokenData<ContractState> {
         fn score(self: @ContractState, token_id: felt252) -> u64 {
-            let world = self.world(@"parchis_trivia");
+            let world = self.world(@"parquiz");
             let link: EgsTokenGameLink = world.read_model(token_id);
             link.score
         }
 
         fn game_over(self: @ContractState, token_id: felt252) -> bool {
-            let world = self.world(@"parchis_trivia");
+            let world = self.world(@"parquiz");
             let link: EgsTokenGameLink = world.read_model(token_id);
             link.game_over
         }

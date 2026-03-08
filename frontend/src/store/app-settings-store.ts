@@ -28,7 +28,6 @@ type AppSettingsState = {
   answerTimeLimitSecs: number
   turnTimeLimitSecs: number
   exitHomeRule: ExitHomeRule
-  shopEnabledOnSafeSquares: boolean
   selectedConfigId: string
   selectedBoardThemeId: BoardThemeId
   selectedSkinId: null | string
@@ -44,7 +43,6 @@ type AppSettingsState = {
   setAnswerTimeLimitSecs: (seconds: number) => void
   setTurnTimeLimitSecs: (seconds: number) => void
   setExitHomeRule: (rule: ExitHomeRule) => void
-  setShopEnabledOnSafeSquares: (enabled: boolean) => void
   setSelectedConfigId: (configId: string) => void
   setSelectedBoardThemeId: (themeId: BoardThemeId) => void
   setSelectedSkinId: (skinId: null | string) => void
@@ -64,7 +62,6 @@ type StoredSettings = {
   answerTimeLimitSecs?: number
   turnTimeLimitSecs?: number
   exitHomeRule?: ExitHomeRule
-  shopEnabledOnSafeSquares?: boolean
   selectedConfigId?: string
   selectedBoardThemeId?: BoardThemeId
   selectedSkinId?: null | string
@@ -91,7 +88,6 @@ type PersistedSettings = Pick<
   | 'selectedDiceSkinId'
   | 'selectedSkinId'
   | 'selectedTokenSkinId'
-  | 'shopEnabledOnSafeSquares'
   | 'soundEnabled'
   | 'turnTimeLimitSecs'
 >
@@ -111,7 +107,6 @@ const defaultSettings: PersistedSettings = {
   selectedDiceSkinId: 'blue',
   selectedSkinId: null,
   selectedTokenSkinId: 'blue',
-  shopEnabledOnSafeSquares: true,
   soundEnabled: true,
   selectedConfigId: '1',
   turnTimeLimitSecs: 45,
@@ -173,7 +168,6 @@ const readStoredSettings = (): PersistedSettings => {
       selectedSkinId: normalizePlayerSkinId(parsed.selectedSkinId ?? null),
       selectedDiceSkinId,
       selectedTokenSkinId,
-      shopEnabledOnSafeSquares: parsed.shopEnabledOnSafeSquares ?? true,
       soundEnabled: parsed.soundEnabled ?? true,
       selectedConfigId: parsed.selectedConfigId || '1',
       turnTimeLimitSecs: normalizeSeconds(parsed.turnTimeLimitSecs, defaultSettings.turnTimeLimitSecs, 10),
@@ -197,7 +191,6 @@ const toPersistedSettings = (state: AppSettingsState): PersistedSettings => ({
   selectedDiceSkinId: state.selectedDiceSkinId,
   selectedSkinId: state.selectedSkinId,
   selectedTokenSkinId: state.selectedTokenSkinId,
-  shopEnabledOnSafeSquares: state.shopEnabledOnSafeSquares,
   soundEnabled: state.soundEnabled,
   turnTimeLimitSecs: state.turnTimeLimitSecs,
 })
@@ -232,7 +225,6 @@ export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
   selectedDiceSkinId: initialSettings.selectedDiceSkinId,
   selectedSkinId: initialSettings.selectedSkinId,
   selectedTokenSkinId: initialSettings.selectedTokenSkinId,
-  shopEnabledOnSafeSquares: initialSettings.shopEnabledOnSafeSquares,
   soundEnabled: initialSettings.soundEnabled,
   selectedConfigId: initialSettings.selectedConfigId,
   turnTimeLimitSecs: initialSettings.turnTimeLimitSecs,
@@ -262,10 +254,6 @@ export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
   },
   setExitHomeRule: (exitHomeRule) => {
     set({ exitHomeRule: normalizeExitHomeRule(exitHomeRule) })
-    persistSettings(toPersistedSettings(get()))
-  },
-  setShopEnabledOnSafeSquares: (shopEnabledOnSafeSquares) => {
-    set({ shopEnabledOnSafeSquares })
     persistSettings(toPersistedSettings(get()))
   },
   setSelectedConfigId: (selectedConfigId) => {

@@ -69,7 +69,7 @@ pub mod egs_system {
     #[generate_trait]
     impl InternalImpl of InternalTrait {
         fn world_default(self: @ContractState) -> dojo::world::WorldStorage {
-            self.world(@"parchis_trivia")
+            self.world(@"parquiz")
         }
     }
 

@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "questions:info": "bun run scripts/print-local-question-set.ts",
+    "questions:seed:release": "bun run scripts/seed-question-set.ts release",
     "test": "vitest --run --passWithNoTests",
     "test:watch": "vitest --passWithNoTests",
     "typecheck": "tsc -b"

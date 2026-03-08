@@ -46,7 +46,6 @@ pub mod config_system {
                 turn_time_limit_secs: payload.turn_time_limit_secs,
                 exit_home_rule: payload.exit_home_rule,
                 difficulty_level: payload.difficulty_level,
-                shop_enabled_on_safe_squares: payload.shop_enabled_on_safe_squares,
                 created_at: now,
                 updated_at: now,
             };
@@ -72,7 +71,6 @@ pub mod config_system {
             config.turn_time_limit_secs = payload.turn_time_limit_secs;
             config.exit_home_rule = payload.exit_home_rule;
             config.difficulty_level = payload.difficulty_level;
-            config.shop_enabled_on_safe_squares = payload.shop_enabled_on_safe_squares;
             config.updated_at = now;
 
             world.write_model(@config);
@@ -135,7 +133,6 @@ pub mod config_system {
                 turn_time_limit_secs: payload.turn_time_limit_secs,
                 exit_home_rule: payload.exit_home_rule,
                 difficulty_level: payload.difficulty_level,
-                shop_enabled_on_safe_squares: payload.shop_enabled_on_safe_squares,
                 created_at: now,
                 updated_at: now,
             };
@@ -156,16 +153,11 @@ pub mod config_system {
             assert(config.creator == caller, 'not_creator');
             assert(config.status == config_status::DRAFT, 'cfg_locked');
 
-            if payload.is_shop {
-                assert(payload.is_safe, 'shop_not_safe');
-            }
-
             let square = BoardSquare {
                 config_id,
                 square_index,
                 square_type: payload.square_type,
                 is_safe: payload.is_safe,
-                is_shop: payload.is_shop,
             };
 
             world.write_model(@square);
@@ -175,7 +167,7 @@ pub mod config_system {
     #[generate_trait]
     impl InternalImpl of InternalTrait {
         fn world_default(self: @ContractState) -> dojo::world::WorldStorage {
-            self.world(@"parchis_trivia")
+            self.world(@"parquiz")
         }
     }
 
@@ -229,7 +221,6 @@ pub mod config_system {
                     square_index,
                     square_type: base_square.square_type,
                     is_safe: base_square.is_safe,
-                    is_shop: base_square.is_shop,
                 }
             } else {
                 default_board_square_for_index(target_config_id, square_index)
@@ -243,13 +234,13 @@ pub mod config_system {
     fn default_board_square_for_index(config_id: u64, square_index: u16) -> BoardSquare {
         let is_start = is_start_square(square_index);
         let is_home_entry = is_home_entry_square(square_index);
-        let is_safe_shop = is_default_safe_shop(square_index);
+        let is_safe_square = is_default_safe_square(square_index);
         let kind = if is_start {
             square_type::START
         } else if is_home_entry {
             square_type::HOME_ENTRY
-        } else if is_safe_shop {
-            square_type::SAFE_SHOP
+        } else if is_safe_square {
+            square_type::SAFE
         } else {
             square_type::NORMAL
         };
@@ -258,8 +249,7 @@ pub mod config_system {
             config_id,
             square_index,
             square_type: kind,
-            is_safe: is_safe_shop || is_start,
-            is_shop: is_safe_shop,
+            is_safe: is_safe_square || is_start,
         }
     }
 
@@ -271,14 +261,14 @@ pub mod config_system {
         square_index == 63 || square_index == 12 || square_index == 29 || square_index == 46
     }
 
-    fn is_default_safe_shop(square_index: u16) -> bool {
-        square_index == 11
-            || square_index == 16
-            || square_index == 28
-            || square_index == 33
-            || square_index == 45
-            || square_index == 50
-            || square_index == 62
-            || square_index == 67
+    fn is_default_safe_square(square_index: u16) -> bool {
+        square_index == 7
+            || square_index == 12
+            || square_index == 24
+            || square_index == 29
+            || square_index == 41
+            || square_index == 46
+            || square_index == 58
+            || square_index == 63
     }
 }

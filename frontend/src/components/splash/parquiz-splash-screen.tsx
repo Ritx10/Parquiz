@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useControllerWallet } from '../../lib/starknet/use-controller-wallet'
 
-type ParquizSplashScreenProps = {
+type ParQuizSplashScreenProps = {
   onEnterHome: () => void
 }
 
@@ -10,7 +10,7 @@ const EXIT_MS = 220
 const PARQUIZ_LOGO_PATH = '/parquiz-logo.png'
 const LOGIN_BUTTON_PATH = '/login-button.png'
 
-export function ParquizSplashScreen({ onEnterHome }: ParquizSplashScreenProps) {
+export function ParQuizSplashScreen({ onEnterHome }: ParQuizSplashScreenProps) {
   const [isReady, setIsReady] = useState(false)
   const [isExiting, setIsExiting] = useState(false)
   const [loginRequested, setLoginRequested] = useState(false)

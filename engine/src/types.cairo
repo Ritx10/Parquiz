@@ -6,14 +6,12 @@ pub struct GameConfigPayload {
     pub turn_time_limit_secs: u32,
     pub exit_home_rule: u8,
     pub difficulty_level: u8,
-    pub shop_enabled_on_safe_squares: bool,
 }
 
 #[derive(Copy, Drop, Serde)]
 pub struct BoardSquarePayload {
     pub square_type: u8,
     pub is_safe: bool,
-    pub is_shop: bool,
 }
 
 #[derive(Drop, Serde)]
@@ -79,14 +77,6 @@ pub struct QuestionSetPayload {
     pub merkle_root: felt252,
     pub question_count: u32,
     pub version: u32,
-    pub enabled: bool,
-}
-
-#[derive(Copy, Drop, Serde)]
-pub struct ItemDefPayload {
-    pub price: u32,
-    pub effect_type: u8,
-    pub effect_value: u32,
     pub enabled: bool,
 }
 

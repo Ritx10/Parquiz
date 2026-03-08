@@ -59,7 +59,6 @@ export type MatchRuleConfig = {
   answerTimeLimitSecs: number
   exitHomeRule: 'FIVE' | 'EVEN' | 'SIX'
   allowSplitDice: boolean
-  shopEnabledOnSafeSquares: boolean
   allowTwoStepSameToken: boolean
   allowSumDice: boolean
   requiresExactHome: boolean

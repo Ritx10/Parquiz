@@ -1,4 +1,4 @@
-# Parchis Trivia On-Chain Spec (Dojo) - v2
+# ParQuiz On-Chain Spec (Dojo) - v2
 
 Estado: draft listo para implementacion  
 Ultima actualizacion: 2026-03-06
@@ -576,21 +576,21 @@ Casos minimos:
 
 ```toml
 [namespace]
-default = "parchis_trivia"
+default = "parquiz"
 
 [writers]
-"parchis_trivia-GameConfig" = ["parchis_trivia-config_system", "parchis_trivia-admin_system"]
-"parchis_trivia-BoardSquare" = ["parchis_trivia-config_system", "parchis_trivia-admin_system"]
-"parchis_trivia-Game" = ["parchis_trivia-lobby_system", "parchis_trivia-turn_system"]
-"parchis_trivia-GamePlayer" = ["parchis_trivia-lobby_system", "parchis_trivia-turn_system", "parchis_trivia-shop_system"]
-"parchis_trivia-Token" = ["parchis_trivia-turn_system"]
-"parchis_trivia-TurnState" = ["parchis_trivia-turn_system"]
-"parchis_trivia-PendingQuestion" = ["parchis_trivia-turn_system"]
-"parchis_trivia-PlayerItem" = ["parchis_trivia-shop_system", "parchis_trivia-turn_system"]
-"parchis_trivia-SquareOccupancy" = ["parchis_trivia-turn_system"]
+"parquiz-GameConfig" = ["parquiz-config_system", "parquiz-admin_system"]
+"parquiz-BoardSquare" = ["parquiz-config_system", "parquiz-admin_system"]
+"parquiz-Game" = ["parquiz-lobby_system", "parquiz-turn_system"]
+"parquiz-GamePlayer" = ["parquiz-lobby_system", "parquiz-turn_system", "parquiz-shop_system"]
+"parquiz-Token" = ["parquiz-turn_system"]
+"parquiz-TurnState" = ["parquiz-turn_system"]
+"parquiz-PendingQuestion" = ["parquiz-turn_system"]
+"parquiz-PlayerItem" = ["parquiz-shop_system", "parquiz-turn_system"]
+"parquiz-SquareOccupancy" = ["parquiz-turn_system"]
 
 [owners]
-"parchis_trivia" = ["parchis_trivia-admin_system", "parchis_trivia-config_system"]
+"parquiz" = ["parquiz-admin_system", "parquiz-config_system"]
 ```
 
 ## 11.2 Despliegue local

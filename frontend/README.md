@@ -1,6 +1,6 @@
-# Parchis Trivia Frontend
+# ParQuiz Frontend
 
-Scaffold base para el frente de `Parchis Trivia` siguiendo el spec Dojo + Cartridge Controller.
+Scaffold base para el frente de `ParQuiz` siguiendo el spec Dojo + Cartridge Controller.
 
 ## Stack configurado
 
@@ -24,6 +24,13 @@ bun install
 bun run dev
 ```
 
+Tambien tienes dos presets listos:
+
+```bash
+cp .env.katana .env
+cp .env.sepolia .env
+```
+
 Si aun no tienes Bun, puedes instalar dependencias con npm y luego usar Bun:
 
 ```bash
@@ -38,6 +45,7 @@ Edita `.env`:
 - `VITE_DOJO_WORLD_ADDRESS`
 - `VITE_DOJO_TORII_URL`
 - `VITE_DOJO_MANIFEST_PATH`
+- `VITE_VRF_PROVIDER_ADDRESS`
 
 ## Scripts
 

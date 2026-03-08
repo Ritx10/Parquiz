@@ -1,18 +1,21 @@
-use crate::types::{EgsConfigPayload, GlobalDefaultsPayload, ItemDefPayload, QuestionSetPayload};
+use crate::types::{EgsConfigPayload, GlobalDefaultsPayload, QuestionSetPayload};
+use starknet::ContractAddress;
 
 #[starknet::interface]
 pub trait IAdminSystem<T> {
     fn set_global_defaults(ref self: T, payload: GlobalDefaultsPayload);
     fn set_question_set(ref self: T, set_id: u64, payload: QuestionSetPayload);
-    fn set_item_def(ref self: T, item_id: u16, payload: ItemDefPayload);
     fn set_egs_config(ref self: T, payload: EgsConfigPayload);
+    fn set_vrf_provider(ref self: T, provider_address: ContractAddress);
 }
 
 #[dojo::contract]
 pub mod admin_system {
-    use crate::constants::{EGS_CONFIG_SINGLETON_ID, GLOBAL_STATE_SINGLETON_ID, MIN_PLAYERS};
-    use crate::models::{AdminAccount, EgsConfig, GlobalDefaults, ItemDef, QuestionSet};
-    use crate::types::{EgsConfigPayload, GlobalDefaultsPayload, ItemDefPayload, QuestionSetPayload};
+    use crate::constants::{
+        EGS_CONFIG_SINGLETON_ID, GLOBAL_STATE_SINGLETON_ID, MIN_PLAYERS, VRF_CONFIG_SINGLETON_ID,
+    };
+    use crate::models::{AdminAccount, EgsConfig, GlobalDefaults, QuestionSet, VrfConfig};
+    use crate::types::{EgsConfigPayload, GlobalDefaultsPayload, QuestionSetPayload};
     use dojo::model::ModelStorage;
     use starknet::{ContractAddress, get_block_timestamp, get_caller_address};
     use super::IAdminSystem;
@@ -56,25 +59,6 @@ pub mod admin_system {
             world.write_model(@set);
         }
 
-        fn set_item_def(ref self: ContractState, item_id: u16, payload: ItemDefPayload) {
-            assert(item_id > 0, 'item_id');
-            assert(payload.price > 0, 'item_price');
-
-            let mut world = self.world_default();
-            let caller = get_caller_address();
-            assert_admin_or_init(ref world, caller);
-
-            let item = ItemDef {
-                item_id,
-                price: payload.price,
-                effect_type: payload.effect_type,
-                effect_value: payload.effect_value,
-                enabled: payload.enabled,
-            };
-
-            world.write_model(@item);
-        }
-
         fn set_egs_config(ref self: ContractState, payload: EgsConfigPayload) {
             let mut world = self.world_default();
             let caller = get_caller_address();
@@ -91,12 +75,21 @@ pub mod admin_system {
 
             world.write_model(@config);
         }
+
+        fn set_vrf_provider(ref self: ContractState, provider_address: ContractAddress) {
+            let mut world = self.world_default();
+            let caller = get_caller_address();
+            assert_admin_or_init(ref world, caller);
+
+            let config = VrfConfig { singleton_id: VRF_CONFIG_SINGLETON_ID, provider_address };
+            world.write_model(@config);
+        }
     }
 
     #[generate_trait]
     impl InternalImpl of InternalTrait {
         fn world_default(self: @ContractState) -> dojo::world::WorldStorage {
-            self.world(@"parchis_trivia")
+            self.world(@"parquiz")
         }
     }
 

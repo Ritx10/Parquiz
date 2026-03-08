@@ -19,7 +19,6 @@ const gameStateSnapshot: ReadonlyGameState = {
     answerTimeLimitSecs: 20,
     exitHomeRule: 'FIVE',
     allowSplitDice: true,
-    shopEnabledOnSafeSquares: true,
     allowTwoStepSameToken: true,
     allowSumDice: true,
     requiresExactHome: true,
@@ -68,7 +67,6 @@ export function useReadonlyGameState() {
   const exitHomeRule = useAppSettingsStore((state) => state.exitHomeRule)
   const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
   const selectedTokenSkinId = useAppSettingsStore((state) => state.selectedTokenSkinId)
-  const shopEnabledOnSafeSquares = useAppSettingsStore((state) => state.shopEnabledOnSafeSquares)
   const turnTimeLimitSecs = useAppSettingsStore((state) => state.turnTimeLimitSecs)
   const selectedSkinSrc = getPlayerSkinSrc(selectedSkinId)
 
@@ -79,7 +77,6 @@ export function useReadonlyGameState() {
         ...gameStateSnapshot.rules,
         answerTimeLimitSecs,
         exitHomeRule,
-        shopEnabledOnSafeSquares,
         timePerTurn: turnTimeLimitSecs,
       },
       players: gameStateSnapshot.players.map((player) =>
@@ -95,5 +92,5 @@ export function useReadonlyGameState() {
             },
       ),
     }
-  }, [answerTimeLimitSecs, exitHomeRule, selectedSkinSrc, selectedTokenSkinId, shopEnabledOnSafeSquares, turnTimeLimitSecs])
+  }, [answerTimeLimitSecs, exitHomeRule, selectedSkinSrc, selectedTokenSkinId, turnTimeLimitSecs])
 }

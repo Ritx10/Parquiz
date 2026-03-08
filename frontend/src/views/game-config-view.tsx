@@ -12,7 +12,6 @@ type ConfigDraft = {
   difficultyLevel: DifficultyPreset
   exitHomeRule: ExitHomeRule
   language: AppLanguage
-  shopEnabledOnSafeSquares: boolean
   soundEnabled: boolean
 }
 
@@ -22,7 +21,6 @@ const defaultDraft: ConfigDraft = {
   difficultyLevel: 'medium',
   exitHomeRule: 'FIVE',
   language: 'es',
-  shopEnabledOnSafeSquares: true,
   soundEnabled: true,
 }
 
@@ -65,7 +63,6 @@ const copy = {
     turnLimit: 'LIMITE DE TURNO (SEGUNDOS)',
     exitRule: 'REGLA PARA SALIR DE CASA',
     difficulty: 'DIFICULTAD GENERAL',
-    safeShop: 'TIENDA EN PARTIDA / CASILLAS SEGURAS',
     save: 'GUARDAR CAMBIOS',
     saving: 'GUARDANDO...',
     cancel: 'CANCELAR',
@@ -105,7 +102,6 @@ const copy = {
     turnLimit: 'TURN LIMIT (SECONDS)',
     exitRule: 'RULE TO EXIT HOME',
     difficulty: 'GENERAL DIFFICULTY',
-    safeShop: 'SHOP IN MATCH / SAFE TILES',
     save: 'SAVE CHANGES',
     saving: 'SAVING...',
     cancel: 'CANCEL',
@@ -146,14 +142,12 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
   const answerTimeLimitSecs = useAppSettingsStore((state) => state.answerTimeLimitSecs)
   const turnTimeLimitSecs = useAppSettingsStore((state) => state.turnTimeLimitSecs)
   const exitHomeRule = useAppSettingsStore((state) => state.exitHomeRule)
-  const shopEnabledOnSafeSquares = useAppSettingsStore((state) => state.shopEnabledOnSafeSquares)
   const setAiDifficulty = useAppSettingsStore((state) => state.setAiDifficulty)
   const setSoundEnabled = useAppSettingsStore((state) => state.setSoundEnabled)
   const setQuestionDifficulty = useAppSettingsStore((state) => state.setQuestionDifficulty)
   const setAnswerTimeLimitSecs = useAppSettingsStore((state) => state.setAnswerTimeLimitSecs)
   const setTurnTimeLimitSecs = useAppSettingsStore((state) => state.setTurnTimeLimitSecs)
   const setExitHomeRule = useAppSettingsStore((state) => state.setExitHomeRule)
-  const setShopEnabledOnSafeSquares = useAppSettingsStore((state) => state.setShopEnabledOnSafeSquares)
   const setSelectedConfigId = useAppSettingsStore((state) => state.setSelectedConfigId)
   const [draft, setDraft] = useState<ConfigDraft>(defaultDraft)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
@@ -167,11 +161,10 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
       difficultyLevel: questionDifficulty || aiDifficulty,
       exitHomeRule,
       language: savedLanguage,
-      shopEnabledOnSafeSquares,
       soundEnabled: savedSoundEnabled,
       turnTimeLimitSecs,
     })
-  }, [aiDifficulty, answerTimeLimitSecs, exitHomeRule, questionDifficulty, savedLanguage, savedSoundEnabled, shopEnabledOnSafeSquares, turnTimeLimitSecs])
+  }, [aiDifficulty, answerTimeLimitSecs, exitHomeRule, questionDifficulty, savedLanguage, savedSoundEnabled, turnTimeLimitSecs])
 
   const { account, address } = useAccount()
   const { isConnected, status, username } = useControllerWallet()
@@ -219,7 +212,6 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
     setAnswerTimeLimitSecs(sanitizedDraft.answerTimeLimitSecs)
     setTurnTimeLimitSecs(sanitizedDraft.turnTimeLimitSecs)
     setExitHomeRule(sanitizedDraft.exitHomeRule)
-    setShopEnabledOnSafeSquares(sanitizedDraft.shopEnabledOnSafeSquares)
 
     if (!account || !address) {
       setStatusTone('success')
@@ -234,7 +226,6 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
         turnTimeLimitSecs: sanitizedDraft.turnTimeLimitSecs,
         difficultyLevel: difficultyToValue[sanitizedDraft.difficultyLevel],
         exitHomeRule: exitRuleToValue[sanitizedDraft.exitHomeRule],
-        shopEnabledOnSafeSquares: sanitizedDraft.shopEnabledOnSafeSquares,
       })
 
       await account.waitForTransaction(createHash)
@@ -445,34 +436,6 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-1">
-                <div>
-                  <p className="text-[16px] font-black uppercase text-[#5c3214]">{text.safeShop}</p>
-                  <p className="text-[11px] font-bold uppercase text-[#88624b]">TIENDA HABILITADA EN<br />CASILLAS SEGURAS</p>
-                </div>
-                <button
-                  className={`relative flex h-[44px] w-[176px] items-center rounded-full border-[3px] p-[4px] shadow-[inset_0_3px_6px_rgba(0,0,0,0.2)] transition-colors ${
-                    draft.shopEnabledOnSafeSquares
-                      ? 'border-[#3d8f38] bg-gradient-to-b from-[#71d659] to-[#45aa34]'
-                      : 'border-[#a96639] bg-[#e8d1b1]'
-                  }`}
-                  onClick={() => updateDraft('shopEnabledOnSafeSquares', !draft.shopEnabledOnSafeSquares)}
-                  type="button"
-                >
-                  <div className={`flex w-full items-center ${draft.shopEnabledOnSafeSquares ? 'justify-between' : 'justify-between flex-row-reverse'}`}>
-                    <span className={`px-2 text-[11px] font-black tracking-wide ${draft.shopEnabledOnSafeSquares ? 'text-white' : 'text-[#88624b]'}`}>
-                      {draft.shopEnabledOnSafeSquares ? 'HABILITADO' : 'DESHABILITADO'}
-                    </span>
-                    <div
-                      className={`h-[30px] w-[30px] flex-shrink-0 rounded-full border-[2px] ${
-                        draft.shopEnabledOnSafeSquares
-                          ? 'border-[#f2deba] bg-[#fff2d7] shadow-[-2px_0_4px_rgba(0,0,0,0.2)]'
-                          : 'border-[#a96639] bg-gradient-to-b from-[#f2deba] to-[#d1ac7f] shadow-[2px_0_4px_rgba(0,0,0,0.2)]'
-                      }`}
-                    />
-                  </div>
-                </button>
-              </div>
             </div>
           </article>
         </div>
