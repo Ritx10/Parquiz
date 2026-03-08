@@ -108,13 +108,6 @@ const moveTypeLabel: Record<MoveType, string> = {
   5: 'EXIT_HOME',
 }
 
-const rewardByPlace: Record<PodiumPlace, number> = {
-  1: 1000,
-  2: 500,
-  3: 250,
-  4: 100,
-}
-
 const announcementGlassTintByThemeId = {
   'theme-classic': {
     border: 'rgba(255, 246, 226, 0.42)',

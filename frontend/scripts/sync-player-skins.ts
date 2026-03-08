@@ -127,7 +127,7 @@ if (!premiumSource) {
   throw new Error('Missing source folder in repository: frontend/CapisPago')
 }
 
-const premiumSourceDirectories = [premiumSource, specialPremiumSource].filter((entry): entry is string => Boolean(entry))
+const premiumSourceDirectories = [premiumSource]
 
 const freeCount = syncSkinGroup({
   destinationDirectory: freeDestination,
