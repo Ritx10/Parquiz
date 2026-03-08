@@ -153,6 +153,7 @@ pub struct TurnState {
     pub question_answered: bool,
     pub question_correct: bool,
     pub has_moved_token: bool,
+    pub exited_home_this_turn: bool,
     pub first_moved_token_id: u8,
     pub deadline: u64,
 }

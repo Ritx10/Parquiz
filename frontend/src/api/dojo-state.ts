@@ -402,6 +402,7 @@ const normalizeTurnStateModel = (raw: RawModel): DojoTurnStateModel => ({
   question_answered: toBoolean(raw.question_answered),
   question_correct: toBoolean(raw.question_correct),
   has_moved_token: toBoolean(raw.has_moved_token),
+  exited_home_this_turn: toBoolean(raw.exited_home_this_turn),
   first_moved_token_id: toNumber(raw.first_moved_token_id),
   deadline: toBigInt(raw.deadline),
 })

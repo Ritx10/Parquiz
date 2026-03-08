@@ -299,6 +299,22 @@ const arrowClassByPlacement: Record<TooltipPlacement, string> = {
   right: 'right-full top-1/2 -translate-y-1/2 translate-x-[1px] border-b border-l',
 }
 
+const compactChoiceLabel = (label: string) => {
+  if (label === 'DIE_A') {
+    return 'D1'
+  }
+
+  if (label === 'DIE_B') {
+    return 'D2'
+  }
+
+  if (label === 'EXIT_HOME') {
+    return 'OUT'
+  }
+
+  return label.replace('_', '')
+}
+
 function CornerBase({ theme }: { theme: ReturnType<typeof getPlayerVisualThemeByColor> }) {
   const palette = theme.homePalette
 
@@ -572,7 +588,7 @@ function Board3DComponent({
                   type="button"
                 >
                   <span className="text-[11px] font-black leading-none">{choice.value}</span>
-                  <span className="text-[8px] font-black uppercase leading-none">+{choice.value}</span>
+                  <span className="text-[8px] font-black uppercase leading-none">{compactChoiceLabel(choice.label)}</span>
                 </button>
               ))}
             </div>

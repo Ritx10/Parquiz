@@ -342,6 +342,7 @@ pub mod lobby_system {
             question_answered: false,
             question_correct: false,
             has_moved_token: false,
+            exited_home_this_turn: false,
             first_moved_token_id: 0,
             deadline: now + config.turn_time_limit_secs.into(),
         };

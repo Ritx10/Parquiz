@@ -84,7 +84,7 @@ pub const DEFAULT_VRF_PROVIDER_ADDRESS: felt252 =
     0x051fea4450da9d6aee758bdeba88b2f665bcbf549d2c61421aa724e9ac0ced8f;
 pub const DEFAULT_ALLOW_SPLIT_DICE: bool = true;
 pub const DEFAULT_ALLOW_TWO_STEP_SAME_TOKEN: bool = true;
-pub const DEFAULT_ALLOW_SUM_DICE: bool = true;
+pub const DEFAULT_ALLOW_SUM_DICE: bool = false;
 pub const DEFAULT_REQUIRES_EXACT_HOME: bool = true;
 pub const EASY_DIFFICULTY_REWARD_COINS: u32 = 60;
 pub const MEDIUM_DIFFICULTY_REWARD_COINS: u32 = 90;

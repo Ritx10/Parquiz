@@ -191,8 +191,11 @@ const onchainCopyByLanguage = {
     endTurn: 'Terminar turno',
     linkPending: 'Resolviendo partida vinculada del token...',
     loadBoard: 'Cargando estado on-chain del tablero...',
-    logLabel: 'Log',
+    logLabel: 'Historial',
     noMovesLeft: 'No quedan movimientos legales. Puedes terminar el turno.',
+    syncingState: 'Sincronizando estado on-chain...',
+    txConfirming: 'Transaccion enviada. Esperando confirmacion...',
+    txPendingPrefix: 'Procesando',
     resolveByGameId: 'Cargar gameId',
     resolveByTokenId: 'Resolver tokenId',
     resolverGamePlaceholder: 'gameId',
@@ -234,8 +237,11 @@ const onchainCopyByLanguage = {
     endTurn: 'End turn',
     linkPending: 'Resolving linked token match...',
     loadBoard: 'Loading on-chain board state...',
-    logLabel: 'Log',
+    logLabel: 'History',
     noMovesLeft: 'No legal moves remain. You can end the turn.',
+    syncingState: 'Syncing on-chain state...',
+    txConfirming: 'Transaction submitted. Waiting for confirmation...',
+    txPendingPrefix: 'Processing',
     resolveByGameId: 'Load gameId',
     resolveByTokenId: 'Resolve tokenId',
     resolverGamePlaceholder: 'gameId',
@@ -396,6 +402,26 @@ const mapErrorToUserMessage = (error: unknown) => {
   }
 
   return raw
+}
+
+const formatPendingActionLabel = (label: string, language: 'en' | 'es') => {
+  if (label === 'Applying move') {
+    return language === 'es' ? 'movimiento' : 'move'
+  }
+
+  if (label === 'Roll + question (VRF)') {
+    return language === 'es' ? 'tirada y pregunta' : 'roll and question'
+  }
+
+  if (label === 'Submitting answer') {
+    return language === 'es' ? 'respuesta' : 'answer'
+  }
+
+  if (label === 'Ending turn') {
+    return language === 'es' ? 'fin del turno' : 'end turn'
+  }
+
+  return language === 'es' ? 'transaccion' : 'transaction'
 }
 
 const HudDie = memo(function HudDie({ skinId, value, rolling }: { skinId: DiceSkinId; value: null | number; rolling: boolean }) {
@@ -858,6 +884,13 @@ type ResolvedAnswerDisplay = {
   selectedOption: number
 }
 
+type PendingTxPhase = 'confirming' | 'submitting' | 'syncing'
+
+type OptimisticAnswerFeedback = {
+  answerState: 'correct' | 'incorrect'
+  selectedOption: number
+}
+
 const cloneSnapshot = (snapshot: DojoGameSnapshot): DojoGameSnapshot => ({
   ...snapshot,
   game: snapshot.game ? { ...snapshot.game } : null,
@@ -928,6 +961,10 @@ const consumeOptimisticDice = (
     turnState.has_moved_token = true
     turnState.first_moved_token_id = move.token_id
   }
+
+  if (move.move_type === 5) {
+    turnState.exited_home_this_turn = true
+  }
 }
 
 const applyOptimisticMoveToSnapshot = (
@@ -992,6 +1029,7 @@ const applyOptimisticEndTurnToSnapshot = (snapshot: DojoGameSnapshot): DojoGameS
   nextSnapshot.turn_state.question_answered = false
   nextSnapshot.turn_state.question_correct = false
   nextSnapshot.turn_state.has_moved_token = false
+  nextSnapshot.turn_state.exited_home_this_turn = false
   nextSnapshot.turn_state.first_moved_token_id = 0
   nextSnapshot.pending_question = null
 
@@ -1185,6 +1223,7 @@ export function MatchOnchainView() {
   const [isLogOpen, setIsLogOpen] = useState(false)
   const [logEvents, setLogEvents] = useState<MatchLogEvent[]>([])
   const [txPendingLabel, setTxPendingLabel] = useState<null | string>(null)
+  const [txPendingPhase, setTxPendingPhase] = useState<null | PendingTxPhase>(null)
   const [, setTxHash] = useState<null | string>(null)
   const [actionError, setActionError] = useState<null | string>(null)
   const [isAwaitingOnchainSync, setIsAwaitingOnchainSync] = useState(false)
@@ -1192,6 +1231,7 @@ export function MatchOnchainView() {
   const [selectedAnswerIndex, setSelectedAnswerIndex] = useState<null | number>(null)
   const [questionSecondsLeft, setQuestionSecondsLeft] = useState(0)
   const [resolvedAnswerDisplay, setResolvedAnswerDisplay] = useState<null | ResolvedAnswerDisplay>(null)
+  const [optimisticAnswerFeedback, setOptimisticAnswerFeedback] = useState<null | OptimisticAnswerFeedback>(null)
   const [rollNotice, setRollNotice] = useState<null | string>(null)
   const [animatedTokenIds, setAnimatingTokenIds] = useState<string[]>([])
   const [animatedTokenPositions, setAnimatedTokenPositions] = useState<Record<string, number>>({})
@@ -1208,7 +1248,7 @@ export function MatchOnchainView() {
   const hudRollTimeoutRef = useRef<null | number>(null)
   const playersByAddressRef = useRef<Record<string, string>>({})
   const colorBySeatRef = useRef<Record<number, PlayerColor>>(seatColorMap)
-  const pendingQuestionRef = useRef<ReturnType<typeof getHydratedQuestion>>(null)
+  const lastResolvedQuestionRef = useRef<null | { difficulty: number; question: NonNullable<ReturnType<typeof getHydratedQuestion>> }>(null)
   const activePlayerCardRef = useRef<MatchPlayer | undefined>(undefined)
   const answerOverlayTimeoutRef = useRef<null | number>(null)
   const rollNoticeTimeoutRef = useRef<null | number>(null)
@@ -1262,7 +1302,9 @@ export function MatchOnchainView() {
 
   useEffect(() => {
     lastAnnouncedWinnerRef.current = null
+    lastResolvedQuestionRef.current = null
     setActiveAnnouncementPlacement(null)
+    setResolvedAnswerDisplay(null)
     setShowFinalClassification(false)
   }, [activeGameId])
 
@@ -1610,8 +1652,13 @@ export function MatchOnchainView() {
   }, [language, snapshot?.pending_question, snapshot?.turn_state?.phase, snapshot?.turn_state?.question_id])
 
   useEffect(() => {
-    pendingQuestionRef.current = activePendingQuestion
-  }, [activePendingQuestion])
+    if (activePendingQuestion && snapshot?.pending_question) {
+      lastResolvedQuestionRef.current = {
+        difficulty: snapshot.pending_question.difficulty,
+        question: activePendingQuestion,
+      }
+    }
+  }, [activePendingQuestion, snapshot?.pending_question])
 
   const modalQuestion = useMemo(() => {
     if (!activePendingQuestion) {
@@ -1652,6 +1699,7 @@ export function MatchOnchainView() {
 
   useEffect(() => {
     setSelectedAnswerIndex(null)
+    setOptimisticAnswerFeedback(null)
   }, [snapshot?.turn_state?.question_id, snapshot?.turn_state?.phase])
 
   useEffect(() => {
@@ -1707,10 +1755,10 @@ export function MatchOnchainView() {
         }, 2200)
       }
 
-      if (event.type === 'AnswerRevealed' && pendingQuestionRef.current) {
-        const question = pendingQuestionRef.current
+      if (event.type === 'AnswerRevealed' && lastResolvedQuestionRef.current) {
+        const { difficulty, question } = lastResolvedQuestionRef.current
         const answerState = event.payload.correct ? 'correct' : 'incorrect'
-        const player = activePlayerCardRef.current
+        const player = playersByAddress[normalizeAddressForCompare(event.payload.player)] || activePlayerCardRef.current
 
         setResolvedAnswerDisplay({
           answerState,
@@ -1718,7 +1766,7 @@ export function MatchOnchainView() {
           question: {
             category: ui.questionCategory,
             correctIndex: question.correctOption,
-            difficulty: questionDifficultyByLevel[snapshot?.pending_question?.difficulty ?? 0] || 'easy',
+            difficulty: questionDifficultyByLevel[difficulty] || 'easy',
             icon: '❓',
             id: `resolved-${event.payload.question_id.toString()}`,
             options: question.displayOptions,
@@ -1740,7 +1788,7 @@ export function MatchOnchainView() {
 
       setLogEvents((current) => [nextLog, ...current].slice(0, 120))
     },
-    [language, playerLabelFromAddress, snapshot?.pending_question?.difficulty, ui.questionCategory],
+    [language, playerLabelFromAddress, playersByAddress, ui.questionCategory],
   )
 
   useEffect(() => {
@@ -1814,7 +1862,7 @@ export function MatchOnchainView() {
   }, [activeGameId, scheduleSnapshotRefresh])
 
   useEffect(() => {
-    if (activeGameId === null || snapshot?.turn_state?.phase !== 2) {
+    if (activeGameId === null || snapshot?.turn_state?.phase !== 2 || isAwaitingOnchainSync) {
       setLegalMoves([])
       setSelectedTokenId(null)
       return
@@ -1845,7 +1893,7 @@ export function MatchOnchainView() {
     return () => {
       cancelled = true
     }
-  }, [activeGameId, legalMovesRefreshKey, snapshot?.turn_state?.phase])
+  }, [activeGameId, isAwaitingOnchainSync, legalMovesRefreshKey, snapshot?.turn_state?.phase])
 
   const uiLegalMoves = useMemo<UiLegalMove[]>(() => {
     if (!activePlayerAddress) {
@@ -1985,6 +2033,7 @@ export function MatchOnchainView() {
 
       setActionError(null)
       setTxPendingLabel(label)
+      setTxPendingPhase('submitting')
       setTxHash(null)
       setIsAwaitingOnchainSync(true)
       options?.onOptimistic?.()
@@ -1992,8 +2041,10 @@ export function MatchOnchainView() {
       try {
         const submittedHash = await action()
         setTxHash(submittedHash)
+        setTxPendingPhase('confirming')
 
         await account.waitForTransaction(submittedHash)
+        setTxPendingPhase('syncing')
         await options?.onConfirmed?.()
         await refreshSnapshot()
 
@@ -2015,6 +2066,7 @@ export function MatchOnchainView() {
         setActionError(mapErrorToUserMessage(error))
       } finally {
         setTxPendingLabel(null)
+        setTxPendingPhase(null)
         setIsAwaitingOnchainSync(false)
       }
     },
@@ -2051,6 +2103,10 @@ export function MatchOnchainView() {
             setExpandedTokenId(null)
             setHoveredChoicePreview(null)
             setSelectedTokenId(move.tokenUiId)
+            setLegalMoves([])
+            setSnapshot((current) =>
+              current ? applyOptimisticMoveToSnapshot(current, activePlayerAddress, move) : current,
+            )
 
             void (async () => {
               if (movingToken) {
@@ -2063,9 +2119,6 @@ export function MatchOnchainView() {
                 await animateTokenPath(move.tokenUiId, path)
               }
 
-              setSnapshot((current) =>
-                current ? applyOptimisticMoveToSnapshot(current, activePlayerAddress, move) : current,
-              )
               setAnimatedTokenPositions((current) => {
                 if (!(move.tokenUiId in current)) {
                   return current
@@ -2099,12 +2152,12 @@ export function MatchOnchainView() {
   )
 
   const onRoll = useCallback(() => {
-    if (!account || !activeGameId) {
+    if (!account || !activeGameId || snapshot?.game?.turn_index === undefined) {
       return
     }
 
     void runTransaction('Roll + question (VRF)', () => rollTwoDiceAndDrawQuestion(account, activeGameId))
-  }, [account, activeGameId, runTransaction])
+  }, [account, activeGameId, runTransaction, snapshot?.game?.turn_index])
 
   const onSelectAnswer = useCallback(
     (optionIndex: number) => {
@@ -2114,20 +2167,30 @@ export function MatchOnchainView() {
 
       const pendingQuestion = snapshot.pending_question
       const turnState = snapshot.turn_state
+      const answerState = optionIndex === activePendingQuestion.correctOption ? 'correct' : 'incorrect'
 
       setSelectedAnswerIndex(optionIndex)
+      setOptimisticAnswerFeedback({ answerState, selectedOption: optionIndex })
 
-      void runTransaction('Submitting answer', () =>
-        submitAnswer(account, activeGameId, {
-          questionId: turnState.question_id,
-          questionIndex: pendingQuestion.question_index,
-          category: pendingQuestion.category,
-          difficulty: pendingQuestion.difficulty,
-          correctOption: activePendingQuestion.correctOption,
-          selectedOption: optionIndex,
-          merkleProof: activePendingQuestion.merkleProof,
-          merkleDirections: activePendingQuestion.merkleDirections,
-        }),
+      void runTransaction(
+        'Submitting answer',
+        () =>
+          submitAnswer(account, activeGameId, {
+            questionId: turnState.question_id,
+            questionIndex: pendingQuestion.question_index,
+            category: pendingQuestion.category,
+            difficulty: pendingQuestion.difficulty,
+            correctOption: activePendingQuestion.correctOption,
+            selectedOption: optionIndex,
+            merkleProof: activePendingQuestion.merkleProof,
+            merkleDirections: activePendingQuestion.merkleDirections,
+          }),
+        {
+          onRollback: () => {
+            setOptimisticAnswerFeedback(null)
+            setSelectedAnswerIndex(null)
+          },
+        },
       )
     },
     [account, activeGameId, activePendingQuestion, runTransaction, snapshot?.pending_question, snapshot?.turn_state],
@@ -2237,6 +2300,23 @@ export function MatchOnchainView() {
 
   const canRoll = isMyTurn && snapshot?.turn_state?.phase === 0
   const canRollAction = canRoll && !hudDiceRolling && !txPendingLabel && !isAwaitingOnchainSync
+  const pendingStatusMessage = useMemo(() => {
+    if (!txPendingLabel || !txPendingPhase) {
+      return null
+    }
+
+    const actionLabel = formatPendingActionLabel(txPendingLabel, language)
+
+    if (txPendingPhase === 'confirming') {
+      return ui.txConfirming
+    }
+
+    if (txPendingPhase === 'syncing') {
+      return ui.syncingState
+    }
+
+    return `${ui.txPendingPrefix}: ${actionLabel}...`
+  }, [language, txPendingLabel, txPendingPhase, ui.syncingState, ui.txConfirming, ui.txPendingPrefix])
   const visualSkinByColor = useMemo(() => {
     return players.reduce<Partial<Record<PlayerColor, MatchPlayer['visualSkinId']>>>((acc, player) => {
       acc[player.color] = player.visualSkinId
@@ -2374,16 +2454,17 @@ export function MatchOnchainView() {
                   {ui.dojoBadge}
                 </span>
                 <button
-                  className="rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] transition hover:brightness-105"
+                  className="rounded-full border px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] shadow-[inset_0_1px_0_rgba(255,255,255,0.32),0_4px_10px_rgba(0,0,0,0.12)] transition hover:-translate-y-0.5 hover:brightness-105"
                   onClick={() => setIsLogOpen(true)}
                   style={{
-                    background: surfacePalette.hudPillBackground,
+                    background: `linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.1) 100%), ${surfacePalette.hudPillBackground}`,
                     borderColor: surfacePalette.hudPillBorder,
                     color: surfacePalette.hudPillText,
+                    textShadow: '0 1px 0 rgba(0,0,0,0.18)',
                   }}
                   type="button"
                 >
-                  {ui.logLabel}
+                  🧾 {ui.logLabel}
                 </button>
               </div>
             </div>
@@ -2422,6 +2503,12 @@ export function MatchOnchainView() {
             {rollNotice ? (
               <div className="mb-3 rounded-2xl border border-[#7f5b24] bg-[#fff4d3] px-4 py-3 text-sm font-bold text-[#65431a] shadow-[0_6px_18px_rgba(72,54,8,0.12)]">
                 {rollNotice}
+              </div>
+            ) : null}
+
+            {pendingStatusMessage ? (
+              <div className="mb-3 rounded-2xl border border-[#4a6f9f] bg-[#ecf5ff] px-4 py-3 text-sm font-bold text-[#19416b] shadow-[0_6px_18px_rgba(30,73,120,0.12)]">
+                {pendingStatusMessage}
               </div>
             ) : null}
 
@@ -2573,7 +2660,7 @@ export function MatchOnchainView() {
 
         {modalQuestion && snapshot?.turn_state?.phase === 1 ? (
           <TriviaQuestionModal
-            answerState="idle"
+            answerState={optimisticAnswerFeedback?.answerState ?? 'idle'}
             difficulty={modalQuestion.difficulty}
             interactionLocked={!isMyTurn || txPendingLabel === 'Submitting answer'}
             isAiTurn={false}
@@ -2582,6 +2669,7 @@ export function MatchOnchainView() {
             question={modalQuestion}
             secondsLeft={questionSecondsLeft}
             selectedOption={selectedAnswerIndex}
+            statusText={txPendingLabel === 'Submitting answer' ? pendingStatusMessage : null}
           />
         ) : resolvedAnswerDisplay ? (
           <TriviaQuestionModal
@@ -2594,6 +2682,7 @@ export function MatchOnchainView() {
             question={resolvedAnswerDisplay.question}
             secondsLeft={0}
             selectedOption={resolvedAnswerDisplay.selectedOption}
+            statusText={null}
           />
         ) : null}
 

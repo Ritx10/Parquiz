@@ -75,7 +75,10 @@ pub mod turn_system {
             let vrf_random: felt252 = vrf_provider.consume_random(Source::Nonce(caller));
             let random_die_1 = poseidon_hash_span(array![vrf_random, 1].span());
             let random_die_2 = poseidon_hash_span(array![vrf_random, 2].span());
-            let random_question = poseidon_hash_span(array![vrf_random, 3].span());
+            let random_question = poseidon_hash_span(
+                array![vrf_random, game.game_id.into(), game.turn_index.into(), question_set.version.into(), 3]
+                    .span(),
+            );
 
             let dice_1 = random_dice_value(random_die_1);
             let dice_2 = random_dice_value(random_die_2);
@@ -120,6 +123,7 @@ pub mod turn_system {
             turn.question_answered = false;
             turn.question_correct = false;
             turn.has_moved_token = false;
+            turn.exited_home_this_turn = false;
             turn.first_moved_token_id = 0;
             turn.deadline = now + runtime.answer_time_limit_secs.into();
 
@@ -171,6 +175,7 @@ pub mod turn_system {
             turn.phase = turn_phase::MOVE_PENDING;
             turn.deadline = now + runtime.turn_time_limit_secs.into();
             turn.has_moved_token = false;
+            turn.exited_home_this_turn = false;
             turn.first_moved_token_id = 0;
             world.write_model(@turn);
 
@@ -285,6 +290,7 @@ pub mod turn_system {
             turn.phase = turn_phase::MOVE_PENDING;
             turn.deadline = now + runtime.turn_time_limit_secs.into();
             turn.has_moved_token = false;
+            turn.exited_home_this_turn = false;
             turn.first_moved_token_id = 0;
             world.write_model(@turn);
 
@@ -451,6 +457,7 @@ pub mod turn_system {
             game,
             runtime,
             caller,
+            ref turn,
             move_input.token_id,
             steps,
             ref bonus_state,
@@ -544,6 +551,7 @@ pub mod turn_system {
                     game,
                     runtime,
                     player_state,
+                    turn,
                     token,
                     move_type::DIE_A,
                     dice_state.die_a,
@@ -557,6 +565,7 @@ pub mod turn_system {
                     game,
                     runtime,
                     player_state,
+                    turn,
                     token,
                     move_type::DIE_B,
                     dice_state.die_b,
@@ -570,6 +579,7 @@ pub mod turn_system {
                     game,
                     runtime,
                     player_state,
+                    turn,
                     token,
                     move_type::SUM,
                     dice_state.die_a + dice_state.die_b,
@@ -583,6 +593,7 @@ pub mod turn_system {
                     game,
                     runtime,
                     player_state,
+                    turn,
                     token,
                     move_type::BONUS_10,
                     10,
@@ -596,6 +607,7 @@ pub mod turn_system {
                     game,
                     runtime,
                     player_state,
+                    turn,
                     token,
                     move_type::BONUS_20,
                     20,
@@ -610,8 +622,8 @@ pub mod turn_system {
 
     fn append_legal_move_for_steps(
         ref legal_moves: Array<LegalMove>, ref world: dojo::world::WorldStorage, game: Game,
-        runtime: GameRuntimeConfig, player_state: GamePlayer, token: Token, source_move_type: u8,
-        steps: u8,
+        runtime: GameRuntimeConfig, player_state: GamePlayer, turn: TurnState, token: Token,
+        source_move_type: u8, steps: u8,
     ) {
         if steps == 0 {
             return;
@@ -623,6 +635,10 @@ pub mod turn_system {
             }
 
             if !can_exit_home(runtime.exit_home_rule, steps) {
+                return;
+            }
+
+            if turn.exited_home_this_turn {
                 return;
             }
 
@@ -876,7 +892,8 @@ pub mod turn_system {
 
     fn apply_move_step(
         ref world: dojo::world::WorldStorage, game: Game, runtime: GameRuntimeConfig,
-        player: ContractAddress, token_id: u8, die_value: u8, ref bonus_state: BonusState,
+        player: ContractAddress, ref turn: TurnState, token_id: u8, die_value: u8,
+        ref bonus_state: BonusState,
     ) {
         assert(die_value > 0, 'die_zero');
 
@@ -904,6 +921,7 @@ pub mod turn_system {
             token.track_pos = spawn_track_pos;
             token.home_lane_pos = 0;
             token.steps_total = 0;
+            turn.exited_home_this_turn = true;
         } else if token.token_state == token_state::ON_TRACK {
             assert_path_not_blocked(ref world, game, token, die_value);
             advance_from_track(ref token, die_value, DEFAULT_REQUIRES_EXACT_HOME);
@@ -1548,6 +1566,7 @@ pub mod turn_system {
         turn.question_answered = false;
         turn.question_correct = false;
         turn.has_moved_token = false;
+        turn.exited_home_this_turn = false;
         turn.first_moved_token_id = 0;
         turn.deadline = now + runtime.turn_time_limit_secs.into();
 
@@ -1785,12 +1804,12 @@ pub mod turn_system {
         }
 
         #[test]
-        fn sum_dice_if_enabled_consumes_both_dice() {
+        fn exit_home_consumes_only_matching_single_die() {
             let runtime = dummy_runtime();
             let mut dice = DiceState {
                 game_id: 1,
-                die_a: 3,
-                die_b: 4,
+                die_a: 5,
+                die_b: 3,
                 die_a_used: false,
                 die_b_used: false,
                 sum_used: false,
@@ -1801,14 +1820,14 @@ pub mod turn_system {
                 runtime,
                 ref dice,
                 ref bonus,
-                MoveInput { move_type: move_type::SUM, token_id: 0, steps: 7 },
+                MoveInput { move_type: move_type::EXIT_HOME, token_id: 0, steps: 5 },
             );
 
-            assert(steps == 7, 'sum_steps_bad');
+            assert(steps == 5, 'exit_steps_bad');
             assert(consumed_bonus == bonus_type::NONE, 'unexpected_bonus');
-            assert(dice.sum_used, 'sum_not_used');
+            assert(!dice.sum_used, 'sum_should_stay_unused');
             assert(dice.die_a_used, 'die_a_not_used');
-            assert(dice.die_b_used, 'die_b_not_used');
+            assert(!dice.die_b_used, 'die_b_should_remain');
         }
 
         #[test]

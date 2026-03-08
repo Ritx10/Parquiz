@@ -77,6 +77,7 @@ export type DojoTurnStateModel = {
   question_answered: boolean
   question_correct: boolean
   has_moved_token: boolean
+  exited_home_this_turn: boolean
   first_moved_token_id: number
   deadline: bigint
 }

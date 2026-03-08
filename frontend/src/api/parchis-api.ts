@@ -38,6 +38,32 @@ const executeCall = async (account: AccountInterface, call: Parameters<AccountIn
   return result.transaction_hash
 }
 
+export const buildRollTwoDiceAndDrawQuestionCalls = ({
+  accountAddress,
+  gameId,
+  turnSystemAddress,
+  vrfProviderAddress,
+}: {
+  accountAddress: string
+  gameId: FeltLike
+  turnSystemAddress: string
+  vrfProviderAddress: string
+}) => {
+  const diceVrfCall = {
+    contractAddress: vrfProviderAddress,
+    entrypoint: 'request_random',
+    calldata: CallData.compile([turnSystemAddress, 0, accountAddress]),
+  }
+
+  const rollCall = {
+    contractAddress: turnSystemAddress,
+    entrypoint: 'roll_two_dice_and_draw_question',
+    calldata: CallData.compile({ game_id: asBigInt(gameId) }),
+  }
+
+  return [diceVrfCall, rollCall]
+}
+
 const rpcProvider = new RpcProvider({ nodeUrl: appEnv.activeRpcUrl })
 
 const parseLegalMoves = (serialized: string[]): LegalMoveApi[] => {
@@ -186,23 +212,22 @@ export const setPlayerCustomization = async (
   })
 }
 
-export const rollTwoDiceAndDrawQuestion = async (account: AccountInterface, gameId: FeltLike) => {
+export const rollTwoDiceAndDrawQuestion = async (
+  account: AccountInterface,
+  gameId: FeltLike,
+) => {
   const vrfProvider = requireAddress('VRF provider', appEnv.vrfProviderAddress)
   const turnSystemAddress = turnSystem()
 
-  const vrfCall = {
-    contractAddress: vrfProvider,
-    entrypoint: 'request_random',
-    calldata: CallData.compile([turnSystemAddress, 0, account.address]),
-  }
-
-  const rollCall = {
-    contractAddress: turnSystemAddress,
-    entrypoint: 'roll_two_dice_and_draw_question',
-    calldata: CallData.compile({ game_id: asBigInt(gameId) }),
-  }
-
-  return executeCall(account, [vrfCall, rollCall])
+  return executeCall(
+    account,
+    buildRollTwoDiceAndDrawQuestionCalls({
+      accountAddress: account.address,
+      gameId,
+      turnSystemAddress,
+      vrfProviderAddress: vrfProvider,
+    }),
+  )
 }
 
 export const submitAnswerAndMoves = async (

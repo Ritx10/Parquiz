@@ -15,6 +15,7 @@ type TriviaQuestionModalProps = {
   question: TriviaQuestion
   secondsLeft: number
   selectedOption: number | null
+  statusText?: null | string
 }
 
 const themeClassByQuestion: Record<TriviaQuestionTheme, string> = {
@@ -86,6 +87,7 @@ export function TriviaQuestionModal({
   question,
   secondsLeft,
   selectedOption,
+  statusText = null,
 }: TriviaQuestionModalProps) {
   const language = useAppSettingsStore((state) => state.language)
   const ui = triviaModalCopyByLanguage[language]
@@ -204,6 +206,12 @@ export function TriviaQuestionModal({
                 {ui.resultLabel[answerState]}
               </p>
               <p className="mt-1 text-sm font-black uppercase tracking-[0.12em]">{ui.feedbackCopy[answerState]}</p>
+            </div>
+          ) : null}
+
+          {statusText ? (
+            <div className="mt-4 rounded-[20px] border-[3px] border-[#85a6d8] bg-[linear-gradient(180deg,#edf6ff_0%,#cfe3ff_100%)] px-4 py-3 text-center text-sm font-black uppercase tracking-[0.12em] text-[#163a66] shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+              {statusText}
             </div>
           ) : null}
         </div>
