@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSplashIntroSoundtrack } from '../../lib/audio'
 import { useControllerWallet } from '../../lib/starknet/use-controller-wallet'
 
 type ParQuizSplashScreenProps = {
@@ -16,6 +17,8 @@ export function ParQuizSplashScreen({ onEnterHome }: ParQuizSplashScreenProps) {
   const [loginRequested, setLoginRequested] = useState(false)
 
   const { isConnected, isPending, canConnectController, connectController } = useControllerWallet()
+
+  useSplashIntroSoundtrack(true)
 
   useEffect(() => {
     const readyTimer = window.setTimeout(() => {

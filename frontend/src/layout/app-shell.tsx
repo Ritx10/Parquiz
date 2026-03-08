@@ -1,10 +1,14 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { useProfileExperienceSound, useRouteIntroSoundtrack } from '../lib/audio'
 import { useAppSettingsStore } from '../store/app-settings-store'
 
 export function AppShell() {
   const location = useLocation()
   const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
   const isDevRoute = location.pathname.startsWith('/dev/')
+
+  useRouteIntroSoundtrack()
+  useProfileExperienceSound()
 
   if (!selectedSkinId && location.pathname !== '/skin-selection' && !isDevRoute) {
     return <Navigate replace to="/skin-selection" />

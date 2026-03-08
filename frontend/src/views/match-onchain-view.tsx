@@ -17,6 +17,7 @@ import { LogDrawer } from '../components/game/log-drawer'
 import type { MatchLogEvent, MatchPlayer, MatchToken, PlayerColor } from '../components/game/match-types'
 import { TriviaQuestionModal } from '../components/game/trivia-question-modal'
 import { isDojoConfigured } from '../config/dojo'
+import { playSoundEffect } from '../lib/audio'
 import { getBoardThemeDefinition, getBoardThemeSurfacePalette } from '../lib/board-themes'
 import { diceSkinIdFromIndex, getDefaultDiceSkinIdByColor, type DiceSkinId } from '../lib/dice-cosmetics'
 import { getPlayerSkinSrc, playerSkinIdFromIndex } from '../lib/player-skins'
@@ -1269,6 +1270,8 @@ export function MatchOnchainView() {
   const onTrackedEventRef = useRef<(event: DojoTrackedEvent) => void>(() => undefined)
   const rewardsGrantedRef = useRef(false)
   const rewardedEventKeysRef = useRef<Set<string>>(new Set())
+  const winnerSoundPlayedRef = useRef(false)
+  const podiumSoundPlayedRef = useRef(false)
 
   useEffect(() => {
     setGameIdInput(searchParams.get('gameId') || '')
@@ -1319,6 +1322,8 @@ export function MatchOnchainView() {
     lastResolvedQuestionRef.current = null
     rewardsGrantedRef.current = false
     rewardedEventKeysRef.current.clear()
+    winnerSoundPlayedRef.current = false
+    podiumSoundPlayedRef.current = false
     setActiveAnnouncementPlacement(null)
     setResolvedAnswerDisplay(null)
     setShowFinalClassification(false)
@@ -1627,6 +1632,11 @@ export function MatchOnchainView() {
       return
     }
 
+    if (!winnerSoundPlayedRef.current) {
+      playSoundEffect('winner')
+      winnerSoundPlayedRef.current = true
+    }
+
     lastAnnouncedWinnerRef.current = winnerKey
     setActiveAnnouncementPlacement(winnerPlacement)
     setShowFinalClassification(false)
@@ -1654,6 +1664,15 @@ export function MatchOnchainView() {
 
     rewardsGrantedRef.current = true
   }, [address, awardCoins, awardXp, finalPlacements, showFinalClassification])
+
+  useEffect(() => {
+    if (!showFinalClassification || finalPlacements.length === 0 || podiumSoundPlayedRef.current) {
+      return
+    }
+
+    playSoundEffect('podium')
+    podiumSoundPlayedRef.current = true
+  }, [finalPlacements.length, showFinalClassification])
 
   const safeSquares = useMemo(() => {
     const source = snapshot?.safe_track_square_refs.length
@@ -1830,6 +1849,15 @@ export function MatchOnchainView() {
           if (eventPlayer === normalizedAddress && !rewardedEventKeysRef.current.has(rewardKey)) {
             rewardedEventKeysRef.current.add(rewardKey)
             awardXp(XP_REWARD_CORRECT_ANSWER)
+            playSoundEffect('correct')
+          }
+        }
+
+        if (event.type === 'AnswerRevealed' && !event.payload.correct) {
+          const eventPlayer = normalizeAddressForCompare(event.payload.player)
+
+          if (eventPlayer === normalizedAddress) {
+            playSoundEffect('incorrect')
           }
         }
 
@@ -1841,6 +1869,8 @@ export function MatchOnchainView() {
             rewardedEventKeysRef.current.add(rewardKey)
             awardXp(XP_REWARD_CAPTURE)
           }
+
+          playSoundEffect('capture')
         }
 
         if (event.type === 'TokenMoved' && event.payload.from_square_ref === 0) {

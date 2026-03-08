@@ -7,6 +7,7 @@ import { GameDie } from '../components/game/game-die'
 import { LogDrawer } from '../components/game/log-drawer'
 import { TriviaQuestionModal } from '../components/game/trivia-question-modal'
 import { getBoardThemeDefinition, getBoardThemeSurfacePalette } from '../lib/board-themes'
+import { playSoundEffect } from '../lib/audio'
 import { assignDistinctDiceSkins, type DiceSkinId } from '../lib/dice-cosmetics'
 import { getPlayerVisualThemeByColor } from '../lib/player-color-themes'
 import { usePlayerProfileActions } from '../lib/use-player-profile'
@@ -1240,6 +1241,8 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   const botHeartbeatRef = useRef(0)
   const botForceAdvanceRef = useRef(false)
   const rewardsGrantedRef = useRef(false)
+  const winnerSoundPlayedRef = useRef(false)
+  const podiumSoundPlayedRef = useRef(false)
   const runtimeStateRef = useRef({
     currentTurnPlayerId,
     hudDiceRolling: false,
@@ -1888,6 +1891,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
       if (answeredCorrectly) {
         if (currentTurnPlayerId === humanPlayerId) {
           awardXp(XP_REWARD_CORRECT_ANSWER)
+          playSoundEffect('correct')
         }
 
         logEvent(
@@ -1916,6 +1920,10 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
         }, 920)
 
         return
+      }
+
+      if (source === 'player' && currentTurnPlayerId === humanPlayerId) {
+        playSoundEffect('incorrect')
       }
 
       logEvent(
@@ -1997,6 +2005,31 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
 
     rewardsGrantedRef.current = true
   }, [awardCoins, awardXp, finalPlacements, humanPlayerId, showFinalClassification, showVictoryPreviewControl])
+
+  useEffect(() => {
+    if (!isMatchComplete || finalPlacements.length === 0 || winnerSoundPlayedRef.current) {
+      return
+    }
+
+    playSoundEffect('winner')
+    winnerSoundPlayedRef.current = true
+  }, [finalPlacements.length, isMatchComplete])
+
+  useEffect(() => {
+    if (!showFinalClassification || finalPlacements.length === 0 || podiumSoundPlayedRef.current) {
+      return
+    }
+
+    playSoundEffect('podium')
+    podiumSoundPlayedRef.current = true
+  }, [finalPlacements.length, showFinalClassification])
+
+  useEffect(() => {
+    if (finalPlacements.length === 0 && !showFinalClassification) {
+      winnerSoundPlayedRef.current = false
+      podiumSoundPlayedRef.current = false
+    }
+  }, [finalPlacements.length, showFinalClassification])
 
   useEffect(() => {
     if (turnTimeoutRef.current !== null) {
@@ -2488,6 +2521,8 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
         if (movedToken.ownerId === humanPlayerId) {
           awardXp(XP_REWARD_CAPTURE)
         }
+
+        playSoundEffect('capture')
 
         logEvent(
           'capture',
