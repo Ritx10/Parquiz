@@ -58,64 +58,45 @@ const stepsToLaneEntryByColor: Record<PlayerColor, number> = {
   green: (entrySquareByColor.green - startSquareByColor.green + TRACK_LENGTH) % TRACK_LENGTH,
 }
 
-const announcementGlassTintByThemeId = {
-  'theme-classic': {
-    border: 'rgba(255, 246, 226, 0.42)',
-    highlight: 'rgba(255, 250, 241, 0.42)',
-    shadow: 'rgba(60, 34, 14, 0.28)',
-    tintA: 'rgba(235, 220, 190, 0.34)',
-    tintB: 'rgba(190, 158, 122, 0.16)',
-  },
-  'theme-rainbow': {
-    border: 'rgba(225, 243, 255, 0.42)',
-    highlight: 'rgba(243, 250, 255, 0.42)',
-    shadow: 'rgba(39, 74, 109, 0.24)',
-    tintA: 'rgba(143, 193, 231, 0.34)',
-    tintB: 'rgba(190, 225, 255, 0.16)',
-  },
-  'theme-castle': {
-    border: 'rgba(236, 228, 255, 0.42)',
-    highlight: 'rgba(248, 245, 255, 0.42)',
-    shadow: 'rgba(65, 54, 108, 0.24)',
-    tintA: 'rgba(168, 153, 221, 0.34)',
-    tintB: 'rgba(213, 204, 246, 0.16)',
-  },
-  'theme-jungle': {
-    border: 'rgba(231, 247, 223, 0.42)',
-    highlight: 'rgba(246, 255, 241, 0.4)',
-    shadow: 'rgba(28, 71, 37, 0.24)',
-    tintA: 'rgba(120, 170, 140, 0.34)',
-    tintB: 'rgba(187, 223, 178, 0.15)',
-  },
-  'theme-desert': {
-    border: 'rgba(255, 236, 214, 0.42)',
-    highlight: 'rgba(255, 248, 238, 0.4)',
-    shadow: 'rgba(113, 68, 25, 0.24)',
-    tintA: 'rgba(214, 167, 112, 0.34)',
-    tintB: 'rgba(246, 214, 165, 0.16)',
-  },
-  'theme-night': {
-    border: 'rgba(217, 228, 255, 0.42)',
-    highlight: 'rgba(240, 245, 255, 0.42)',
-    shadow: 'rgba(20, 32, 74, 0.28)',
-    tintA: 'rgba(120, 150, 210, 0.34)',
-    tintB: 'rgba(84, 111, 184, 0.18)',
-  },
-  'theme-volcano': {
-    border: 'rgba(255, 223, 214, 0.42)',
-    highlight: 'rgba(255, 242, 237, 0.42)',
-    shadow: 'rgba(92, 31, 20, 0.28)',
-    tintA: 'rgba(200, 110, 90, 0.34)',
-    tintB: 'rgba(121, 39, 22, 0.18)',
-  },
-  'theme-legend': {
-    border: 'rgba(255, 235, 210, 0.42)',
-    highlight: 'rgba(255, 247, 235, 0.42)',
-    shadow: 'rgba(92, 68, 26, 0.26)',
-    tintA: 'rgba(208, 175, 114, 0.34)',
-    tintB: 'rgba(140, 109, 62, 0.16)',
-  },
-} as const
+const hexToRgb = (hex: string) => {
+  const sanitized = hex.replace('#', '')
+  const normalized = sanitized.length === 3 ? sanitized.split('').map((char) => `${char}${char}`).join('') : sanitized
+  const value = Number.parseInt(normalized, 16)
+
+  return {
+    b: value & 255,
+    g: (value >> 8) & 255,
+    r: (value >> 16) & 255,
+  }
+}
+
+const mixHexColors = (hex: string, targetHex: string, ratio: number) => {
+  const source = hexToRgb(hex)
+  const target = hexToRgb(targetHex)
+  const mix = (from: number, to: number) => Math.round(from + (to - from) * ratio)
+
+  return {
+    r: mix(source.r, target.r),
+    g: mix(source.g, target.g),
+    b: mix(source.b, target.b),
+  }
+}
+
+const rgbaFromHex = (hex: string, alpha: number) => {
+  const { r, g, b } = hexToRgb(hex)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+const rgbaFromRgb = (rgb: { b: number; g: number; r: number }, alpha: number) => `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`
+
+const buildAnnouncementGlassTint = (baseColor: string) => ({
+  border: rgbaFromRgb(mixHexColors(baseColor, '#ffffff', 0.76), 0.4),
+  glow: rgbaFromHex(baseColor, 0.34),
+  highlight: rgbaFromRgb(mixHexColors(baseColor, '#ffffff', 0.88), 0.44),
+  shadow: rgbaFromRgb(mixHexColors(baseColor, '#120a06', 0.7), 0.34),
+  tintA: rgbaFromRgb(mixHexColors(baseColor, '#ffffff', 0.22), 0.46),
+  tintB: rgbaFromRgb(mixHexColors(baseColor, '#0f172a', 0.12), 0.26),
+})
 
 const lanePositionSet = new Set(Object.values(finalLaneByColor).flat())
 const protectedColorTrackSquares = new Set<number>(Object.values(startSquareByColor))
@@ -249,7 +230,8 @@ const matchCopyByLanguage = {
       1: 'ES 1ER LUGAR',
       2: 'ES 2DO LUGAR',
       3: 'ES 3ER LUGAR',
-    } as Record<1 | 2 | 3, string>,
+      4: 'ES 4TO LUGAR',
+    } as Record<PodiumPlace, string>,
     placeLabel: {
       1: '1er lugar',
       2: '2do lugar',
@@ -296,7 +278,8 @@ const matchCopyByLanguage = {
       1: 'IS 1ST PLACE',
       2: 'IS 2ND PLACE',
       3: 'IS 3RD PLACE',
-    } as Record<1 | 2 | 3, string>,
+      4: 'IS 4TH PLACE',
+    } as Record<PodiumPlace, string>,
     placeLabel: {
       1: '1st place',
       2: '2nd place',
@@ -1230,7 +1213,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     () => fullTurnOrder.filter((playerId) => !placedPlayerIdSet.has(playerId)),
     [fullTurnOrder, placedPlayerIdSet],
   )
-  const announcementCount = Math.min(3, finalPlacements.length)
+  const announcementCount = finalPlacements.length
   const isPlacementAnnouncementActive = !showFinalClassification && announcementIndex < announcementCount
   const isMatchComplete = players.length > 0 && finalPlacements.length === players.length
   const isPlacementFlowBlocking = isPlacementAnnouncementActive || isMatchComplete
@@ -1931,30 +1914,16 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   }, [activeSessionState.rules.timePerTurn, advanceTurn, currentTurnPlayerId, isPlacementFlowBlocking, logEvent, playersById, ui])
 
   useEffect(() => {
-    if (finalPlacements.length === 0 || showFinalClassification) {
+    if (!isMatchComplete || finalPlacements.length === 0 || showFinalClassification || announcementIndex < announcementCount) {
       return
     }
 
-    if (announcementIndex >= announcementCount) {
-      if (!isMatchComplete) {
-        return
-      }
-
-      const finalRevealTimer = window.setTimeout(() => {
-        setShowFinalClassification(true)
-      }, 420)
-
-      return () => {
-        window.clearTimeout(finalRevealTimer)
-      }
-    }
-
-    const nextAnnouncementTimer = window.setTimeout(() => {
-      setAnnouncementIndex((current) => current + 1)
-    }, 2_450)
+    const finalRevealTimer = window.setTimeout(() => {
+      setShowFinalClassification(true)
+    }, 650)
 
     return () => {
-      window.clearTimeout(nextAnnouncementTimer)
+      window.clearTimeout(finalRevealTimer)
     }
   }, [announcementCount, announcementIndex, finalPlacements.length, isMatchComplete, showFinalClassification])
 
@@ -2780,18 +2749,19 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   const activeAnnouncementTheme = activeAnnouncementPlacement
     ? getPlayerVisualThemeByColor(activeAnnouncementPlacement.color, activeAnnouncementPlacement.visualSkinId)
     : null
-  const announcementGlassTint = announcementGlassTintByThemeId[selectedBoardThemeId]
+  const announcementBaseColor = activeAnnouncementTheme?.boardCenterColor || '#d2ab4b'
+  const announcementGlassTint = buildAnnouncementGlassTint(announcementBaseColor)
+  const announcementAccentColors = [
+    rgbaFromHex(announcementBaseColor, 0.92),
+    rgbaFromRgb(mixHexColors(announcementBaseColor, '#ffffff', 0.35), 0.88),
+    rgbaFromRgb(mixHexColors(announcementBaseColor, '#ffe9a8', 0.4), 0.84),
+    rgbaFromRgb(mixHexColors(announcementBaseColor, '#fff7da', 0.6), 0.78),
+  ]
   const announcementGlassPanelStyle = {
     backdropFilter: 'blur(28px) saturate(145%)',
-    background: `linear-gradient(180deg, ${announcementGlassTint.highlight} 0%, rgba(255,255,255,0.1) 16%, rgba(255,255,255,0.03) 100%), linear-gradient(135deg, ${announcementGlassTint.tintA} 0%, ${announcementGlassTint.tintB} 100%)`,
+    background: `linear-gradient(180deg, ${announcementGlassTint.highlight} 0%, rgba(255,255,255,0.16) 16%, rgba(255,255,255,0.05) 100%), linear-gradient(135deg, ${announcementGlassTint.tintA} 0%, ${announcementGlassTint.tintB} 100%)`,
     borderColor: announcementGlassTint.border,
-    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.32), inset 0 -18px 28px rgba(255,255,255,0.05), 0 26px 48px ${announcementGlassTint.shadow}`,
-  } satisfies CSSProperties
-  const announcementGlassInnerStyle = {
-    backdropFilter: 'blur(22px) saturate(140%)',
-    background: `linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 24%, rgba(255,255,255,0.03) 100%), linear-gradient(135deg, ${announcementGlassTint.tintA} 0%, ${announcementGlassTint.tintB} 100%)`,
-    borderColor: announcementGlassTint.border,
-    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -10px 22px rgba(255,255,255,0.04), 0 16px 28px ${announcementGlassTint.shadow}`,
+    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.32), inset 0 -18px 28px rgba(255,255,255,0.05), 0 26px 48px ${announcementGlassTint.shadow}, 0 0 42px ${announcementGlassTint.glow}`,
   } satisfies CSSProperties
   const announcementGlassSheenStyle = {
     background:
@@ -2810,21 +2780,22 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
       return
     }
 
-    if (!isMatchComplete) {
-      setAnnouncementIndex((current) => Math.min(current + 1, announcementCount))
+    const nextAnnouncementIndex = Math.min(announcementIndex + 1, announcementCount)
+    setAnnouncementIndex(nextAnnouncementIndex)
+
+    if (!isMatchComplete || nextAnnouncementIndex < announcementCount) {
       return
     }
 
-    setAnnouncementIndex(Math.min(announcementCount, finalPlacements.length))
     setShowFinalClassification(true)
   }
 
   const activeAnnouncementTitle = activeAnnouncementPlacement
     ? language === 'es'
-      ? `¡${activeAnnouncementPlacement.name} ${ui.placeAnnouncementLabel[Math.min(activeAnnouncementPlacement.place, 3) as 1 | 2 | 3]}!`
-      : `${activeAnnouncementPlacement.name} ${ui.placeAnnouncementLabel[Math.min(activeAnnouncementPlacement.place, 3) as 1 | 2 | 3]}!`
+      ? `¡${activeAnnouncementPlacement.name} ${ui.placeAnnouncementLabel[activeAnnouncementPlacement.place]}!`
+      : `${activeAnnouncementPlacement.name} ${ui.placeAnnouncementLabel[activeAnnouncementPlacement.place]}!`
     : ''
-  const activeAnnouncementPlaceNumber = activeAnnouncementPlacement ? Math.min(activeAnnouncementPlacement.place, 3) : null
+  const activeAnnouncementPlaceNumber = activeAnnouncementPlacement ? activeAnnouncementPlacement.place : null
   const activeAnnouncementSubtitle = activeAnnouncementPlacement
     ? language === 'es'
       ? `${ui.congrats}, ${activeAnnouncementPlacement.name}.`
@@ -2988,7 +2959,12 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
 
       {activeAnnouncementPlacement ? (
         <div className="fixed inset-0 z-[220] flex items-center justify-center px-3 py-6">
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(18,10,6,0.12),rgba(12,6,3,0.18))] backdrop-blur-[16px]" />
+          <div
+            className="absolute inset-0 backdrop-blur-[16px]"
+            style={{
+              background: `radial-gradient(circle at 50% 50%, ${rgbaFromHex(announcementBaseColor, 0.18)} 0%, rgba(255,255,255,0.04) 26%, rgba(12,6,3,0.22) 100%)`,
+            }}
+          />
 
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             {Array.from({ length: 20 }).map((_, index) => (
@@ -2998,26 +2974,12 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
                 style={{
                   animationDelay: `${(index % 6) * 140}ms`,
                   animationDuration: `${2400 + (index % 5) * 260}ms`,
-                  background:
-                    index % 4 === 0
-                      ? '#ffe188'
-                      : index % 4 === 1
-                        ? '#ff8f7b'
-                        : index % 4 === 2
-                          ? '#89dbff'
-                          : '#9effb8',
+                  background: announcementAccentColors[index % announcementAccentColors.length],
                   left: `${4 + ((index * 11) % 92)}%`,
                   top: `${-14 - (index % 6) * 8}%`,
                 }}
               />
             ))}
-
-            <span className="absolute left-[8%] top-[17%] text-6xl opacity-80 drop-shadow-[0_6px_12px_rgba(0,0,0,0.4)] sm:text-7xl">
-              🎆
-            </span>
-            <span className="absolute right-[8%] top-[17%] text-6xl opacity-80 drop-shadow-[0_6px_12px_rgba(0,0,0,0.4)] sm:text-7xl">
-              🎇
-            </span>
 
             {Array.from({ length: 8 }).map((_, index) => (
               <span
@@ -3025,8 +2987,8 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
                 key={`spark-${index}`}
                 style={{
                   animationDelay: `${index * 150}ms`,
-                  background: index % 2 === 0 ? '#ffd760' : '#ff89be',
-                  boxShadow: '0 0 24px rgba(255,215,96,0.7)',
+                  background: announcementAccentColors[index % announcementAccentColors.length],
+                  boxShadow: `0 0 24px ${rgbaFromHex(announcementBaseColor, 0.52)}`,
                   left: `${14 + ((index * 10) % 70)}%`,
                   top: `${16 + ((index * 8) % 52)}%`,
                 }}
@@ -3034,81 +2996,66 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
             ))}
           </div>
 
-          <div className="relative w-full max-w-[980px] text-center">
-            <div
-              className="victory-pop relative mx-auto overflow-hidden rounded-[42px] border-[1.5px] bg-white/10 shadow-[0_30px_60px_rgba(0,0,0,0.48)]"
-              style={announcementGlassPanelStyle}
-            >
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_28%,rgba(255,255,255,0.22),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))]" />
-              <div className="absolute inset-x-[2%] top-[1.4%] h-[22%] rounded-[30px] opacity-80 blur-sm" style={announcementGlassSheenStyle} />
-              <div className="absolute inset-0 opacity-[0.08] mix-blend-screen" style={{ backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.18) 1px, transparent 1px, transparent 3px), repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0, rgba(255,255,255,0.08) 1px, transparent 1px, transparent 4px)' }} />
+          <div className="relative w-full max-w-[640px] text-center">
+            <div className="relative mx-auto flex flex-col items-center pt-24 sm:pt-28">
+              <div className="absolute left-1/2 top-0 z-20 -translate-x-1/2 sm:top-1">
+                <div className="relative flex h-[164px] w-[164px] items-center justify-center sm:h-[184px] sm:w-[184px]">
+                  <div className="absolute left-1/2 top-0 z-30 -translate-x-1/2 text-[#f8d777] drop-shadow-[0_5px_0_rgba(115,62,18,0.55)]">
+                    <svg aria-hidden="true" className="h-16 w-16 sm:h-20 sm:w-20" fill="none" viewBox="0 0 64 64">
+                      <path d="M12 46h40l-3.8 8H15.8L12 46Zm4-24 10 9 6-13 6 13 10-9-4 20H20l-4-20Z" fill="url(#crownFill)" stroke="#8a4e17" strokeLinejoin="round" strokeWidth="3" />
+                      <circle cx="16" cy="22" r="4" fill="#ffeaa0" stroke="#8a4e17" strokeWidth="3" />
+                      <circle cx="32" cy="16" r="4" fill="#ffeaa0" stroke="#8a4e17" strokeWidth="3" />
+                      <circle cx="48" cy="22" r="4" fill="#ffeaa0" stroke="#8a4e17" strokeWidth="3" />
+                      <defs>
+                        <linearGradient id="crownFill" x1="32" x2="32" y1="16" y2="54" gradientUnits="userSpaceOnUse">
+                          <stop stopColor="#fff0a8" />
+                          <stop offset="0.58" stopColor="#f5c248" />
+                          <stop offset="1" stopColor="#cb842b" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                  </div>
 
-              <div className="pointer-events-none absolute inset-0">
-                <span className="absolute left-[7%] top-[18%] h-24 w-24 rounded-full bg-[#ffd36b]/20 blur-2xl" />
-                <span className="absolute right-[8%] top-[22%] h-20 w-20 rounded-full bg-[#ffefb0]/18 blur-2xl" />
-                <span className="absolute bottom-[18%] left-[14%] h-16 w-16 rounded-full bg-[#fff3ca]/18 blur-xl" />
-                <span className="absolute bottom-[12%] right-[12%] h-20 w-20 rounded-full bg-[#ffd985]/18 blur-2xl" />
-              </div>
+                  <div className="absolute left-1/2 top-[34px] z-20 -translate-x-1/2 rounded-full border-[4px] border-[#874d26] bg-gradient-to-b from-[#fff1b6] via-[#edb546] to-[#b86b1e] px-4 py-1 text-[32px] font-display leading-none text-[#5a2d10] shadow-[0_8px_14px_rgba(0,0,0,0.34),inset_0_2px_0_rgba(255,247,203,0.85)] sm:top-[38px] sm:text-[38px]">
+                    {activeAnnouncementPlaceNumber}
+                  </div>
 
-              <div className="relative px-5 pb-7 pt-24 sm:px-8 sm:pb-9 sm:pt-28">
-                <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 sm:top-4">
-                  <div className="relative flex h-[164px] w-[164px] items-center justify-center sm:h-[184px] sm:w-[184px]">
-                    <div className="absolute left-1/2 top-0 z-30 -translate-x-1/2 text-[#f8d777] drop-shadow-[0_5px_0_rgba(115,62,18,0.55)]">
-                      <svg aria-hidden="true" className="h-16 w-16 sm:h-20 sm:w-20" fill="none" viewBox="0 0 64 64">
-                        <path d="M12 46h40l-3.8 8H15.8L12 46Zm4-24 10 9 6-13 6 13 10-9-4 20H20l-4-20Z" fill="url(#crownFill)" stroke="#8a4e17" strokeLinejoin="round" strokeWidth="3" />
-                        <circle cx="16" cy="22" r="4" fill="#ffeaa0" stroke="#8a4e17" strokeWidth="3" />
-                        <circle cx="32" cy="16" r="4" fill="#ffeaa0" stroke="#8a4e17" strokeWidth="3" />
-                        <circle cx="48" cy="22" r="4" fill="#ffeaa0" stroke="#8a4e17" strokeWidth="3" />
-                        <defs>
-                          <linearGradient id="crownFill" x1="32" x2="32" y1="16" y2="54" gradientUnits="userSpaceOnUse">
-                            <stop stopColor="#fff0a8" />
-                            <stop offset="0.58" stopColor="#f5c248" />
-                            <stop offset="1" stopColor="#cb842b" />
-                          </linearGradient>
-                        </defs>
-                      </svg>
-                    </div>
-
-                    <div className="absolute left-1/2 top-[34px] z-20 -translate-x-1/2 rounded-full border-[4px] border-[#874d26] bg-gradient-to-b from-[#fff1b6] via-[#edb546] to-[#b86b1e] px-4 py-1 text-[32px] font-display leading-none text-[#5a2d10] shadow-[0_8px_14px_rgba(0,0,0,0.34),inset_0_2px_0_rgba(255,247,203,0.85)] sm:top-[38px] sm:text-[38px]">
-                      {activeAnnouncementPlaceNumber}
-                    </div>
-
-                    <div className="absolute bottom-0 left-1/2 z-20 flex h-[132px] w-[132px] -translate-x-1/2 items-center justify-center rounded-full border-[6px] border-[#7b4528] bg-gradient-to-b from-[#ffe7ab] via-[#f8bf56] to-[#cd8335] shadow-[0_26px_42px_rgba(0,0,0,0.44)] sm:h-[146px] sm:w-[146px]">
-                      <span
-                        className={`inline-flex h-[104px] w-[104px] items-center justify-center rounded-full border-[4px] border-[#7c3f21] bg-gradient-to-b text-3xl font-black text-[#2c190d] sm:h-[116px] sm:w-[116px] ${activeAnnouncementTheme?.avatarToneClass || ''}`}
-                      >
-                        <GameAvatar
-                          alt={activeAnnouncementPlacement.name}
-                          avatar={activeAnnouncementPlacement.avatar}
-                          imageClassName="h-full w-full object-contain p-2"
-                          textClassName="text-3xl font-black text-[#2c190d]"
-                        />
-                      </span>
-                    </div>
+                  <div className="absolute bottom-0 left-1/2 z-20 flex h-[132px] w-[132px] -translate-x-1/2 items-center justify-center rounded-full border-[6px] border-[#7b4528] bg-gradient-to-b from-[#ffe7ab] via-[#f8bf56] to-[#cd8335] shadow-[0_26px_42px_rgba(0,0,0,0.44)] sm:h-[146px] sm:w-[146px]">
+                    <span
+                      className={`inline-flex h-[104px] w-[104px] items-center justify-center rounded-full border-[4px] border-[#7c3f21] bg-gradient-to-b text-3xl font-black text-[#2c190d] sm:h-[116px] sm:w-[116px] ${activeAnnouncementTheme?.avatarToneClass || ''}`}
+                    >
+                      <GameAvatar
+                        alt={activeAnnouncementPlacement.name}
+                        avatar={activeAnnouncementPlacement.avatar}
+                        imageClassName="h-full w-full object-contain p-2"
+                        textClassName="text-3xl font-black text-[#2c190d]"
+                      />
+                    </span>
                   </div>
                 </div>
+              </div>
 
-                <div
-                  className="relative mx-auto max-w-[760px] rounded-[34px] border bg-white/10 px-4 pb-5 pt-[104px] sm:px-8 sm:pb-7 sm:pt-[116px]"
-                  style={announcementGlassInnerStyle}
-                >
-                  <div className="absolute inset-x-5 top-4 h-[72px] rounded-[22px] border border-white/20 bg-white/10" />
-                  <div className="absolute inset-x-[4%] top-[2%] h-[20%] rounded-[26px] opacity-90 blur-sm" style={announcementGlassSheenStyle} />
-                  <div className="absolute inset-0 opacity-[0.06] mix-blend-screen" style={{ backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.16) 0, rgba(255,255,255,0.16) 1px, transparent 1px, transparent 3px), repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0, rgba(255,255,255,0.08) 1px, transparent 1px, transparent 4px)' }} />
+              <div
+                className="victory-pop relative w-full overflow-hidden rounded-[32px] border bg-white/20 px-5 pb-6 pt-[96px] shadow-2xl backdrop-blur-xl sm:px-8 sm:pb-8 sm:pt-[108px]"
+                style={announcementGlassPanelStyle}
+              >
+                <div className="absolute inset-x-[4%] top-[2%] h-[22%] rounded-[26px] opacity-90 blur-sm" style={announcementGlassSheenStyle} />
+                <div className="absolute inset-0 opacity-[0.06] mix-blend-screen" style={{ backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.16) 0, rgba(255,255,255,0.16) 1px, transparent 1px, transparent 3px), repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0, rgba(255,255,255,0.08) 1px, transparent 1px, transparent 4px)' }} />
 
-                  <div
-                    className="relative rounded-[28px] border px-4 py-5 sm:px-6 sm:py-6"
-                    style={announcementGlassInnerStyle}
-                  >
-                    <p className="font-display text-[28px] uppercase leading-[1.05] tracking-[0.04em] text-[#ffe8be] drop-shadow-[0_3px_0_rgba(67,31,12,0.82)] sm:text-[46px]">
-                      {activeAnnouncementTitle}
-                    </p>
-                    <p className="mt-3 text-sm font-black uppercase tracking-[0.14em] text-[#ffefc8] sm:text-lg">
-                      {activeAnnouncementSubtitle}
-                    </p>
-                  </div>
+                <div className="pointer-events-none absolute inset-0">
+                  <span className="absolute left-[10%] top-[18%] h-20 w-20 rounded-full blur-2xl" style={{ background: rgbaFromHex(announcementBaseColor, 0.28) }} />
+                  <span className="absolute right-[10%] bottom-[14%] h-24 w-24 rounded-full blur-2xl" style={{ background: rgbaFromRgb(mixHexColors(announcementBaseColor, '#ffffff', 0.52), 0.22) }} />
+                </div>
 
-                  <div className="mt-5 flex justify-center">
+                <div className="relative">
+                  <p className="font-display text-[28px] uppercase leading-[1.05] tracking-[0.04em] text-[#ffe8be] drop-shadow-[0_3px_0_rgba(67,31,12,0.82)] sm:text-[46px]">
+                    {activeAnnouncementTitle}
+                  </p>
+                  <p className="mt-3 text-sm font-black uppercase tracking-[0.14em] text-[#ffefc8] sm:text-lg">
+                    {activeAnnouncementSubtitle}
+                  </p>
+
+                  <div className="mt-6 flex justify-center">
                     <button
                       className="rounded-[22px] border px-8 py-2.5 font-display text-[22px] uppercase tracking-[0.12em] text-[#fff4de] transition hover:brightness-105 active:translate-y-[2px]"
                       style={{
@@ -3124,7 +3071,6 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
                 </div>
               </div>
             </div>
-
           </div>
         </div>
       ) : null}

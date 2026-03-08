@@ -1,369 +1,482 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { GameAvatar } from './game-avatar';
-import { getPlayerVisualThemeByColor } from '../../lib/player-color-themes';
-import type { TokenSkinId } from '../../lib/token-cosmetics';
-import { useAppSettingsStore } from '../../store/app-settings-store';
+import { type CSSProperties, useEffect, useMemo, useState } from 'react'
+import { motion, type TargetAndTransition } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
+import { GameAvatar } from './game-avatar'
+import { getBoardThemeDefinition, getBoardThemeSurfacePalette } from '../../lib/board-themes'
+import { getPlayerVisualThemeByColor } from '../../lib/player-color-themes'
+import type { TokenSkinId } from '../../lib/token-cosmetics'
+import { useAppSettingsStore } from '../../store/app-settings-store'
 
-type PlayerColor = 'red' | 'green' | 'blue' | 'yellow';
-type PodiumPlace = 1 | 2 | 3 | 4;
+type PlayerColor = 'red' | 'green' | 'blue' | 'yellow'
+type PodiumPlace = 1 | 2 | 3 | 4
 
 interface RankingEntry {
-  avatar: string;
-  id: string;
-  name: string;
-  place: PodiumPlace;
-  reward: number;
-  color: PlayerColor;
-  title?: string;
-  visualSkinId?: TokenSkinId;
-}
-
-type FallingCoinConfig = {
-  animationDelay: string;
-  animationDuration: string;
-  left: string;
-  transform: string;
+  avatar: string
+  id: string
+  name: string
+  place: PodiumPlace
+  reward: number
+  color: PlayerColor
+  progressScore?: number
+  title?: string
+  visualSkinId?: TokenSkinId
 }
 
 const defaultRanking = [
-  { id: "P1", name: "P1", place: 1, reward: 1000, color: "red", avatar: 'P1' },
-  { id: "P2", name: "P2", place: 2, reward: 500, color: "green", avatar: 'P2' },
-  { id: "P4", name: "P4", place: 3, reward: 250, color: "blue", avatar: 'P4' },
-  { id: "P3", name: "P3", place: 4, reward: 100, color: "yellow", avatar: 'P3' }
-] as const satisfies RankingEntry[];
-
-const avatarToneByColor: Record<PlayerColor, string> = {
-  blue: 'from-[#d6edff] via-[#8fd4ff] to-[#3e93df]',
-  green: 'from-[#dcffe6] via-[#9ef0b4] to-[#4caf6b]',
-  red: 'from-[#ffd9d9] via-[#ff9f95] to-[#d85d4f]',
-  yellow: 'from-[#fff6d6] via-[#ffe48a] to-[#d2ae3e]',
-};
-
-const placePodiumHeightClassNew: Record<PodiumPlace, string> = {
-  1: 'h-[320px]',
-  2: 'h-[240px]',
-  3: 'h-[180px]',
-  4: 'h-[130px]',
-};
-
-const placeMedalColors: Record<PodiumPlace, { bg: string, border: string }> = {
-  1: { bg: 'from-[#FFDF73] via-[#F4B41A] to-[#D48900]', border: '#FFEA99' },
-  2: { bg: 'from-[#E2E8F0] via-[#A0AEC0] to-[#718096]', border: '#F7FAFC' },
-  3: { bg: 'from-[#F6AD55] via-[#DD6B20] to-[#9C4221]', border: '#FBD38D' },
-  4: { bg: 'from-[#D69E2E] via-[#B7791F] to-[#975A16]', border: '#F6E05E' },
-};
-
-const placeRibbonClassNew: Record<PodiumPlace, string> = {
-  1: 'bg-[#E74C3C] border-[#C0392B]',
-  2: 'bg-[#2ECC71] border-[#27AE60]',
-  3: 'bg-[#3498DB] border-[#2980B9]',
-  4: 'bg-[#F1C40F] border-[#D68910]',
-};
+  { id: 'P1', name: 'P1', place: 1, reward: 2350, color: 'red', avatar: 'P1' },
+  { id: 'P2', name: 'P2', place: 2, reward: 1980, color: 'blue', avatar: 'P2' },
+  { id: 'P3', name: 'P3', place: 3, reward: 1650, color: 'green', avatar: 'P3' },
+  { id: 'P4', name: 'P4', place: 4, reward: 1400, color: 'yellow', avatar: 'P4' },
+] as const satisfies RankingEntry[]
 
 const rankingCopyByLanguage = {
   es: {
-    coins: 'MONEDAS',
-    finalRanking: 'CLASIFICACIÓN FINAL',
-    placeOrdinalLabel: {
-      1: '1º',
-      2: '2º',
-      3: '3º',
-      4: '4º',
+    backHome: 'VOLVER AL MENU',
+    championship: 'CAMPEONATO - CLASIFICACION FINAL',
+    finalRanking: 'PARQUIZ CHAMPIONSHIP',
+    placeLabel: {
+      1: 'PRIMER LUGAR',
+      2: 'SEGUNDO LUGAR',
+      3: 'TERCER LUGAR',
+      4: 'CUARTO LUGAR',
     } as Record<PodiumPlace, string>,
-    placeTitleByPlace: {
-      1: 'GANADOR',
-      2: '2° LUGAR',
-      3: '3° LUGAR',
-      4: '4° LUGAR',
-    } as Record<PodiumPlace, string>,
-    scoreDetails: 'VER PUNTUACIÓN DETALLADA',
-    backHome: 'VOLVER AL MENÚ PRINCIPAL',
+    pts: 'pts',
   },
   en: {
-    coins: 'COINS',
-    finalRanking: 'FINAL RANKING',
-    placeOrdinalLabel: {
-      1: '1ST',
-      2: '2ND',
-      3: '3RD',
-      4: '4TH',
+    backHome: 'BACK TO MENU',
+    championship: 'CHAMPIONSHIP - FINAL RANKING',
+    finalRanking: 'PARQUIZ CHAMPIONSHIP',
+    placeLabel: {
+      1: 'FIRST PLACE',
+      2: 'SECOND PLACE',
+      3: 'THIRD PLACE',
+      4: 'FOURTH PLACE',
     } as Record<PodiumPlace, string>,
-    placeTitleByPlace: {
-      1: 'WINNER',
-      2: '2ND PLACE',
-      3: '3RD PLACE',
-      4: '4TH PLACE',
-    } as Record<PodiumPlace, string>,
-    scoreDetails: 'VIEW DETAILED SCORE',
-    backHome: 'BACK TO MAIN MENU',
+    pts: 'pts',
   },
-} as const;
+} as const
 
-const placeMedalRibbons = (place: PodiumPlace) => {
-  const common = "w-[18px] h-[54px] rounded-b-sm border-x-2 border-b-2 shadow-sm origin-top";
-  if (place === 1) return (
-    <>
-      <div className={`${common} -rotate-[30deg] bg-gradient-to-b from-[#EF5350] to-[#C62828] border-[#8E0000]`} />
-      <div className={`${common} rotate-[30deg] bg-gradient-to-b from-[#EF5350] to-[#C62828] border-[#8E0000]`} />
-    </>
-  );
-  if (place === 2) return (
-    <>
-      <div className={`${common} -rotate-[30deg] bg-gradient-to-b from-[#42A5F5] to-[#1565C0] border-[#0D47A1]`} />
-      <div className={`${common} rotate-[30deg] bg-gradient-to-b from-[#42A5F5] to-[#1565C0] border-[#0D47A1]`} />
-    </>
-  );
-  if (place === 3) return (
-    <>
-      <div className={`${common} -rotate-[30deg] bg-gradient-to-b from-[#EF5350] to-[#C62828] border-[#8E0000]`} />
-      <div className={`${common} rotate-[30deg] bg-gradient-to-b from-[#42A5F5] to-[#1565C0] border-[#0D47A1]`} />
-    </>
-  );
-  return (
-    <>
-      <div className={`${common} -rotate-[30deg] bg-gradient-to-b from-[#FFA726] to-[#EF6C00] border-[#E65100]`} />
-      <div className={`${common} rotate-[30deg] bg-gradient-to-b from-[#FFA726] to-[#EF6C00] border-[#E65100]`} />
-    </>
-  );
+const podiumOrder: PodiumPlace[] = [2, 1, 3, 4]
+
+const podiumConfigByPlace: Record<PodiumPlace, { blockClass: string; medalClass: string; icon: string; labelClass: string }> = {
+  1: {
+    blockClass: 'h-[430px] w-[228px] sm:h-[500px] sm:w-[254px]',
+    icon: '🏆',
+    labelClass: 'text-[#fff0a8]',
+    medalClass: 'from-[#fff0aa] via-[#ffcf4f] to-[#d88a06]',
+  },
+  2: {
+    blockClass: 'h-[350px] w-[198px] sm:h-[410px] sm:w-[216px]',
+    icon: '🥈',
+    labelClass: 'text-[#ebf3ff]',
+    medalClass: 'from-[#f4f8ff] via-[#bccbe1] to-[#7d8ea8]',
+  },
+  3: {
+    blockClass: 'h-[286px] w-[188px] sm:h-[334px] sm:w-[206px]',
+    icon: '🥉',
+    labelClass: 'text-[#ffe3c7]',
+    medalClass: 'from-[#ffd8b5] via-[#e09a5a] to-[#ac5828]',
+  },
+  4: {
+    blockClass: 'h-[228px] w-[204px] sm:h-[266px] sm:w-[224px]',
+    icon: '🎖',
+    labelClass: 'text-[#fff0b9]',
+    medalClass: 'from-[#ffe9ad] via-[#efc760] to-[#cd8a21]',
+  },
+}
+
+const avatarMotionByPlace: Record<PodiumPlace, TargetAndTransition> = {
+  1: { rotate: [0, -4, 4, 0], scale: [1, 1.06, 1], y: [0, -8, 0] },
+  2: { rotate: [0, -2, 2, -2, 0], scale: [1, 1.02, 1], y: [0, -3, 0] },
+  3: { rotate: [0, 1.5, -1.5, 0], scale: [1, 1.015, 1], y: [0, -2, 0] },
+  4: { rotate: [0, -3, 3, 0], x: [0, -2, 2, 0], y: [0, -1, 0] },
+}
+
+const rankingGlassTintByThemeId = {
+  'theme-classic': {
+    border: 'rgba(255,255,255,0.28)',
+    glow: 'rgba(103, 64, 29, 0.2)',
+    tintA: 'rgba(245,230,200,0.34)',
+    tintB: 'rgba(214,186,148,0.18)',
+  },
+  'theme-rainbow': {
+    border: 'rgba(255,255,255,0.3)',
+    glow: 'rgba(96, 132, 199, 0.22)',
+    tintA: 'rgba(200,220,255,0.3)',
+    tintB: 'rgba(255,212,236,0.16)',
+  },
+  'theme-castle': {
+    border: 'rgba(255,255,255,0.3)',
+    glow: 'rgba(86, 92, 168, 0.22)',
+    tintA: 'rgba(180,200,255,0.32)',
+    tintB: 'rgba(214,202,255,0.16)',
+  },
+  'theme-jungle': {
+    border: 'rgba(255,255,255,0.28)',
+    glow: 'rgba(43, 104, 58, 0.2)',
+    tintA: 'rgba(180,255,200,0.28)',
+    tintB: 'rgba(118,180,132,0.16)',
+  },
+  'theme-desert': {
+    border: 'rgba(255,255,255,0.28)',
+    glow: 'rgba(131, 87, 37, 0.2)',
+    tintA: 'rgba(255,226,185,0.28)',
+    tintB: 'rgba(232,180,116,0.16)',
+  },
+  'theme-night': {
+    border: 'rgba(255,255,255,0.3)',
+    glow: 'rgba(48, 75, 138, 0.24)',
+    tintA: 'rgba(180,200,255,0.28)',
+    tintB: 'rgba(104,128,201,0.18)',
+  },
+  'theme-volcano': {
+    border: 'rgba(255,255,255,0.28)',
+    glow: 'rgba(126, 49, 28, 0.24)',
+    tintA: 'rgba(255,160,140,0.3)',
+    tintB: 'rgba(170,72,44,0.18)',
+  },
+  'theme-legend': {
+    border: 'rgba(255,255,255,0.3)',
+    glow: 'rgba(136, 110, 54, 0.22)',
+    tintA: 'rgba(245,220,170,0.28)',
+    tintB: 'rgba(215,186,108,0.16)',
+  },
+} as const
+
+const hexToRgb = (hex: string) => {
+  const sanitized = hex.replace('#', '')
+  const normalized = sanitized.length === 3 ? sanitized.split('').map((char) => `${char}${char}`).join('') : sanitized
+  const value = Number.parseInt(normalized, 16)
+
+  return {
+    b: value & 255,
+    g: (value >> 8) & 255,
+    r: (value >> 16) & 255,
+  }
+}
+
+const mixHex = (hex: string, targetHex: string, ratio: number) => {
+  const source = hexToRgb(hex)
+  const target = hexToRgb(targetHex)
+  const mix = (from: number, to: number) => Math.round(from + (to - from) * ratio)
+
+  return `rgb(${mix(source.r, target.r)}, ${mix(source.g, target.g)}, ${mix(source.b, target.b)})`
+}
+
+const rgbaFromHex = (hex: string, alpha: number) => {
+  const { r, g, b } = hexToRgb(hex)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
 type FinalRankingScreenProps = {
-  placements?: RankingEntry[];
+  placements?: RankingEntry[]
+}
+
+function StadiumLight({ className }: { className: string }) {
+  return (
+    <div className={`absolute ${className}`}>
+      <div className="grid grid-cols-4 gap-2 rounded-[22px] border border-white/20 bg-[#113265]/80 p-3 shadow-[0_14px_24px_rgba(0,0,0,0.34)] backdrop-blur-sm">
+        {Array.from({ length: 12 }).map((_, index) => (
+          <span
+            className="h-3.5 w-3.5 rounded-full bg-[#eaf8ff] shadow-[0_0_18px_rgba(169,237,255,0.95)] sm:h-4 sm:w-4"
+            key={`light-${className}-${index}`}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function PodiumAvatar({ entry }: { entry: RankingEntry }) {
+  const avatarTheme = getPlayerVisualThemeByColor(entry.color, entry.visualSkinId)
+  const frameSizeClass =
+    entry.place === 1
+      ? 'h-[122px] w-[122px] rounded-[32px] sm:h-[142px] sm:w-[142px]'
+      : entry.place === 4
+        ? 'h-[88px] w-[88px] rounded-[24px] sm:h-[98px] sm:w-[98px]'
+        : 'h-[96px] w-[96px] rounded-[26px] sm:h-[108px] sm:w-[108px]'
+  const outerFrameClass = entry.place === 1 ? 'rounded-[36px]' : 'rounded-[32px]'
+
+  return (
+    <motion.div
+      animate={avatarMotionByPlace[entry.place]}
+      className="relative"
+      transition={{ duration: entry.place === 1 ? 2.3 : 2.8, ease: 'easeInOut', repeat: Infinity }}
+    >
+      <div className="absolute -right-2 top-4 z-20 text-[40px] drop-shadow-[0_6px_12px_rgba(0,0,0,0.35)] sm:text-[48px]">
+        {podiumConfigByPlace[entry.place].icon}
+      </div>
+      <div className={`${outerFrameClass} border-[5px] border-[#5f2d16] bg-[linear-gradient(180deg,#ffe39e_0%,#f4b742_55%,#d67a1d_100%)] p-2 shadow-[0_18px_24px_rgba(0,0,0,0.34)]`}>
+        <div className={`flex items-center justify-center border-[4px] border-[#fff2d1] bg-gradient-to-b ${frameSizeClass} ${avatarTheme.avatarToneClass} shadow-[inset_0_2px_0_rgba(255,255,255,0.55)]`}>
+          <GameAvatar
+            alt={entry.name}
+            avatar={entry.avatar}
+            imageClassName="h-full w-full object-contain p-2"
+            textClassName="text-4xl font-black text-white"
+          />
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+function PodiumBlock({ entry, delay, ui }: { entry: RankingEntry; delay: number; ui: (typeof rankingCopyByLanguage)[keyof typeof rankingCopyByLanguage] }) {
+  const config = podiumConfigByPlace[entry.place]
+  const scoreLabel = `${(entry.progressScore ?? entry.reward).toLocaleString('en-US')} ${ui.pts}`
+  const visualTheme = getPlayerVisualThemeByColor(entry.color, entry.visualSkinId)
+  const podiumBaseColor = visualTheme.boardCenterColor
+  const podiumStyle = {
+    backgroundImage: `linear-gradient(180deg, ${mixHex(podiumBaseColor, '#ffffff', 0.14)} 0%, ${podiumBaseColor} 54%, ${mixHex(podiumBaseColor, '#000000', 0.22)} 100%)`,
+    borderColor: mixHex(podiumBaseColor, '#4a2411', 0.5),
+    boxShadow: `0 22px 34px ${rgbaFromHex(podiumBaseColor, 0.24)}`,
+  } satisfies CSSProperties
+  const medalBorderColor = mixHex(podiumBaseColor, '#6b3715', 0.42)
+
+  return (
+    <motion.article
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      className={`relative flex flex-col items-center ${entry.place === 1 ? 'z-20' : 'z-10'}`}
+      initial={{ opacity: 0, y: 80, scale: 0.92 }}
+      transition={{ delay, duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <div className={`relative z-20 flex flex-col items-center ${entry.place === 1 ? 'mb-[-26px] sm:mb-[-32px]' : entry.place === 2 ? 'mb-[-14px] sm:mb-[-18px]' : entry.place === 3 ? 'mb-[-10px] sm:mb-[-14px]' : 'mb-[-8px] sm:mb-[-10px]'}`}>
+        <PodiumAvatar entry={entry} />
+      </div>
+
+      <div className={`relative overflow-hidden rounded-t-[28px] border-[5px] ${config.blockClass}`} style={podiumStyle}>
+        <div className="absolute inset-x-0 top-0 h-5 bg-white/18" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[size:18px_18px] opacity-40" />
+        <div className={`absolute inset-x-0 h-[3px] bg-black/12 ${entry.place === 1 ? 'top-[112px] sm:top-[126px]' : entry.place === 2 ? 'top-[90px] sm:top-[100px]' : entry.place === 3 ? 'top-[84px] sm:top-[92px]' : 'top-[78px] sm:top-[84px]'}`} />
+
+        <div className={`relative flex h-full flex-col items-center justify-end px-4 text-center sm:px-5 ${entry.place === 1 ? 'pb-8 pt-[148px] sm:pb-9 sm:pt-[172px]' : entry.place === 2 ? 'pb-7 pt-[116px] sm:pb-8 sm:pt-[132px]' : entry.place === 3 ? 'pb-7 pt-[104px] sm:pb-8 sm:pt-[118px]' : 'pb-6 pt-[96px] sm:pb-7 sm:pt-[108px]'}`}>
+          <div className={`mb-3 rounded-full border-[4px] bg-gradient-to-b ${config.medalClass} px-4 py-2 font-display text-[18px] tracking-[0.08em] text-[#5a3014] shadow-[0_8px_14px_rgba(0,0,0,0.26)] sm:text-[22px]`} style={{ borderColor: medalBorderColor }}>
+            {entry.place}
+          </div>
+          <p className={`font-display uppercase leading-[0.94] drop-shadow-[0_3px_0_rgba(48,23,9,0.62)] ${entry.place === 4 ? 'text-[18px] sm:text-[25px]' : entry.place === 1 ? 'text-[28px] sm:text-[38px]' : 'text-[23px] sm:text-[31px]'} ${config.labelClass}`}>
+            {ui.placeLabel[entry.place]}
+          </p>
+          <p className={`mt-3 font-black leading-tight text-white ${entry.place === 4 ? 'text-[14px] sm:text-[18px]' : 'text-[16px] sm:text-[22px]'}`}>{entry.name}</p>
+          <p className={`mt-1 font-black text-[#fff7c8] ${entry.place === 4 ? 'text-[12px] sm:text-[15px]' : 'text-[14px] sm:text-[17px]'}`}>{scoreLabel}</p>
+        </div>
+      </div>
+    </motion.article>
+  )
 }
 
 export default function FinalRankingScreen({ placements }: FinalRankingScreenProps) {
-  const [show, setShow] = useState(false);
-  const [fallingCoins] = useState<FallingCoinConfig[]>(() =>
-    Array.from({ length: 40 }, () => ({
-      left: `${Math.random() * 100}%`,
-      animationDelay: `${Math.random() * 2}s`,
-      animationDuration: `${1.5 + Math.random() * 2}s`,
-      transform: `scale(${0.5 + Math.random() * 0.5})`,
-    }))
-  );
-  const navigate = useNavigate();
-  const language = useAppSettingsStore((state) => state.language);
-  const ui = rankingCopyByLanguage[language];
+  const navigate = useNavigate()
+  const language = useAppSettingsStore((state) => state.language)
+  const selectedBoardThemeId = useAppSettingsStore((state) => state.selectedBoardThemeId)
+  const ui = rankingCopyByLanguage[language]
+  const [showConfetti, setShowConfetti] = useState(true)
+  const boardTheme = getBoardThemeDefinition(selectedBoardThemeId)
+  const surfacePalette = getBoardThemeSurfacePalette(selectedBoardThemeId)
+  const glassTint = rankingGlassTintByThemeId[selectedBoardThemeId]
+
+  const rankingGlassStyle = {
+    backdropFilter: 'blur(22px) saturate(135%)',
+    background: `linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.08) 18%, rgba(255,255,255,0.03) 100%), linear-gradient(135deg, ${glassTint.tintA} 0%, ${glassTint.tintB} 100%)`,
+    borderColor: glassTint.border,
+    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -18px 28px rgba(255,255,255,0.04), 0 10px 40px ${glassTint.glow}`,
+  } satisfies CSSProperties
+
+  const buttonGlassStyle = {
+    backdropFilter: 'blur(14px) saturate(135%)',
+    background: `linear-gradient(180deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.1) 22%, rgba(255,255,255,0.04) 100%), linear-gradient(135deg, ${glassTint.tintA} 0%, ${glassTint.tintB} 100%)`,
+    borderColor: 'rgba(255,255,255,0.3)',
+    boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.4), 0 6px 20px rgba(0,0,0,0.35)',
+  } satisfies CSSProperties
 
   useEffect(() => {
-    // Pequeño delay para asegurar que el montaje haya sucedido antes de aplicar las clases de show
-    const t = setTimeout(() => setShow(true), 50);
-    return () => clearTimeout(t);
-  }, []);
+    const timeoutId = window.setTimeout(() => setShowConfetti(false), 7200)
+    return () => window.clearTimeout(timeoutId)
+  }, [])
 
-  const ranking = placements && placements.length > 0 ? placements : [...defaultRanking];
+  const ranking = useMemo(() => {
+    const source = placements && placements.length > 0 ? [...placements] : [...defaultRanking]
+    return source.sort((a, b) => a.place - b.place)
+  }, [placements])
 
-  const podiumPlacementByPlace = ranking.reduce((acc, entry) => {
-    acc[entry.place] = entry;
-    return acc;
-  }, {} as Record<PodiumPlace, RankingEntry>);
+  const placementsByPlace = useMemo(() => {
+    return ranking.reduce((acc, entry) => {
+      acc[entry.place] = entry
+      return acc
+    }, {} as Record<PodiumPlace, RankingEntry>)
+  }, [ranking])
+
+  const confettiPieces = useMemo(
+    () =>
+      Array.from({ length: 56 }).map((_, index) => ({
+        delay: (index % 9) * 0.18,
+        duration: 4.9 + (index % 6) * 0.5,
+        left: `${2 + ((index * 7) % 96)}%`,
+        rotate: (index * 29) % 360,
+        shape: index % 3 === 0 ? 'rounded-sm' : index % 3 === 1 ? 'rounded-full' : 'rounded-[3px]',
+        tone:
+          index % 5 === 0
+            ? 'bg-[#ff6b6b]'
+            : index % 5 === 1
+              ? 'bg-[#ffd54c]'
+              : index % 5 === 2
+                ? 'bg-[#55d6ff]'
+                : index % 5 === 3
+                  ? 'bg-[#72e46f]'
+                  : 'bg-[#c87dff]',
+      })),
+    [],
+  )
+
+  const coinPieces = useMemo(
+    () =>
+      Array.from({ length: 18 }).map((_, index) => ({
+        delay: (index % 6) * 0.28,
+        duration: 4.6 + (index % 5) * 0.42,
+        left: `${8 + ((index * 13) % 84)}%`,
+        rotate: (index * 41) % 360,
+        size: index % 3 === 0 ? 34 : index % 3 === 1 ? 28 : 24,
+      })),
+    [],
+  )
 
   return (
-    <div className={`fixed inset-0 z-[300] flex flex-col items-center justify-end bg-[#8CD1FF] overflow-hidden transition-opacity duration-500 ${show ? 'opacity-100' : 'opacity-0'}`}>
-      
-      {/* Sky background with Rainbow and Clouds */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden flex justify-center translate-y-[10%]">
-         <div className="absolute w-[220vh] h-[220vh] rounded-full border-[6vh] border-[#FF8787]/60" />
-         <div className="absolute w-[208vh] h-[208vh] rounded-full border-[6vh] border-[#FFD966]/60 mt-[6vh]" />
-         <div className="absolute w-[196vh] h-[196vh] rounded-full border-[6vh] border-[#93E396]/60 mt-[12vh]" />
-         <div className="absolute w-[184vh] h-[184vh] rounded-full border-[6vh] border-[#81CBFF]/60 mt-[18vh]" />
-      </div>
+    <div
+      className="fixed inset-0 z-[300] overflow-hidden text-white"
+      style={{ backgroundColor: boardTheme.backgroundColor, backgroundImage: boardTheme.backgroundImage, backgroundPosition: 'center', backgroundSize: 'cover' }}
+    >
+      <motion.div
+        animate={{ opacity: 1 }}
+        className="absolute inset-0 bg-black/35"
+        initial={{ opacity: 0.3 }}
+        transition={{ duration: 0.55 }}
+      />
 
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        {/* Clouds */}
-        <div className="absolute top-[10%] left-[8%] w-[180px] h-[60px] bg-white rounded-full opacity-90 shadow-sm" />
-        <div className="absolute top-[5%] left-[12%] w-[100px] h-[100px] bg-white rounded-full opacity-90" />
-        <div className="absolute top-[5%] left-[18%] w-[120px] h-[80px] bg-white rounded-full opacity-90" />
-        
-        <div className="absolute top-[20%] right-[10%] w-[240px] h-[70px] bg-white rounded-full opacity-90 shadow-sm" />
-        <div className="absolute top-[12%] right-[16%] w-[120px] h-[120px] bg-white rounded-full opacity-90" />
-        <div className="absolute top-[14%] right-[22%] w-[140px] h-[90px] bg-white rounded-full opacity-90" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_82%,rgba(255,248,201,0.18),transparent_22%),radial-gradient(circle_at_50%_34%,rgba(255,255,255,0.16),transparent_18%)]" />
 
-        {/* Decorative elements */}
-        <div className="absolute top-[40%] left-[15%] text-5xl opacity-80 text-red-500 drop-shadow-md transform -rotate-12 animate-pulse">❤️</div>
-        <div className="absolute top-[20%] left-[30%] text-6xl opacity-80 text-[#3B82F6] drop-shadow-md font-bold">?</div>
-        <div className="absolute top-[35%] right-[20%] text-6xl opacity-80 text-[#3B82F6] drop-shadow-md font-bold transform rotate-12">?</div>
-        <div className="absolute top-[25%] right-[35%] text-4xl opacity-80 text-red-500 drop-shadow-md transform rotate-[25deg] animate-pulse">❤️</div>
-      </div>
+      <StadiumLight className="left-[4%] top-[5%] rotate-[-8deg]" />
+      <StadiumLight className="right-[4%] top-[5%] rotate-[8deg]" />
 
-      {/* Wooden Banner */}
-      <div className={`absolute top-[4%] left-1/2 -translate-x-1/2 z-[250] drop-shadow-[0_15px_15px_rgba(0,0,0,0.3)] transition-transform duration-700 ease-out delay-100 ${show ? 'scale-100' : 'scale-0'}`}>
-        <div className="absolute -left-6 top-8 h-14 w-20 bg-[#8E4A23] rounded-l-2xl -skew-x-[20deg]" />
-        <div className="absolute -left-6 top-[3.5rem] h-8 w-14 bg-[#572B11] rounded-bl-2xl -skew-x-[20deg]" />
-        <div className="absolute -right-6 top-8 h-14 w-20 bg-[#8E4A23] rounded-r-2xl skew-x-[20deg]" />
-        <div className="absolute -right-6 top-[3.5rem] h-8 w-14 bg-[#572B11] rounded-br-2xl skew-x-[20deg]" />
-        
-        <div className="relative z-10 rounded-[20px] border-[6px] border-[#6D381B] bg-gradient-to-b from-[#E2A26D] via-[#C98453] to-[#B36F40] px-[50px] py-[12px] shadow-[inset_0_4px_4px_rgba(255,255,255,0.3),0_10px_0_#874B2A]">
-          <h1 className="font-display text-[44px] uppercase tracking-wide text-[#FFF8E7] sm:text-[54px]" style={{textShadow: '0 4px 0 #6D381B, 0 6px 12px rgba(0,0,0,0.5)', WebkitTextStroke: '2px #6D381B'}}>
+      <div className="absolute left-0 right-0 top-6 z-20 flex justify-center px-4">
+        <div className="rounded-[30px] border px-5 py-4 sm:px-10" style={rankingGlassStyle}>
+          <p className="text-center font-display text-[28px] uppercase leading-none sm:text-[54px]" style={{ color: surfacePalette.headerText, textShadow: '0 3px 0 rgba(90,44,6,0.4)' }}>
             {ui.finalRanking}
-          </h1>
+          </p>
+          <p className="mt-2 text-center text-[14px] font-black uppercase tracking-[0.12em] sm:text-[22px]" style={{ color: surfacePalette.hudCardText }}>
+            {ui.championship}
+          </p>
         </div>
       </div>
 
-      {/* Podiums */}
-      <div className="relative w-full max-w-[800px] flex items-end justify-center z-[240] pb-[130px] sm:pb-[150px]">
-        {[2, 1, 3, 4].map((placeOrder, index) => {
-          const placement = podiumPlacementByPlace[placeOrder as PodiumPlace];
-          if (!placement) return null;
-          const placementTitle = placement.title || ui.placeTitleByPlace[placement.place];
-
-          return (
-            <article
-              className={`relative flex w-[180px] flex-col items-center transition-all duration-700 ease-out ${placeOrder === 1 ? 'z-20' : 'z-10'} ${show ? 'translate-y-0 opacity-100' : 'translate-y-32 opacity-0'}`}
-              key={`podium-${placement.place}`}
-              style={{ transitionDelay: `${index * 150 + 200}ms` }}
-            >
-              <div className="relative flex flex-col items-center justify-end mb-[-25px] z-30">
-                 {placeOrder === 1 && (
-                   <div className="absolute -top-[70px] text-[80px] drop-shadow-[0_4px_8px_rgba(0,0,0,0.4)] animate-bounce z-40">👑</div>
-                 )}
-                 
-                    <div className={`relative rounded-full border-[6px] ${placeRibbonClassNew[placement.place]} shadow-[0_10px_20px_rgba(0,0,0,0.3)] ${placeOrder === 1 ? 'h-[135px] w-[135px]' : 'h-[105px] w-[105px]'}`}>
-                    <div className={`flex h-full w-full items-center justify-center rounded-full border-[3px] border-[#FFF8E7] text-4xl font-black text-white/80 bg-gradient-to-b ${getPlayerVisualThemeByColor(placement.color, placement.visualSkinId).avatarToneClass || avatarToneByColor[placement.color]} shadow-inner overflow-hidden`}>
-                      <GameAvatar
-                        alt={placement.name}
-                        avatar={placement.avatar}
-                        imageClassName="h-full w-full object-contain p-2"
-                        textClassName="text-4xl font-black text-white/80"
-                      />
-                    </div>
-                 </div>
-                 
-                  <div className={`relative z-30 -mt-3 rounded-[12px] border-[3px] ${placeRibbonClassNew[placement.place]} px-3 py-1.5 text-center text-[13px] font-black uppercase tracking-wider text-white shadow-[0_5px_10px_rgba(0,0,0,0.4),inset_0_2px_0_rgba(255,255,255,0.4)]`}>
-                    {placement.name} - {placementTitle}
-                  </div>
-              </div>
-              
-              <div className={`relative w-full rounded-t-[10px] border-x-[5px] border-t-[5px] border-[#8C522B] bg-gradient-to-b from-[#C48455] to-[#A0643B] shadow-[inset_0_8px_0_rgba(255,255,255,0.2)] ${placePodiumHeightClassNew[placement.place]} flex flex-col items-center pt-[20px]`}>
-                 <div className="relative z-10 flex flex-col items-center justify-center mt-[-35px]">
-                   <div className="absolute -top-[14px] flex w-[32px] justify-between z-[-1]">
-                      {placeMedalRibbons(placement.place)}
-                   </div>
-                   <div
-                     className={`flex h-[68px] w-[68px] items-center justify-center rounded-full border-[4px] border-[#8C522B] bg-gradient-to-b ${placeMedalColors[placement.place].bg}`}
-                     style={{
-                       boxShadow: `0 6px 10px rgba(0,0,0,0.3), inset 0 3px 0 ${placeMedalColors[placement.place].border}`,
-                     }}
-                   >
-                      <span className="font-display text-[32px] text-[#5A3219] drop-shadow-[0_1px_0_rgba(255,255,255,0.6)]">{ui.placeOrdinalLabel[placement.place]}</span>
-                   </div>
-                 </div>
-                 
-                 <div className="mt-auto mb-6 flex flex-col items-center drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]">
-                   <span className="font-display text-[42px] leading-none text-[#FFF5DE]">{placement.reward}</span>
-                    <span className="text-[16px] font-black uppercase tracking-wider text-[#FFD7A0]">{ui.coins}</span>
-                 </div>
-              </div>
-            </article>
-          );
-        })}
+      <div className="absolute inset-x-0 top-[84px] z-10 hidden h-8 items-start justify-between px-[10%] md:flex">
+        {Array.from({ length: 10 }).map((_, index) => (
+          <span
+            className={`h-0 w-0 border-l-[16px] border-r-[16px] border-t-[28px] border-l-transparent border-r-transparent ${index % 4 === 0 ? 'border-t-[#ff7a59]' : index % 4 === 1 ? 'border-t-[#ffd34e]' : index % 4 === 2 ? 'border-t-[#52d86d]' : 'border-t-[#55b8ff]'}`}
+            key={`flag-${index}`}
+          />
+        ))}
       </div>
 
-      {/* Falling Coins Animation Layer */}
-      {show && (
-        <div className="pointer-events-none absolute inset-0 z-[245] overflow-hidden">
-          {fallingCoins.map((coin, i) => (
-             <div 
-                key={`falling-coin-${i}`}
-                className="arcade-coin-falling"
-                style={coin}
-             />
+      <div className="absolute bottom-[12%] left-[50%] h-[360px] w-[360px] -translate-x-1/2 rounded-full bg-white/10 blur-[70px]" />
+      <div className="absolute bottom-[8%] left-0 right-0 h-[230px] bg-[linear-gradient(180deg,rgba(19,35,75,0)_0%,rgba(9,21,46,0.22)_10%,rgba(15,84,122,0.72)_60%,rgba(8,34,73,0.94)_100%)]" />
+
+      <div className="absolute bottom-[22%] left-0 right-0 z-10 h-[260px] bg-[radial-gradient(circle_at_50%_0%,rgba(255,248,179,0.28),transparent_30%)]" />
+
+      <div className="absolute bottom-[17%] left-0 right-0 z-10 h-[190px] overflow-hidden">
+        <div className="absolute bottom-0 left-0 right-0 h-[180px] bg-[linear-gradient(180deg,rgba(42,13,31,0)_0%,rgba(32,13,40,0.48)_25%,rgba(18,10,30,0.9)_100%)]" />
+        <div className="absolute bottom-0 left-0 right-0 flex items-end justify-center gap-1 opacity-85">
+          {Array.from({ length: 24 }).map((_, index) => (
+            <span
+              className="rounded-t-full bg-[#25153d]"
+              key={`crowd-${index}`}
+              style={{
+                height: `${72 + (index % 6) * 18}px`,
+                width: `${20 + (index % 4) * 8}px`,
+              }}
+            />
           ))}
         </div>
-      )}
-
-      {/* Base Coins Array (Accumulated) */}
-      <div className={`absolute bottom-0 left-0 w-full h-[18vh] z-[245] flex items-end overflow-hidden transition-opacity duration-1000 delay-[800ms] ${show ? 'opacity-100' : 'opacity-0'}`}>
-         {Array.from({ length: 80 }).map((_, index) => (
-           <div
-             key={`pile-coin-${index}`}
-             className="arcade-coin"
-             style={{
-               width: `${45 + (index % 4) * 15}px`,
-               height: `${45 + (index % 4) * 15}px`,
-               left: `${-2 + (index * 1.3) % 104}%`,
-               bottom: `${-10 + (index % 5) * 15 + Math.abs(Math.sin(index) * 25)}px`,
-               transform: `rotate(${(index * 23) % 360}deg)`,
-               zIndex: index % 15
-             }}
-           />
-         ))}
       </div>
 
-      {/* Buttons */}
-      <div className={`absolute bottom-[4%] w-full flex flex-col sm:flex-row justify-center items-center gap-4 sm:gap-6 z-[260] px-4 transition-transform duration-700 ease-out delay-[1000ms] ${show ? 'translate-y-0 opacity-100' : 'translate-y-20 opacity-0'}`}>
-        <button
-          className="w-full max-w-[340px] rounded-[30px] border-[5px] border-[#1D4ED8] bg-gradient-to-b from-[#60A5FA] via-[#3B82F6] to-[#2563EB] px-4 py-4 font-display text-[22px] uppercase tracking-wider text-white shadow-[0_10px_0_#1E3A8A,0_15px_20px_rgba(0,0,0,0.4),inset_0_4px_0_rgba(255,255,255,0.4)] transition hover:brightness-110 active:translate-y-[6px] active:shadow-[0_4px_0_#1E3A8A,0_5px_10px_rgba(0,0,0,0.4),inset_0_4px_0_rgba(255,255,255,0.4)]"
-          onClick={() => navigate('/', { replace: true })}
-          type="button"
-          style={{ textShadow: '0 2px 4px rgba(0,0,0,0.4)' }}
-        >
-          {ui.backHome}
-        </button>
-        <button
-          className="w-full max-w-[340px] rounded-[30px] border-[5px] border-[#C2410C] bg-gradient-to-b from-[#FDBA74] via-[#F97316] to-[#EA580C] px-4 py-4 font-display text-[22px] uppercase tracking-wider text-white shadow-[0_10px_0_#9A3412,0_15px_20px_rgba(0,0,0,0.4),inset_0_4px_0_rgba(255,255,255,0.4)] transition hover:brightness-110 active:translate-y-[6px] active:shadow-[0_4px_0_#9A3412,0_5px_10px_rgba(0,0,0,0.4),inset_0_4px_0_rgba(255,255,255,0.4)]"
-          onClick={() => console.log('ver puntuacion detallada')}
-          type="button"
-          style={{ textShadow: '0 2px 4px rgba(0,0,0,0.4)' }}
-        >
-          {ui.scoreDetails}
-        </button>
-      </div>
-      
-      <style>{`
-        .arcade-coin {
-          position: absolute;
-          border-radius: 50%;
-          border: 3px solid #D68B13;
-          background: radial-gradient(circle at 30% 30%, #FFF3B0, #F2AC21 60%, #B77A14 100%);
-          box-shadow: 0 4px 6px rgba(0,0,0,0.4), inset 0 -4px 0 rgba(183,122,20,0.8), inset 0 4px 0 rgba(255,255,255,0.6);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .arcade-coin::after {
-          content: '⭐';
-          font-size: 50%;
-          color: #D68B13;
-          opacity: 0.6;
-        }
+      <div className="absolute bottom-[15%] left-[10%] right-[10%] z-10 hidden h-[10px] rounded-full bg-white/10 blur-md lg:block" />
 
-        .arcade-coin-falling {
-          position: absolute;
-          top: -100px;
-          width: 50px;
-          height: 50px;
-          border-radius: 50%;
-          border: 3px solid #D68B13;
-          background: radial-gradient(circle at 30% 30%, #FFF3B0, #F2AC21 60%, #B77A14 100%);
-          box-shadow: 0 4px 6px rgba(0,0,0,0.4), inset 0 -4px 0 rgba(183,122,20,0.8), inset 0 4px 0 rgba(255,255,255,0.6);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          animation: coinFall linear forwards;
-        }
-        .arcade-coin-falling::after {
-          content: '⭐';
-          font-size: 50%;
-          color: #D68B13;
-          opacity: 0.6;
-        }
+      {showConfetti ? (
+        <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
+          {confettiPieces.map((piece, index) => (
+            <motion.span
+              animate={{ opacity: [0, 1, 1, 0], rotate: [piece.rotate, piece.rotate + 260], y: ['-10%', '110%'] }}
+              className={`absolute h-4 w-2 ${piece.shape} ${piece.tone} shadow-[0_0_8px_rgba(255,255,255,0.25)]`}
+              initial={{ opacity: 0, y: '-15%' }}
+              key={`confetti-${index}`}
+              style={{ left: piece.left, top: '-5%' }}
+              transition={{ delay: piece.delay, duration: piece.duration, ease: 'linear', repeat: Infinity }}
+            />
+          ))}
 
-        @keyframes coinFall {
-          0% {
-            transform: translateY(-100px) rotate(0deg);
-            opacity: 1;
-          }
-          90% {
-            opacity: 1;
-          }
-          100% {
-            transform: translateY(110vh) rotate(360deg);
-            opacity: 0;
-          }
-        }
-      `}</style>
+          {coinPieces.map((coin, index) => (
+            <motion.span
+              animate={{ opacity: [0, 1, 1, 0], rotate: [coin.rotate, coin.rotate + 240], y: ['-14%', '110%'] }}
+              className="absolute flex items-center justify-center rounded-full border-[3px] border-[#b97812] bg-[radial-gradient(circle_at_30%_30%,#fff7b8_0%,#f8c94d_45%,#d88a18_80%,#a9650e_100%)] shadow-[0_0_16px_rgba(255,220,108,0.35),0_8px_14px_rgba(90,51,10,0.24)]"
+              initial={{ opacity: 0, y: '-20%' }}
+              key={`coin-${index}`}
+              style={{ height: coin.size, left: coin.left, top: '-9%', width: coin.size }}
+              transition={{ delay: coin.delay, duration: coin.duration, ease: 'linear', repeat: Infinity }}
+            >
+              <span className="font-black text-[#8d5612]" style={{ fontSize: coin.size * 0.38 }}>$</span>
+            </motion.span>
+          ))}
+
+          {Array.from({ length: 18 }).map((_, index) => (
+            <motion.span
+              animate={{ opacity: [0.2, 1, 0.2], scale: [0.8, 1.2, 0.8] }}
+              className="absolute text-[20px]"
+              initial={{ opacity: 0.2, scale: 0.7 }}
+              key={`sparkle-${index}`}
+              style={{ left: `${6 + ((index * 9) % 88)}%`, top: `${8 + ((index * 11) % 64)}%` }}
+              transition={{ duration: 1.4 + (index % 4) * 0.3, ease: 'easeInOut', repeat: Infinity }}
+            >
+              ✦
+            </motion.span>
+          ))}
+        </div>
+      ) : null}
+
+      <motion.div
+        animate={{ opacity: 1, y: 0 }}
+        className="relative z-40 mx-auto flex min-h-screen max-w-[1180px] flex-col justify-end px-3 pb-24 pt-36 sm:px-6 sm:pt-40"
+        initial={{ opacity: 0, y: 30 }}
+        transition={{ delay: 0.2, duration: 0.7 }}
+      >
+        <div className="relative rounded-[34px] border px-5 pb-7 pt-5 sm:px-7 sm:pb-8 sm:pt-6" style={rankingGlassStyle}>
+          <div className="absolute inset-x-[3%] top-[2%] h-[16%] rounded-[28px] bg-[linear-gradient(180deg,rgba(255,255,255,0.28),rgba(255,255,255,0.05))] blur-sm" />
+          <div className="absolute inset-0 opacity-[0.08] mix-blend-screen" style={{ backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.18) 1px, transparent 1px, transparent 3px), repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0, rgba(255,255,255,0.08) 1px, transparent 1px, transparent 4px)' }} />
+
+          <div className="relative flex items-end justify-center gap-1.5 sm:gap-2 lg:gap-3 xl:gap-3.5">
+            {podiumOrder.map((place, index) => {
+              const entry = placementsByPlace[place]
+              if (!entry) {
+                return null
+              }
+
+              return <PodiumBlock delay={0.45 + index * 0.18} entry={entry} key={entry.id} ui={ui} />
+            })}
+          </div>
+        </div>
+
+        <motion.div
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-8 flex justify-center"
+          initial={{ opacity: 0, y: 20 }}
+          transition={{ delay: 1.2, duration: 0.45 }}
+        >
+          <button
+            className="rounded-[24px] border px-8 py-3 font-display text-[24px] uppercase tracking-[0.1em] text-white transition hover:brightness-105 active:translate-y-[2px]"
+            onClick={() => navigate('/', { replace: true })}
+            style={buttonGlassStyle}
+            type="button"
+          >
+            {ui.backHome}
+          </button>
+        </motion.div>
+      </motion.div>
     </div>
-  );
+  )
 }
