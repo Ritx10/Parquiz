@@ -1,14 +1,14 @@
 import { useAccount } from '@starknet-react/core'
 import { memo, type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { applyMove, computeLegalMoves, endTurn, rollTwoDiceAndDrawQuestion, submitAnswer } from '../api'
+import { applyMove, computeLegalMoves, endTurn, forceSkipTurn, rollTwoDiceAndDrawQuestion, submitAnswer } from '../api'
 import {
   readDojoGameSnapshot,
   readEgsTokenGameLink,
   subscribeDojoGame,
   type DojoGameSnapshot,
 } from '../api/dojo-state'
-import type { DojoTokenModel, DojoTrackedEvent, LegalMoveApi, MoveType } from '../api/types'
+import type { DojoTrackedEvent, LegalMoveApi, MoveType } from '../api/types'
 import { Board3D } from '../components/game/board3d'
 import FinalRankingScreen from '../components/game/FinalRankingScreen'
 import { GameAvatar } from '../components/game/game-avatar'
@@ -23,7 +23,12 @@ import { diceSkinIdFromIndex, getDefaultDiceSkinIdByColor, type DiceSkinId } fro
 import { calculateMatchRewardSummary, coinsRewardByPlace, type MatchRewardSummary, type PodiumPlace } from '../lib/match-rewards'
 import { getPlayerSkinSrc, playerSkinIdFromIndex } from '../lib/player-skins'
 import { getPlayerVisualThemeByColor } from '../lib/player-color-themes'
-import { getHydratedQuestion } from '../lib/questions/local-question-bank'
+import {
+  getHydratedQuestion,
+  localDifficultyToTriviaDifficulty,
+  mapCanonicalOptionToDisplay,
+  mapDisplayOptionToCanonical,
+} from '../lib/questions/local-question-bank'
 import { usePlayerProfileActions } from '../lib/use-player-profile'
 import { useControllerUsernames } from '../lib/starknet/use-controller-usernames'
 import { shortenAddress, useControllerWallet } from '../lib/starknet/use-controller-wallet'
@@ -80,13 +85,6 @@ const laneBaseByColor: Record<PlayerColor, number> = {
   yellow: 400,
 }
 
-const startSquareByColor: Record<PlayerColor, number> = {
-  red: 22,
-  blue: 5,
-  yellow: 56,
-  green: 39,
-}
-
 const entrySquareByColor: Record<PlayerColor, number> = {
   red: 17,
   blue: 68,
@@ -101,13 +99,6 @@ const finalLaneByColor: Record<PlayerColor, number[]> = {
   yellow: [401, 402, 403, 404, 405, 406, 407, 408],
 }
 
-const stepsToLaneEntryByColor: Record<PlayerColor, number> = {
-  red: (entrySquareByColor.red - startSquareByColor.red + TRACK_LENGTH) % TRACK_LENGTH,
-  blue: (entrySquareByColor.blue - startSquareByColor.blue + TRACK_LENGTH) % TRACK_LENGTH,
-  yellow: (entrySquareByColor.yellow - startSquareByColor.yellow + TRACK_LENGTH) % TRACK_LENGTH,
-  green: (entrySquareByColor.green - startSquareByColor.green + TRACK_LENGTH) % TRACK_LENGTH,
-}
-
 const moveTypeLabel: Record<MoveType, string> = {
   0: 'DIE_A',
   1: 'DIE_B',
@@ -117,10 +108,11 @@ const moveTypeLabel: Record<MoveType, string> = {
   5: 'EXIT_HOME',
 }
 
-const questionDifficultyByLevel: Record<number, TriviaDifficulty> = {
-  0: 'easy',
-  1: 'medium',
-  2: 'hard',
+const rewardByPlace: Record<PodiumPlace, number> = {
+  1: 1000,
+  2: 500,
+  3: 250,
+  4: 100,
 }
 
 const announcementGlassTintByThemeId = {
@@ -413,24 +405,68 @@ const mapErrorToUserMessage = (error: unknown) => {
   return raw
 }
 
-const formatPendingActionLabel = (label: string, language: 'en' | 'es') => {
-  if (label === 'Applying move') {
-    return language === 'es' ? 'movimiento' : 'move'
-  }
+const formatPendingActionLabel = (
+  label: string,
+  phase: PendingTxPhase,
+  language: 'en' | 'es',
+) => {
+  const actionKey =
+    label === 'Applying move'
+      ? 'move'
+      : label === 'Roll + question (VRF)'
+        ? 'roll-question'
+        : label === 'Submitting answer'
+          ? 'answer'
+          : 'end-turn'
 
-  if (label === 'Roll + question (VRF)') {
-    return language === 'es' ? 'tirada y pregunta' : 'roll and question'
-  }
+  const phrases = {
+    en: {
+      answer: {
+        confirming: 'Confirming answer...',
+        submitting: 'Submitting answer...',
+        syncing: 'Syncing answer...',
+      },
+      'end-turn': {
+        confirming: 'Confirming end turn...',
+        submitting: 'Submitting end turn...',
+        syncing: 'Syncing end turn...',
+      },
+      move: {
+        confirming: 'Confirming move...',
+        submitting: 'Submitting move...',
+        syncing: 'Syncing move...',
+      },
+      'roll-question': {
+        confirming: 'Confirming roll and question...',
+        submitting: 'Submitting roll and question...',
+        syncing: 'Syncing roll and question...',
+      },
+    },
+    es: {
+      answer: {
+        confirming: 'Confirmando respuesta...',
+        submitting: 'Enviando respuesta...',
+        syncing: 'Sincronizando respuesta...',
+      },
+      'end-turn': {
+        confirming: 'Confirmando fin de turno...',
+        submitting: 'Enviando fin de turno...',
+        syncing: 'Sincronizando fin de turno...',
+      },
+      move: {
+        confirming: 'Confirmando movimiento...',
+        submitting: 'Enviando movimiento...',
+        syncing: 'Sincronizando movimiento...',
+      },
+      'roll-question': {
+        confirming: 'Confirmando tirada y pregunta...',
+        submitting: 'Enviando tirada y pregunta...',
+        syncing: 'Sincronizando tirada y pregunta...',
+      },
+    },
+  } as const
 
-  if (label === 'Submitting answer') {
-    return language === 'es' ? 'respuesta' : 'answer'
-  }
-
-  if (label === 'Ending turn') {
-    return language === 'es' ? 'fin del turno' : 'end turn'
-  }
-
-  return language === 'es' ? 'transaccion' : 'transaction'
+  return phrases[language][actionKey][phase]
 }
 
 const HudDie = memo(function HudDie({ skinId, value, rolling }: { skinId: DiceSkinId; value: null | number; rolling: boolean }) {
@@ -1056,10 +1092,43 @@ const applyOptimisticEndTurnToSnapshot = (snapshot: DojoGameSnapshot): DojoGameS
 const stabilizeSnapshot = (
   nextSnapshot: DojoGameSnapshot,
   previousSnapshot: DojoGameSnapshot | null,
+  latestQuestionDraw?: null | { questionId: bigint; turnIndex: number },
 ): DojoGameSnapshot => {
   if (!previousSnapshot) {
     return nextSnapshot
   }
+
+  const mergedGame = nextSnapshot.game ?? previousSnapshot.game
+  const mergedTurnState = nextSnapshot.turn_state ?? previousSnapshot.turn_state
+  const previousTurnIndex = previousSnapshot.game?.turn_index ?? 0
+  const previousQuestionId = previousSnapshot.turn_state?.question_id ?? 0n
+  const keepPreviousPendingQuestion = (() => {
+    if (nextSnapshot.pending_question) {
+      return true
+    }
+
+    if (!previousSnapshot.pending_question || !mergedTurnState || mergedTurnState.phase !== 1) {
+      return false
+    }
+
+    if ((mergedGame?.turn_index ?? 0) !== previousTurnIndex) {
+      return false
+    }
+
+    if (mergedTurnState.question_id !== previousQuestionId) {
+      return false
+    }
+
+    if (
+      latestQuestionDraw &&
+      (latestQuestionDraw.turnIndex > (mergedGame?.turn_index ?? 0) ||
+        latestQuestionDraw.questionId !== mergedTurnState.question_id)
+    ) {
+      return false
+    }
+
+    return true
+  })()
 
   return {
     ...nextSnapshot,
@@ -1067,7 +1136,9 @@ const stabilizeSnapshot = (
     turn_state: nextSnapshot.turn_state ?? previousSnapshot.turn_state,
     dice_state: nextSnapshot.dice_state ?? previousSnapshot.dice_state,
     runtime_config: nextSnapshot.runtime_config ?? previousSnapshot.runtime_config,
-    pending_question: nextSnapshot.pending_question ?? previousSnapshot.pending_question,
+    pending_question:
+      nextSnapshot.pending_question ??
+      (keepPreviousPendingQuestion ? previousSnapshot.pending_question : null),
     players: nextSnapshot.players.length > 0 ? nextSnapshot.players : previousSnapshot.players,
     player_customizations:
       nextSnapshot.player_customizations.length > 0
@@ -1082,17 +1153,17 @@ const stabilizeSnapshot = (
   }
 }
 
-const buildOptimisticMovePath = (params: {
+const buildUiMovePath = (params: {
   color: PlayerColor
   currentUiPosition: number
-  move: UiLegalMove
-  token: DojoTokenModel
+  steps: number
+  targetUiPosition: number
 }): number[] => {
-  if (params.token.token_state === 0) {
-    return params.move.targetUiPosition > 0 ? [params.move.targetUiPosition] : []
+  if (params.currentUiPosition <= 0) {
+    return params.targetUiPosition > 0 ? [params.targetUiPosition] : []
   }
 
-  if (params.token.token_state === 2) {
+  if (params.currentUiPosition >= 100) {
     const lane = finalLaneByColor[params.color]
     const laneIndex = lane.indexOf(params.currentUiPosition)
 
@@ -1100,24 +1171,20 @@ const buildOptimisticMovePath = (params: {
       return []
     }
 
-    return lane.slice(laneIndex + 1, laneIndex + 1 + params.move.steps)
+    return lane.slice(laneIndex + 1, laneIndex + 1 + params.steps)
   }
 
-  if (params.token.token_state !== 1 || !isTrackPosition(params.currentUiPosition)) {
+  if (!isTrackPosition(params.currentUiPosition)) {
     return []
   }
 
   const path: number[] = []
   let current = params.currentUiPosition
-  let remaining = params.move.steps
-  let trackStepsDelta = 0
+  let remaining = params.steps
+  const entersLane = params.targetUiPosition >= 100
 
   while (remaining > 0) {
-    const canEnterLane =
-      current === entrySquareByColor[params.color] &&
-      params.token.steps_total + trackStepsDelta >= stepsToLaneEntryByColor[params.color]
-
-    if (canEnterLane) {
+    if (entersLane && current === entrySquareByColor[params.color]) {
       const lanePath = finalLaneByColor[params.color].slice(0, remaining)
       path.push(...lanePath)
       break
@@ -1126,7 +1193,6 @@ const buildOptimisticMovePath = (params: {
     const next = wrapPosition(current + 1)
     path.push(next)
     current = next
-    trackStepsDelta += 1
     remaining -= 1
   }
 
@@ -1270,6 +1336,8 @@ export function MatchOnchainView() {
   const playerStatsRef = useRef<Record<string, MatchPlayerStats>>({})
   const winnerSoundPlayedRef = useRef(false)
   const podiumSoundPlayedRef = useRef(false)
+  const latestQuestionDrawRef = useRef<null | { questionId: bigint; turnIndex: number }>(null)
+  const timeoutSkipKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     setGameIdInput(searchParams.get('gameId') || '')
@@ -1390,7 +1458,7 @@ export function MatchOnchainView() {
         includeBoardSquares: true,
         includePlayerCustomizations: true,
       })
-      setSnapshot((current) => stabilizeSnapshot(nextSnapshot, current))
+      setSnapshot((current) => stabilizeSnapshot(nextSnapshot, current, latestQuestionDrawRef.current))
       setSnapshotError(null)
     } catch (error) {
       setSnapshotError(mapErrorToUserMessage(error))
@@ -1722,15 +1790,18 @@ export function MatchOnchainView() {
   }, [snapshot?.safe_track_square_refs])
 
   const activePendingQuestion = useMemo(() => {
-    if (!snapshot?.pending_question || snapshot.turn_state?.phase !== 1) {
+    if (!snapshot?.pending_question || !snapshot.turn_state || snapshot.turn_state.phase !== 1) {
       return null
     }
 
     const hydrated = getHydratedQuestion(
       snapshot.pending_question.question_index,
       snapshot.pending_question.category,
-      snapshot.pending_question.difficulty,
       language,
+      {
+        questionId: snapshot.turn_state.question_id,
+        seedNonce: snapshot.pending_question.seed_nonce,
+      },
     )
 
     if (!hydrated) {
@@ -1746,7 +1817,7 @@ export function MatchOnchainView() {
   useEffect(() => {
     if (activePendingQuestion && snapshot?.pending_question) {
       lastResolvedQuestionRef.current = {
-        difficulty: snapshot.pending_question.difficulty,
+        difficulty: activePendingQuestion.difficulty,
         question: activePendingQuestion,
       }
     }
@@ -1759,18 +1830,19 @@ export function MatchOnchainView() {
 
     return {
       category: ui.questionCategory,
-      correctIndex: activePendingQuestion.correctOption,
-      difficulty: questionDifficultyByLevel[snapshot?.pending_question?.difficulty ?? 0] || 'easy',
+      correctIndex: activePendingQuestion.displayCorrectOption,
+      difficulty: localDifficultyToTriviaDifficulty(activePendingQuestion.difficulty),
       icon: '❓',
       id: activePendingQuestion.id,
       options: activePendingQuestion.displayOptions,
       prompt: activePendingQuestion.displayPrompt,
       theme: 'blue' as const,
     }
-  }, [activePendingQuestion, snapshot?.pending_question?.difficulty, ui.questionCategory])
+  }, [activePendingQuestion, ui.questionCategory])
 
   useEffect(() => {
     if (!snapshot?.turn_state || snapshot.turn_state.phase !== 1) {
+      timeoutSkipKeyRef.current = null
       setQuestionSecondsLeft(0)
       return
     }
@@ -1825,6 +1897,36 @@ export function MatchOnchainView() {
     return playersByAddressRef.current[key] || shortenAddress(playerAddress)
   }, [])
 
+  const animateTokenPath = useCallback((tokenId: string, path: number[]) => {
+    return new Promise<void>((resolve) => {
+      if (path.length === 0) {
+        resolve()
+        return
+      }
+
+      setAnimatingTokenIds([tokenId])
+      let index = 0
+
+      const stepForward = () => {
+        const nextPosition = path[index]
+        setAnimatedTokenPositions({ [tokenId]: nextPosition })
+        index += 1
+
+        if (index >= path.length) {
+          window.setTimeout(() => {
+            setAnimatingTokenIds([])
+            resolve()
+          }, 140)
+          return
+        }
+
+        window.setTimeout(stepForward, TOKEN_STEP_ANIMATION_MS)
+      }
+
+      stepForward()
+    })
+  }, [])
+
   const onTrackedEvent = useCallback(
     (event: DojoTrackedEvent) => {
       const nextLog = trackEventToLog(event, playerLabelFromAddress, colorBySeatRef.current, language)
@@ -1847,6 +1949,22 @@ export function MatchOnchainView() {
         }, 2200)
       }
 
+      if (event.type === 'QuestionDrawn') {
+        latestQuestionDrawRef.current = {
+          questionId: event.payload.question_id,
+          turnIndex: event.payload.turn_index,
+        }
+        scheduleSnapshotRefresh()
+        window.setTimeout(() => {
+          if (
+            latestQuestionDrawRef.current?.questionId === event.payload.question_id &&
+            latestQuestionDrawRef.current?.turnIndex === event.payload.turn_index
+          ) {
+            scheduleSnapshotRefresh()
+          }
+        }, 500)
+      }
+
       if (event.type === 'AnswerRevealed' && lastResolvedQuestionRef.current) {
         const { difficulty, question } = lastResolvedQuestionRef.current
         const answerState = event.payload.correct ? 'correct' : 'incorrect'
@@ -1857,15 +1975,15 @@ export function MatchOnchainView() {
           player,
           question: {
             category: ui.questionCategory,
-            correctIndex: question.correctOption,
-            difficulty: questionDifficultyByLevel[difficulty] || 'easy',
+            correctIndex: mapCanonicalOptionToDisplay(question, question.correctOption),
+            difficulty: localDifficultyToTriviaDifficulty(difficulty as 0 | 1 | 2),
             icon: '❓',
             id: `resolved-${event.payload.question_id.toString()}`,
             options: question.displayOptions,
             prompt: question.displayPrompt,
             theme: 'blue',
           },
-          selectedOption: event.payload.selected_option,
+          selectedOption: mapCanonicalOptionToDisplay(question, event.payload.selected_option),
         })
 
         if (answerOverlayTimeoutRef.current !== null) {
@@ -1959,9 +2077,40 @@ export function MatchOnchainView() {
         }
       }
 
+      if (event.type === 'TokenMoved') {
+        const tokenId = tokenUiId(event.payload.player, event.payload.token_id)
+        const fromUi = mapSquareRefToUiPosition(event.payload.from_square_ref, colorBySeatRef.current)
+        const toUi = mapSquareRefToUiPosition(event.payload.to_square_ref, colorBySeatRef.current)
+        const seat = seatByAddress[normalizeAddressForCompare(event.payload.player)] ?? 0
+        const color = colorBySeatRef.current[seat] || 'green'
+
+        if (fromUi > 0 && toUi > 0) {
+          void (async () => {
+            await animateTokenPath(
+              tokenId,
+              buildUiMovePath({
+                color,
+                currentUiPosition: fromUi,
+                steps: event.payload.die_value,
+                targetUiPosition: toUi,
+              }),
+            )
+            setAnimatedTokenPositions((current) => {
+              if (!(tokenId in current)) {
+                return current
+              }
+
+              const next = { ...current }
+              delete next[tokenId]
+              return next
+            })
+          })()
+        }
+      }
+
       setLogEvents((current) => [nextLog, ...current].slice(0, 120))
     },
-    [address, awardXp, language, playerLabelFromAddress, playersByAddress, ui.questionCategory],
+    [address, animateTokenPath, awardXp, language, playerLabelFromAddress, playersByAddress, scheduleSnapshotRefresh, seatByAddress, ui.questionCategory],
   )
 
   useEffect(() => {
@@ -1992,7 +2141,7 @@ export function MatchOnchainView() {
           return
         }
 
-        setSnapshot((current) => stabilizeSnapshot(initialSnapshot, current))
+        setSnapshot((current) => stabilizeSnapshot(initialSnapshot, current, latestQuestionDrawRef.current))
 
         unsubscribe = await subscribeDojoGame({
           gameId: activeGameId,
@@ -2155,36 +2304,6 @@ export function MatchOnchainView() {
     )
   }, [movesByToken])
 
-  const animateTokenPath = useCallback((tokenId: string, path: number[]) => {
-    return new Promise<void>((resolve) => {
-      if (path.length === 0) {
-        resolve()
-        return
-      }
-
-      setAnimatingTokenIds([tokenId])
-      let index = 0
-
-      const stepForward = () => {
-        const nextPosition = path[index]
-        setAnimatedTokenPositions({ [tokenId]: nextPosition })
-        index += 1
-
-        if (index >= path.length) {
-          window.setTimeout(() => {
-            setAnimatingTokenIds([])
-            resolve()
-          }, 140)
-          return
-        }
-
-        window.setTimeout(stepForward, TOKEN_STEP_ANIMATION_MS)
-      }
-
-      stepForward()
-    })
-  }, [])
-
   const runTransaction = useCallback(
     async (
       label: string,
@@ -2246,6 +2365,28 @@ export function MatchOnchainView() {
     [account, activeGameId, activeTokenId, language, refreshSnapshot],
   )
 
+  useEffect(() => {
+    if (
+      !account ||
+      !activeGameId ||
+      !isMyTurn ||
+      snapshot?.turn_state?.phase !== 1 ||
+      txPendingLabel ||
+      questionSecondsLeft > 0
+    ) {
+      timeoutSkipKeyRef.current = null
+      return
+    }
+
+    const turnKey = `${activeGameId.toString()}:${snapshot.turn_state.question_id.toString()}:${snapshot.turn_state.deadline.toString()}`
+    if (timeoutSkipKeyRef.current === turnKey) {
+      return
+    }
+
+    timeoutSkipKeyRef.current = turnKey
+    void runTransaction('Force skip timeout', () => forceSkipTurn(account, activeGameId))
+  }, [account, activeGameId, isMyTurn, questionSecondsLeft, runTransaction, snapshot?.turn_state, txPendingLabel])
+
   const onApplyMove = useCallback(
     (move: UiLegalMove) => {
       if (!account || !activeGameId || !snapshot) {
@@ -2283,11 +2424,11 @@ export function MatchOnchainView() {
 
             void (async () => {
               if (movingToken) {
-                const path = buildOptimisticMovePath({
+                const path = buildUiMovePath({
                   color: currentColor,
                   currentUiPosition,
-                  move,
-                  token: movingToken,
+                  steps: move.steps,
+                  targetUiPosition: move.targetUiPosition,
                 })
                 await animateTokenPath(move.tokenUiId, path)
               }
@@ -2340,7 +2481,8 @@ export function MatchOnchainView() {
 
       const pendingQuestion = snapshot.pending_question
       const turnState = snapshot.turn_state
-      const answerState = optionIndex === activePendingQuestion.correctOption ? 'correct' : 'incorrect'
+      const canonicalOption = mapDisplayOptionToCanonical(activePendingQuestion, optionIndex)
+      const answerState = canonicalOption === activePendingQuestion.correctOption ? 'correct' : 'incorrect'
 
       setSelectedAnswerIndex(optionIndex)
       setOptimisticAnswerFeedback({ answerState, selectedOption: optionIndex })
@@ -2352,9 +2494,8 @@ export function MatchOnchainView() {
             questionId: turnState.question_id,
             questionIndex: pendingQuestion.question_index,
             category: pendingQuestion.category,
-            difficulty: pendingQuestion.difficulty,
             correctOption: activePendingQuestion.correctOption,
-            selectedOption: optionIndex,
+            selectedOption: canonicalOption,
             merkleProof: activePendingQuestion.merkleProof,
             merkleDirections: activePendingQuestion.merkleDirections,
           }),
@@ -2478,7 +2619,7 @@ export function MatchOnchainView() {
       return null
     }
 
-    const actionLabel = formatPendingActionLabel(txPendingLabel, language)
+    const actionLabel = formatPendingActionLabel(txPendingLabel, txPendingPhase ?? 'submitting', language)
 
     if (txPendingPhase === 'confirming') {
       return ui.txConfirming
