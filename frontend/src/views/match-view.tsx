@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Board3D } from '../components/game/board3d'
 import FinalRankingScreen from '../components/game/FinalRankingScreen'
@@ -57,6 +57,65 @@ const stepsToLaneEntryByColor: Record<PlayerColor, number> = {
   yellow: (entrySquareByColor.yellow - startSquareByColor.yellow + TRACK_LENGTH) % TRACK_LENGTH,
   green: (entrySquareByColor.green - startSquareByColor.green + TRACK_LENGTH) % TRACK_LENGTH,
 }
+
+const announcementGlassTintByThemeId = {
+  'theme-classic': {
+    border: 'rgba(255, 246, 226, 0.42)',
+    highlight: 'rgba(255, 250, 241, 0.42)',
+    shadow: 'rgba(60, 34, 14, 0.28)',
+    tintA: 'rgba(235, 220, 190, 0.34)',
+    tintB: 'rgba(190, 158, 122, 0.16)',
+  },
+  'theme-rainbow': {
+    border: 'rgba(225, 243, 255, 0.42)',
+    highlight: 'rgba(243, 250, 255, 0.42)',
+    shadow: 'rgba(39, 74, 109, 0.24)',
+    tintA: 'rgba(143, 193, 231, 0.34)',
+    tintB: 'rgba(190, 225, 255, 0.16)',
+  },
+  'theme-castle': {
+    border: 'rgba(236, 228, 255, 0.42)',
+    highlight: 'rgba(248, 245, 255, 0.42)',
+    shadow: 'rgba(65, 54, 108, 0.24)',
+    tintA: 'rgba(168, 153, 221, 0.34)',
+    tintB: 'rgba(213, 204, 246, 0.16)',
+  },
+  'theme-jungle': {
+    border: 'rgba(231, 247, 223, 0.42)',
+    highlight: 'rgba(246, 255, 241, 0.4)',
+    shadow: 'rgba(28, 71, 37, 0.24)',
+    tintA: 'rgba(120, 170, 140, 0.34)',
+    tintB: 'rgba(187, 223, 178, 0.15)',
+  },
+  'theme-desert': {
+    border: 'rgba(255, 236, 214, 0.42)',
+    highlight: 'rgba(255, 248, 238, 0.4)',
+    shadow: 'rgba(113, 68, 25, 0.24)',
+    tintA: 'rgba(214, 167, 112, 0.34)',
+    tintB: 'rgba(246, 214, 165, 0.16)',
+  },
+  'theme-night': {
+    border: 'rgba(217, 228, 255, 0.42)',
+    highlight: 'rgba(240, 245, 255, 0.42)',
+    shadow: 'rgba(20, 32, 74, 0.28)',
+    tintA: 'rgba(120, 150, 210, 0.34)',
+    tintB: 'rgba(84, 111, 184, 0.18)',
+  },
+  'theme-volcano': {
+    border: 'rgba(255, 223, 214, 0.42)',
+    highlight: 'rgba(255, 242, 237, 0.42)',
+    shadow: 'rgba(92, 31, 20, 0.28)',
+    tintA: 'rgba(200, 110, 90, 0.34)',
+    tintB: 'rgba(121, 39, 22, 0.18)',
+  },
+  'theme-legend': {
+    border: 'rgba(255, 235, 210, 0.42)',
+    highlight: 'rgba(255, 247, 235, 0.42)',
+    shadow: 'rgba(92, 68, 26, 0.26)',
+    tintA: 'rgba(208, 175, 114, 0.34)',
+    tintB: 'rgba(140, 109, 62, 0.16)',
+  },
+} as const
 
 const lanePositionSet = new Set(Object.values(finalLaneByColor).flat())
 const protectedColorTrackSquares = new Set<number>(Object.values(startSquareByColor))
@@ -2714,6 +2773,29 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   const activeAnnouncementTheme = activeAnnouncementPlacement
     ? getPlayerVisualThemeByColor(activeAnnouncementPlacement.color, activeAnnouncementPlacement.visualSkinId)
     : null
+  const announcementGlassTint = announcementGlassTintByThemeId[selectedBoardThemeId]
+  const announcementGlassPanelStyle = {
+    backdropFilter: 'blur(28px) saturate(145%)',
+    background: `linear-gradient(180deg, ${announcementGlassTint.highlight} 0%, rgba(255,255,255,0.1) 16%, rgba(255,255,255,0.03) 100%), linear-gradient(135deg, ${announcementGlassTint.tintA} 0%, ${announcementGlassTint.tintB} 100%)`,
+    borderColor: announcementGlassTint.border,
+    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.32), inset 0 -18px 28px rgba(255,255,255,0.05), 0 26px 48px ${announcementGlassTint.shadow}`,
+  } satisfies CSSProperties
+  const announcementGlassInnerStyle = {
+    backdropFilter: 'blur(22px) saturate(140%)',
+    background: `linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 24%, rgba(255,255,255,0.03) 100%), linear-gradient(135deg, ${announcementGlassTint.tintA} 0%, ${announcementGlassTint.tintB} 100%)`,
+    borderColor: announcementGlassTint.border,
+    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -10px 22px rgba(255,255,255,0.04), 0 16px 28px ${announcementGlassTint.shadow}`,
+  } satisfies CSSProperties
+  const announcementGlassSheenStyle = {
+    background:
+      'linear-gradient(180deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.12) 38%, rgba(255,255,255,0.02) 100%)',
+  } satisfies CSSProperties
+  const announcementGlassButtonStyle = {
+    backdropFilter: 'blur(22px) saturate(145%)',
+    background: `linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.12) 20%, rgba(255,255,255,0.05) 100%), linear-gradient(135deg, ${announcementGlassTint.tintA} 0%, ${announcementGlassTint.tintB} 100%)`,
+    borderColor: announcementGlassTint.border,
+    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.34), inset 0 -10px 18px rgba(255,255,255,0.05), 0 14px 24px ${announcementGlassTint.shadow}`,
+  } satisfies CSSProperties
   const activeTriviaPlayer = playersById[currentTurnPlayerId] ?? null
 
   const skipToFinalClassification = () => {
@@ -2734,6 +2816,12 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     ? language === 'es'
       ? `¡${activeAnnouncementPlacement.name} ${ui.placeAnnouncementLabel[Math.min(activeAnnouncementPlacement.place, 3) as 1 | 2 | 3]}!`
       : `${activeAnnouncementPlacement.name} ${ui.placeAnnouncementLabel[Math.min(activeAnnouncementPlacement.place, 3) as 1 | 2 | 3]}!`
+    : ''
+  const activeAnnouncementPlaceNumber = activeAnnouncementPlacement ? Math.min(activeAnnouncementPlacement.place, 3) : null
+  const activeAnnouncementSubtitle = activeAnnouncementPlacement
+    ? language === 'es'
+      ? `${ui.congrats}, ${activeAnnouncementPlacement.name}.`
+      : `${ui.congrats}, ${activeAnnouncementPlacement.name}.`
     : ''
 
   const previewWinnerPlayer = playersById[currentTurnPlayerId] ?? players[0] ?? null
@@ -2978,7 +3066,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
 
       {activeAnnouncementPlacement ? (
         <div className="fixed inset-0 z-[220] flex items-center justify-center px-3 py-6">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(255,236,173,0.32),rgba(20,10,6,0.84)_62%,rgba(10,5,2,0.9)_100%)] backdrop-blur-[7px]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(18,10,6,0.12),rgba(12,6,3,0.18))] backdrop-blur-[16px]" />
 
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             {Array.from({ length: 20 }).map((_, index) => (
@@ -3024,46 +3112,97 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
             ))}
           </div>
 
-          <div className="relative w-full max-w-[860px] text-center">
-            <div className="victory-pop relative mx-auto mb-3 flex h-[164px] w-[164px] items-center justify-center rounded-full border-[6px] border-[#7b4528] bg-gradient-to-b from-[#ffe7ab] via-[#f8bf56] to-[#cd8335] shadow-[0_26px_42px_rgba(0,0,0,0.44)]">
-              <span className="absolute -top-8 text-5xl drop-shadow-[0_4px_5px_rgba(0,0,0,0.4)]">👑</span>
-              <span
-                className={`inline-flex h-[118px] w-[118px] items-center justify-center rounded-full border-[4px] border-[#7c3f21] bg-gradient-to-b text-3xl font-black text-[#2c190d] ${activeAnnouncementTheme?.avatarToneClass || ''}`}
-              >
-                <GameAvatar
-                  alt={activeAnnouncementPlacement.name}
-                  avatar={activeAnnouncementPlacement.avatar}
-                  imageClassName="h-full w-full object-contain p-2"
-                  textClassName="text-3xl font-black text-[#2c190d]"
-                />
-              </span>
-              <span className="absolute -bottom-2 rounded-full border border-[#8f532d] bg-gradient-to-b from-[#7e4c2d] to-[#5b341f] px-3 py-1 text-[11px] font-black tracking-[0.15em] text-[#ffe8bf]">
-                {activeAnnouncementPlacement.tag}
-              </span>
-            </div>
+          <div className="relative w-full max-w-[980px] text-center">
+            <div
+              className="victory-pop relative mx-auto overflow-hidden rounded-[42px] border-[1.5px] bg-white/10 shadow-[0_30px_60px_rgba(0,0,0,0.48)]"
+              style={announcementGlassPanelStyle}
+            >
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_28%,rgba(255,255,255,0.22),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))]" />
+              <div className="absolute inset-x-[2%] top-[1.4%] h-[22%] rounded-[30px] opacity-80 blur-sm" style={announcementGlassSheenStyle} />
+              <div className="absolute inset-0 opacity-[0.08] mix-blend-screen" style={{ backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.18) 0, rgba(255,255,255,0.18) 1px, transparent 1px, transparent 3px), repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0, rgba(255,255,255,0.08) 1px, transparent 1px, transparent 4px)' }} />
 
-            <div className="relative mx-auto w-full max-w-[760px] px-5">
-              <span className="absolute left-1 top-1/2 h-[66px] w-[74px] -translate-y-1/2 rounded-l-[20px] border border-[#86512f] bg-gradient-to-b from-[#cb7f47] to-[#9d562e] shadow-[inset_0_1px_0_rgba(255,218,165,0.6)]" />
-              <span className="absolute right-1 top-1/2 h-[66px] w-[74px] -translate-y-1/2 rounded-r-[20px] border border-[#86512f] bg-gradient-to-b from-[#cb7f47] to-[#9d562e] shadow-[inset_0_1px_0_rgba(255,218,165,0.6)]" />
+              <div className="pointer-events-none absolute inset-0">
+                <span className="absolute left-[7%] top-[18%] h-24 w-24 rounded-full bg-[#ffd36b]/20 blur-2xl" />
+                <span className="absolute right-[8%] top-[22%] h-20 w-20 rounded-full bg-[#ffefb0]/18 blur-2xl" />
+                <span className="absolute bottom-[18%] left-[14%] h-16 w-16 rounded-full bg-[#fff3ca]/18 blur-xl" />
+                <span className="absolute bottom-[12%] right-[12%] h-20 w-20 rounded-full bg-[#ffd985]/18 blur-2xl" />
+              </div>
 
-              <div className="relative rounded-[34px] border-[4px] border-[#6f3f21] bg-gradient-to-b from-[#b56e3d] via-[#8f522f] to-[#734125] px-6 py-5 shadow-[inset_0_2px_0_rgba(255,216,168,0.65),0_14px_30px_rgba(24,11,3,0.55)]">
-                <p className="font-display text-[34px] uppercase tracking-[0.06em] text-[#ffe8be] drop-shadow-[0_2px_0_rgba(67,31,12,0.7)] sm:text-[56px]">
-                  {activeAnnouncementTitle}
-                </p>
+              <div className="relative px-5 pb-7 pt-24 sm:px-8 sm:pb-9 sm:pt-28">
+                <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 sm:top-4">
+                  <div className="relative flex h-[164px] w-[164px] items-center justify-center sm:h-[184px] sm:w-[184px]">
+                    <div className="absolute left-1/2 top-0 z-30 -translate-x-1/2 text-[#f8d777] drop-shadow-[0_5px_0_rgba(115,62,18,0.55)]">
+                      <svg aria-hidden="true" className="h-16 w-16 sm:h-20 sm:w-20" fill="none" viewBox="0 0 64 64">
+                        <path d="M12 46h40l-3.8 8H15.8L12 46Zm4-24 10 9 6-13 6 13 10-9-4 20H20l-4-20Z" fill="url(#crownFill)" stroke="#8a4e17" strokeLinejoin="round" strokeWidth="3" />
+                        <circle cx="16" cy="22" r="4" fill="#ffeaa0" stroke="#8a4e17" strokeWidth="3" />
+                        <circle cx="32" cy="16" r="4" fill="#ffeaa0" stroke="#8a4e17" strokeWidth="3" />
+                        <circle cx="48" cy="22" r="4" fill="#ffeaa0" stroke="#8a4e17" strokeWidth="3" />
+                        <defs>
+                          <linearGradient id="crownFill" x1="32" x2="32" y1="16" y2="54" gradientUnits="userSpaceOnUse">
+                            <stop stopColor="#fff0a8" />
+                            <stop offset="0.58" stopColor="#f5c248" />
+                            <stop offset="1" stopColor="#cb842b" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                    </div>
+
+                    <div className="absolute left-1/2 top-[34px] z-20 -translate-x-1/2 rounded-full border-[4px] border-[#874d26] bg-gradient-to-b from-[#fff1b6] via-[#edb546] to-[#b86b1e] px-4 py-1 text-[32px] font-display leading-none text-[#5a2d10] shadow-[0_8px_14px_rgba(0,0,0,0.34),inset_0_2px_0_rgba(255,247,203,0.85)] sm:top-[38px] sm:text-[38px]">
+                      {activeAnnouncementPlaceNumber}
+                    </div>
+
+                    <div className="absolute bottom-0 left-1/2 z-20 flex h-[132px] w-[132px] -translate-x-1/2 items-center justify-center rounded-full border-[6px] border-[#7b4528] bg-gradient-to-b from-[#ffe7ab] via-[#f8bf56] to-[#cd8335] shadow-[0_26px_42px_rgba(0,0,0,0.44)] sm:h-[146px] sm:w-[146px]">
+                      <span
+                        className={`inline-flex h-[104px] w-[104px] items-center justify-center rounded-full border-[4px] border-[#7c3f21] bg-gradient-to-b text-3xl font-black text-[#2c190d] sm:h-[116px] sm:w-[116px] ${activeAnnouncementTheme?.avatarToneClass || ''}`}
+                      >
+                        <GameAvatar
+                          alt={activeAnnouncementPlacement.name}
+                          avatar={activeAnnouncementPlacement.avatar}
+                          imageClassName="h-full w-full object-contain p-2"
+                          textClassName="text-3xl font-black text-[#2c190d]"
+                        />
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className="relative mx-auto max-w-[760px] rounded-[34px] border bg-white/10 px-4 pb-5 pt-[104px] sm:px-8 sm:pb-7 sm:pt-[116px]"
+                  style={announcementGlassInnerStyle}
+                >
+                  <div className="absolute inset-x-5 top-4 h-[72px] rounded-[22px] border border-white/20 bg-white/10" />
+                  <div className="absolute inset-x-[4%] top-[2%] h-[20%] rounded-[26px] opacity-90 blur-sm" style={announcementGlassSheenStyle} />
+                  <div className="absolute inset-0 opacity-[0.06] mix-blend-screen" style={{ backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.16) 0, rgba(255,255,255,0.16) 1px, transparent 1px, transparent 3px), repeating-linear-gradient(90deg, rgba(255,255,255,0.08) 0, rgba(255,255,255,0.08) 1px, transparent 1px, transparent 4px)' }} />
+
+                  <div
+                    className="relative rounded-[28px] border px-4 py-5 sm:px-6 sm:py-6"
+                    style={announcementGlassInnerStyle}
+                  >
+                    <p className="font-display text-[28px] uppercase leading-[1.05] tracking-[0.04em] text-[#ffe8be] drop-shadow-[0_3px_0_rgba(67,31,12,0.82)] sm:text-[46px]">
+                      {activeAnnouncementTitle}
+                    </p>
+                    <p className="mt-3 text-sm font-black uppercase tracking-[0.14em] text-[#ffefc8] sm:text-lg">
+                      {activeAnnouncementSubtitle}
+                    </p>
+                  </div>
+
+                  <div className="mt-5 flex justify-center">
+                    <button
+                      className="rounded-[22px] border px-8 py-2.5 font-display text-[22px] uppercase tracking-[0.12em] text-[#fff4de] transition hover:brightness-105 active:translate-y-[2px]"
+                      style={{
+                        ...announcementGlassButtonStyle,
+                        textShadow: '0 2px 8px rgba(52,31,16,0.34)',
+                      }}
+                      onClick={skipToFinalClassification}
+                      type="button"
+                    >
+                      {ui.skip}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <p className="mt-4 text-base font-black uppercase tracking-[0.08em] text-[#ffebb8] sm:text-xl">
-              {ui.congrats}, {activeAnnouncementPlacement.name}
-            </p>
-
-            <button
-              className="mt-5 rounded-full border border-[#f9df9a] bg-black/30 px-4 py-1 text-xs font-black uppercase tracking-[0.15em] text-[#ffe8a8] transition hover:bg-black/45"
-              onClick={skipToFinalClassification}
-              type="button"
-            >
-              {ui.skip}
-            </button>
           </div>
         </div>
       ) : null}
