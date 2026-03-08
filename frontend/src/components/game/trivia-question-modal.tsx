@@ -8,6 +8,7 @@ type TriviaAnswerState = 'correct' | 'incorrect' | 'idle' | 'timeout'
 type TriviaQuestionModalProps = {
   answerState: TriviaAnswerState
   difficulty: TriviaDifficulty
+  interactionLocked?: boolean
   isAiTurn: boolean
   onSelectOption: (optionIndex: number) => void
   player?: MatchPlayer
@@ -78,6 +79,7 @@ const triviaModalCopyByLanguage = {
 export function TriviaQuestionModal({
   answerState,
   difficulty,
+  interactionLocked = false,
   isAiTurn,
   onSelectOption,
   player,
@@ -87,7 +89,7 @@ export function TriviaQuestionModal({
 }: TriviaQuestionModalProps) {
   const language = useAppSettingsStore((state) => state.language)
   const ui = triviaModalCopyByLanguage[language]
-  const answersLocked = answerState !== 'idle' || isAiTurn
+  const answersLocked = answerState !== 'idle' || isAiTurn || interactionLocked
 
   return (
     <div className="fixed inset-0 z-[260] flex items-center justify-center px-3 py-5 sm:px-6">

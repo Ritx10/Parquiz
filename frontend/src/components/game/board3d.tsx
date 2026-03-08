@@ -1,7 +1,6 @@
-import type { BoardThemeSurfacePalette } from '../../lib/board-themes'
 import { getPlayerVisualThemeByColor } from '../../lib/player-color-themes'
 import type { TokenSkinId } from '../../lib/token-cosmetics'
-import type { MatchToken, MoveResource, PlayerColor } from './match-types'
+import type { MatchToken, PlayerColor } from './match-types'
 import { GameAvatar } from './game-avatar'
 import { Tile } from './tile'
 import { Token } from './token'
@@ -298,8 +297,8 @@ const arrowClassByPlacement: Record<TooltipPlacement, string> = {
   right: 'right-full top-1/2 -translate-y-1/2 translate-x-[1px] border-b border-l',
 }
 
-function CornerBase({ color, visualSkinId }: { color: PlayerColor; visualSkinId?: TokenSkinId }) {
-  const palette = getPlayerVisualThemeByColor(color, visualSkinId).homePalette
+function CornerBase({ color }: { color: PlayerColor }) {
+  const palette = getPlayerVisualThemeByColor(color).homePalette
 
   return (
     <div className="relative flex h-full w-full items-center justify-center">
@@ -321,11 +320,11 @@ function CornerBase({ color, visualSkinId }: { color: PlayerColor; visualSkinId?
   )
 }
 
-function BoardCenter({ visualSkinByColor = {} }: { visualSkinByColor?: Partial<Record<PlayerColor, TokenSkinId>> }) {
-  const greenTheme = getPlayerVisualThemeByColor('green', visualSkinByColor.green)
-  const redTheme = getPlayerVisualThemeByColor('red', visualSkinByColor.red)
-  const blueTheme = getPlayerVisualThemeByColor('blue', visualSkinByColor.blue)
-  const yellowTheme = getPlayerVisualThemeByColor('yellow', visualSkinByColor.yellow)
+function BoardCenter() {
+  const greenTheme = getPlayerVisualThemeByColor('green')
+  const redTheme = getPlayerVisualThemeByColor('red')
+  const blueTheme = getPlayerVisualThemeByColor('blue')
+  const yellowTheme = getPlayerVisualThemeByColor('yellow')
 
   return (
     <div
@@ -363,22 +362,18 @@ type Board3DProps = {
   animatingTokenIds?: string[]
   tokenHints?: Record<string, string>
   tokenDiceChoices?: Record<
-    string,
-    Array<{
-      id: MoveResource
-      label: string
-      value: number
-    }>
-  >
+      string,
+      Array<{
+        id: string
+        label: string
+        value: number
+      }>
+    >
   expandedTokenId?: null | string
   onTokenHover?: (tokenId: string | null) => void
-  onTokenDiceChoiceHover?: (tokenId: string, choiceId: MoveResource | null) => void
-  onTokenDiceChoiceSelect?: (tokenId: string, choiceId: MoveResource) => void
+  onTokenDiceChoiceHover?: (tokenId: string, choiceId: null | string) => void
+  onTokenDiceChoiceSelect?: (tokenId: string, choiceId: string) => void
   onTokenClick?: (tokenId: string) => void
-  surfacePalette?: Pick<
-    BoardThemeSurfacePalette,
-    'boardGridOverlay' | 'boardInnerBackground' | 'boardOuterBackground' | 'boardOuterBorder' | 'neutralTrackFill'
-  >
   visualSkinByColor?: Partial<Record<PlayerColor, TokenSkinId>>
 }
 
@@ -398,8 +393,6 @@ export function Board3D({
   onTokenDiceChoiceHover,
   onTokenDiceChoiceSelect,
   onTokenClick,
-  surfacePalette,
-  visualSkinByColor = {},
 }: Board3DProps) {
   const playersById = players.reduce<Record<string, { avatar: string; name: string }>>((acc, player) => {
     acc[player.id] = { avatar: player.avatar, name: player.name }
@@ -411,7 +404,7 @@ export function Board3D({
   const movableSet = new Set(movableTokenIds)
   const safeSet = new Set(safeSquares)
   const animatingSet = new Set(animatingTokenIds)
-  const themeForColor = (color: PlayerColor) => getPlayerVisualThemeByColor(color, visualSkinByColor[color])
+  const themeForColor = (color: PlayerColor) => getPlayerVisualThemeByColor(color)
 
   const groupedTokens = Object.values(
     tokens.reduce<Record<string, { cell: Coord; position: number; tokens: MatchToken[] }>>(
@@ -557,10 +550,10 @@ export function Board3D({
 
   return (
     <div
-      className="pointer-events-none relative aspect-square w-full overflow-visible rounded-[24px] border-[7px] p-1 shadow-board"
+      className="pointer-events-none relative aspect-square w-full overflow-visible rounded-[24px] border-[7px] border-[#b98652] p-1 shadow-board"
       style={{
-        backgroundImage: surfacePalette?.boardOuterBackground,
-        borderColor: surfacePalette?.boardOuterBorder,
+        backgroundImage:
+          'repeating-linear-gradient(0deg, rgba(126,84,45,0.18) 0, rgba(126,84,45,0.18) 2px, rgba(229,194,146,0.2) 2px, rgba(229,194,146,0.2) 4px), linear-gradient(120deg, #e7c68f 0%, #d8af77 26%, #f2d8ac 56%, #cca06a 100%)',
       }}
     >
       <div
@@ -568,8 +561,9 @@ export function Board3D({
         style={{
           gridTemplateColumns: `repeat(${fineGridSize}, minmax(0, 1fr))`,
           gridTemplateRows: `repeat(${fineGridSize}, minmax(0, 1fr))`,
-          backgroundColor: surfacePalette?.boardInnerBackground,
-          backgroundImage: surfacePalette?.boardGridOverlay,
+          backgroundColor: '#f7e6c8',
+          backgroundImage:
+            'linear-gradient(to right, rgba(40, 25, 12, 0.42) 1px, transparent 1px), linear-gradient(to bottom, rgba(40, 25, 12, 0.42) 1px, transparent 1px), repeating-linear-gradient(0deg, rgba(128, 80, 45, 0.08) 0, rgba(128, 80, 45, 0.08) 2px, rgba(239, 208, 170, 0.08) 2px, rgba(239, 208, 170, 0.08) 4px)',
           backgroundSize:
             `calc(100% / ${fineGridSize}) calc(100% / ${fineGridSize}), calc(100% / ${fineGridSize}) calc(100% / ${fineGridSize}), auto`,
           backgroundPosition: '0 0, 0 0, 0 0',
@@ -577,7 +571,7 @@ export function Board3D({
       >
         {cornerHomes.map((home) => (
           <div className="z-10" key={home.color} style={cellPlacement(home.rowStart, home.colStart, 7, 7)}>
-            <CornerBase color={home.color} visualSkinId={visualSkinByColor[home.color]} />
+            <CornerBase color={home.color} />
           </div>
         ))}
 
@@ -589,22 +583,19 @@ export function Board3D({
           />
         ))}
 
-        <BoardCenter visualSkinByColor={visualSkinByColor} />
+        <BoardCenter />
 
         {trackCells.map((cell) => {
           const startColor = startSquares.get(cell.number)
 
           return (
             <Tile
-              className={startColor ? themeForColor(startColor).laneFillClass : ''}
+              className={startColor ? themeForColor(startColor).laneFillClass : 'bg-[#fff8e6]'}
               isHighlighted={highlightedSet.has(cell.number)}
               isSafe={safeSet.has(cell.number)}
               key={`track-${cell.number}`}
               number={cell.number}
-              style={{
-                ...cellPlacement(cell.row, cell.col),
-                backgroundColor: startColor ? undefined : surfacePalette?.neutralTrackFill,
-              }}
+              style={cellPlacement(cell.row, cell.col)}
             />
           )
         })}

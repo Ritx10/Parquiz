@@ -1,53 +1,81 @@
 import { useAccount } from '@starknet-react/core'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import {
-  applyMove,
-  bindEgsToken,
-  computeLegalMoves,
-  endTurn,
-  forceSkipTurn,
-  rollTwoDiceAndDrawQuestion,
-  skipShop,
-  submitAnswer,
-} from '../api'
+import { useSearchParams } from 'react-router-dom'
+import { applyMove, computeLegalMoves, endTurn, rollTwoDiceAndDrawQuestion, submitAnswer } from '../api'
 import {
   readDojoGameSnapshot,
   readEgsTokenGameLink,
-  readQuestionSet,
   subscribeDojoGame,
   type DojoGameSnapshot,
 } from '../api/dojo-state'
-import type { DojoTrackedEvent, LegalMoveApi, MoveType } from '../api/types'
+import type { DojoTokenModel, DojoTrackedEvent, LegalMoveApi, MoveType } from '../api/types'
 import { Board3D } from '../components/game/board3d'
-import { GameDie } from '../components/game/game-die'
+import { GameAvatar } from '../components/game/game-avatar'
 import { LogDrawer } from '../components/game/log-drawer'
 import type { MatchLogEvent, MatchPlayer, MatchToken, PlayerColor } from '../components/game/match-types'
+import { TriviaQuestionModal } from '../components/game/trivia-question-modal'
 import { isDojoConfigured } from '../config/dojo'
-import { appEnv } from '../config/env'
-import { getBoardThemeDefinition, getBoardThemeSurfacePalette } from '../lib/board-themes'
-import { assignDistinctDiceSkins, type DiceSkinId } from '../lib/dice-cosmetics'
-import { getPlayerSkinSrc } from '../lib/player-skins'
-import {
-  getHydratedQuestion,
-  LOCAL_QUESTION_SET_COUNT,
-  LOCAL_QUESTION_SET_ID,
-  LOCAL_QUESTION_SET_ROOT,
-} from '../lib/questions/local-question-bank'
-import { getPlayerVisualThemeByColor } from '../lib/player-color-themes'
+import { getPlayerSkinSrc, playerSkinIdFromIndex } from '../lib/player-skins'
+import { getHydratedQuestion } from '../lib/questions/local-question-bank'
+import { useControllerUsernames } from '../lib/starknet/use-controller-usernames'
 import { shortenAddress, useControllerWallet } from '../lib/starknet/use-controller-wallet'
-import type { TokenSkinId } from '../lib/token-cosmetics'
 import { useAppSettingsStore } from '../store/app-settings-store'
+import { tokenSkinIdFromIndex } from '../lib/token-cosmetics'
+import type { TriviaDifficulty } from '../lib/trivia-engine'
 
 const TRACK_SQUARE_UI_OFFSET = 4
 const TRACK_LENGTH = 68
-const BOARD_DEFAULT_SAFE_TRACK_REFS = [12, 17, 29, 34, 46, 51, 63, 68]
+const BOARD_DEFAULT_SAFE_TRACK_REFS = [8, 13, 25, 30, 42, 47, 59, 64]
+const TOKEN_STEP_ANIMATION_MS = 105
+
+type DiceFaceValue = 1 | 2 | 3 | 4 | 5 | 6
 
 const seatColorMap: Record<number, PlayerColor> = {
   0: 'blue',
   1: 'red',
   2: 'green',
   3: 'yellow',
+}
+
+const hudAccentClass: Record<PlayerColor, string> = {
+  green: 'bg-[#2bc58d] text-[#0b3d2d]',
+  red: 'bg-[#ff6d5e] text-[#4a1008]',
+  blue: 'bg-[#4a9bff] text-[#0d3058]',
+  yellow: 'bg-[#f4cc4e] text-[#4a3404]',
+}
+
+const dicePipLayout: Record<DiceFaceValue, Array<{ left: string; top: string }>> = {
+  1: [{ left: '50%', top: '50%' }],
+  2: [
+    { left: '28%', top: '28%' },
+    { left: '72%', top: '72%' },
+  ],
+  3: [
+    { left: '28%', top: '28%' },
+    { left: '50%', top: '50%' },
+    { left: '72%', top: '72%' },
+  ],
+  4: [
+    { left: '28%', top: '28%' },
+    { left: '72%', top: '28%' },
+    { left: '28%', top: '72%' },
+    { left: '72%', top: '72%' },
+  ],
+  5: [
+    { left: '28%', top: '28%' },
+    { left: '72%', top: '28%' },
+    { left: '50%', top: '50%' },
+    { left: '28%', top: '72%' },
+    { left: '72%', top: '72%' },
+  ],
+  6: [
+    { left: '28%', top: '24%' },
+    { left: '72%', top: '24%' },
+    { left: '28%', top: '50%' },
+    { left: '72%', top: '50%' },
+    { left: '28%', top: '76%' },
+    { left: '72%', top: '76%' },
+  ],
 }
 
 const laneBaseByColor: Record<PlayerColor, number> = {
@@ -57,119 +85,48 @@ const laneBaseByColor: Record<PlayerColor, number> = {
   yellow: 400,
 }
 
-const onchainCopyByLanguage = {
-  es: {
-    actionsTitle: 'Acciones on-chain',
-    answerTitle: 'Respuesta',
-    applyMove: 'Aplicar jugada',
-    awaitSync: 'Esperando sincronizacion de estado en Torii...',
-    backHome: 'Volver al inicio',
-    bindToken: 'Vincular token a esta partida',
-    boardBadge: 'legalidad via compute_legal_moves',
-    boardTitle: 'Board 3D on-chain',
-    bonusActive: 'Bonus activo',
-    connectWallet: 'Conecta Controller Wallet para ejecutar transacciones on-chain.',
-    currentQuestionUnavailable: 'No se pudo hidratar la pregunta actual.',
-    deadline: 'Deadline',
-    deadlineExpired: 'expirado',
-    deadlineOpen: 'vigente',
-    endTurn: 'Terminar turno',
-    forceSkipTurn: 'Forzar pasar turno',
-    gameIdInvalid: '`game_id` invalido. Usa decimal o hexadecimal 0x.',
-    gameIdPlaceholder: 'game_id (decimal o 0x...)',
-    gameSessionTitle: 'Sesion on-chain',
-    gameStatus: 'Estado',
-    gameTurn: 'Turno',
-    goToMock: 'Ir a /board-mock',
-    hydratedPending: 'Esperando datos de la pregunta on-chain.',
-    legalMoveTitle: 'Jugada legal',
-    loadSession: 'Cargar sesion',
-    loadingSnapshot: 'Cargando estado on-chain...',
-    localSourceVerified: 'Fuente local verificada contra root on-chain',
-    logEvents: 'Log eventos',
-    movePhaseInactive: 'Fase de movimiento no activa.',
-    movesFilterEmpty: 'Sin jugadas legales para el filtro actual.',
-    noPendingQuestion: 'No hay pregunta pendiente on-chain para responder.',
-    onchainMode: 'Modo On-chain',
-    optionPrefix: 'Opcion',
-    pending: 'pendiente',
-    playersTitle: 'Jugadores',
-    proofNodes: 'nodos proof',
-    questionId: 'Pregunta ID',
-    rollAction: 'Tirar (VRF)',
-    rollAndQuestion: 'Tirar + pregunta (VRF)',
-    scoreLoaded: 'Token EGS cargado.',
-    selectAnswer: 'Selecciona una respuesta antes de enviar la transaccion.',
-    skipShop: 'Saltar tienda',
-    submitAnswer: 'Enviar respuesta',
-    tokenIdInvalid: '`token_id` invalido. Usa decimal o hexadecimal 0x.',
-    tokenIdPlaceholder: 'token_id EGS (decimal o 0x...)',
-    waitingBonus: 'sin bonus',
-  },
-  en: {
-    actionsTitle: 'On-chain actions',
-    answerTitle: 'Answer',
-    applyMove: 'Apply move',
-    awaitSync: 'Waiting for Torii state sync...',
-    backHome: 'Back home',
-    bindToken: 'Bind token to this match',
-    boardBadge: 'legality via compute_legal_moves',
-    boardTitle: 'On-chain 3D Board',
-    bonusActive: 'Active bonus',
-    connectWallet: 'Connect Controller Wallet to execute on-chain transactions.',
-    currentQuestionUnavailable: 'Could not hydrate the current question.',
-    deadline: 'Deadline',
-    deadlineExpired: 'expired',
-    deadlineOpen: 'active',
-    endTurn: 'End turn',
-    forceSkipTurn: 'Force skip turn',
-    gameIdInvalid: 'Invalid `game_id`. Use decimal or hexadecimal 0x.',
-    gameIdPlaceholder: 'game_id (decimal or 0x...)',
-    gameSessionTitle: 'On-chain session',
-    gameStatus: 'Status',
-    gameTurn: 'Turn',
-    goToMock: 'Go to /board-mock',
-    hydratedPending: 'Waiting for on-chain question data.',
-    legalMoveTitle: 'Legal move',
-    loadSession: 'Load session',
-    loadingSnapshot: 'Loading on-chain state...',
-    localSourceVerified: 'Local source verified against on-chain root',
-    logEvents: 'Event log',
-    movePhaseInactive: 'Move phase is not active.',
-    movesFilterEmpty: 'No legal moves for the current filter.',
-    noPendingQuestion: 'There is no pending on-chain question to answer.',
-    onchainMode: 'On-chain mode',
-    optionPrefix: 'Option',
-    pending: 'pending',
-    playersTitle: 'Players',
-    proofNodes: 'proof nodes',
-    questionId: 'Question ID',
-    rollAction: 'Roll (VRF)',
-    rollAndQuestion: 'Roll + question (VRF)',
-    scoreLoaded: 'EGS token loaded.',
-    selectAnswer: 'Select an answer before submitting the transaction.',
-    skipShop: 'Skip shop',
-    submitAnswer: 'Submit answer',
-    tokenIdInvalid: 'Invalid `token_id`. Use decimal or hexadecimal 0x.',
-    tokenIdPlaceholder: 'EGS token_id (decimal or 0x...)',
-    waitingBonus: 'no bonus',
-  },
-} as const
+const startSquareByColor: Record<PlayerColor, number> = {
+  red: 22,
+  blue: 5,
+  yellow: 56,
+  green: 39,
+}
 
-const phaseLabelByLanguage = {
-  es: { 0: 'TIRADA_Y_PREGUNTA', 1: 'RESPUESTA_PENDIENTE', 2: 'MOVIMIENTO_PENDIENTE', 3: 'TIENDA_PENDIENTE', 4: 'TURNO_FINALIZADO' },
-  en: { 0: 'ROLL_AND_QUESTION', 1: 'ANSWER_PENDING', 2: 'MOVE_PENDING', 3: 'SHOP_PENDING', 4: 'TURN_ENDED' },
-} as const
+const entrySquareByColor: Record<PlayerColor, number> = {
+  red: 17,
+  blue: 68,
+  yellow: 51,
+  green: 34,
+}
 
-const gameStatusLabelByLanguage = {
-  es: { 0: 'ESPERANDO', 1: 'EN_PROGRESO', 2: 'FINALIZADA', 3: 'CANCELADA' },
-  en: { 0: 'WAITING', 1: 'IN_PROGRESS', 2: 'FINISHED', 3: 'CANCELLED' },
-} as const
+const finalLaneByColor: Record<PlayerColor, number[]> = {
+  green: [101, 102, 103, 104, 105, 106, 107, 108],
+  red: [201, 202, 203, 204, 205, 206, 207, 208],
+  blue: [301, 302, 303, 304, 305, 306, 307, 308],
+  yellow: [401, 402, 403, 404, 405, 406, 407, 408],
+}
 
-const moveTypeLabelByLanguage = {
-  es: { 0: 'DADO_A', 1: 'DADO_B', 2: 'SUMA', 3: 'BONUS_10', 4: 'BONUS_20', 5: 'SALIR_CASA' },
-  en: { 0: 'DIE_A', 1: 'DIE_B', 2: 'SUM', 3: 'BONUS_10', 4: 'BONUS_20', 5: 'EXIT_HOME' },
-} as const
+const stepsToLaneEntryByColor: Record<PlayerColor, number> = {
+  red: (entrySquareByColor.red - startSquareByColor.red + TRACK_LENGTH) % TRACK_LENGTH,
+  blue: (entrySquareByColor.blue - startSquareByColor.blue + TRACK_LENGTH) % TRACK_LENGTH,
+  yellow: (entrySquareByColor.yellow - startSquareByColor.yellow + TRACK_LENGTH) % TRACK_LENGTH,
+  green: (entrySquareByColor.green - startSquareByColor.green + TRACK_LENGTH) % TRACK_LENGTH,
+}
+
+const moveTypeLabel: Record<MoveType, string> = {
+  0: 'DIE_A',
+  1: 'DIE_B',
+  2: 'SUM',
+  3: 'BONUS_10',
+  4: 'BONUS_20',
+  5: 'EXIT_HOME',
+}
+
+const questionDifficultyByLevel: Record<number, TriviaDifficulty> = {
+  0: 'easy',
+  1: 'medium',
+  2: 'hard',
+}
 
 const parseBigNumberish = (value: string): bigint | null => {
   const normalized = value.trim()
@@ -227,6 +184,13 @@ const mapTrackSquareRefToUi = (trackSquareRef: number) => {
   return shifted + 1
 }
 
+const isTrackPosition = (position: number) => position >= 1 && position <= TRACK_LENGTH
+
+const wrapPosition = (position: number) => {
+  const normalized = ((position - 1) % TRACK_LENGTH + TRACK_LENGTH) % TRACK_LENGTH
+  return normalized + 1
+}
+
 const mapSquareRefToUiPosition = (squareRef: number, colorBySeat: Record<number, PlayerColor>) => {
   if (squareRef >= 1 && squareRef <= TRACK_LENGTH) {
     return mapTrackSquareRefToUi(squareRef)
@@ -259,57 +223,189 @@ const mapSquareRefToUiPosition = (squareRef: number, colorBySeat: Record<number,
   return 0
 }
 
-const mapErrorToUserMessage = (error: unknown, language: 'es' | 'en') => {
+const mapErrorToUserMessage = (error: unknown) => {
   const raw = error instanceof Error ? error.message : `${error}`
   const normalized = raw.toLowerCase()
 
   if (normalized.includes('not_active')) {
-    return language === 'es' ? 'No eres el jugador activo. Espera tu turno.' : 'You are not the active player. Wait for your turn.'
+    return 'No eres el jugador activo. Espera tu turno.'
   }
 
   if (normalized.includes('phase')) {
-    return language === 'es' ? 'La accion no coincide con la fase actual del turno.' : 'The action does not match the current turn phase.'
+    return 'La accion no coincide con la fase actual del turno.'
   }
 
   if (normalized.includes('illegal_move')) {
-    return language === 'es' ? 'Movimiento ilegal. Usa solo jugadas devueltas por compute_legal_moves.' : 'Illegal move. Use only moves returned by compute_legal_moves.'
+    return 'Movimiento ilegal. Usa solo jugadas devueltas por compute_legal_moves.'
   }
 
   if (normalized.includes('deadline')) {
-    return language === 'es' ? 'El deadline del turno aun no expiro.' : 'The turn deadline has not expired yet.'
+    return 'El deadline del turno aun no expiro.'
   }
 
   if (normalized.includes('moves_pending')) {
-    return language === 'es' ? 'Aun existen movimientos legales pendientes. Debes agotarlos o usar el flujo correcto.' : 'There are still pending legal moves. You must consume them or use the correct flow.'
+    return 'Aun existen movimientos legales pendientes. Debes agotarlos o usar el flujo correcto.'
   }
 
   if (normalized.includes('q_proof')) {
-    return language === 'es' ? 'Prueba Merkle invalida para la respuesta enviada.' : 'Invalid Merkle proof for the submitted answer.'
+    return 'Prueba Merkle invalida para la respuesta enviada.'
   }
 
   if (normalized.includes('q_id') || normalized.includes('q_index')) {
-    return language === 'es' ? 'La respuesta enviada no coincide con la pregunta pendiente on-chain.' : 'The submitted answer does not match the pending on-chain question.'
+    return 'La respuesta enviada no coincide con la pregunta pendiente on-chain.'
   }
 
   if (normalized.includes('user rejected') || normalized.includes('rejected')) {
-    return language === 'es' ? 'Transaccion cancelada en wallet.' : 'Transaction rejected in wallet.'
+    return 'Transaccion cancelada en wallet.'
   }
 
   return raw
 }
 
-const buildBonusText = (bonus10: number, bonus20: number, language: 'es' | 'en') => {
-  const parts: string[] = []
-
-  if (bonus10 > 0) {
-    parts.push(`10 x ${bonus10}`)
+const normalizeDiceFace = (value: null | number, fallback: DiceFaceValue): DiceFaceValue => {
+  if (!value || value < 1 || value > 6) {
+    return fallback
   }
 
-  if (bonus20 > 0) {
-    parts.push(`20 x ${bonus20}`)
+  return value as DiceFaceValue
+}
+
+function HudDie({ value, rolling }: { value: null | number; rolling: boolean }) {
+  const face = normalizeDiceFace(value, 1)
+
+  return (
+    <span
+      className={`relative inline-flex h-11 w-11 items-center justify-center rounded-[11px] border border-[#aeb9ca] bg-gradient-to-b from-[#fefefe] to-[#dce6f4] shadow-[0_5px_0_rgba(53,74,107,0.45)] ${rolling ? 'animate-spin' : ''}`}
+    >
+      {dicePipLayout[face].map((pip, index) => (
+        <span
+          className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#1e3553]"
+          key={`${face}-${index}`}
+          style={{ left: pip.left, top: pip.top }}
+        />
+      ))}
+    </span>
+  )
+}
+
+function PlayerHudCard({ player, isTurn }: { player: MatchPlayer; isTurn: boolean }) {
+  return (
+    <article className="w-[132px] rounded-2xl border border-white/20 bg-[#082944]/78 px-3 py-2 text-center text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+      <div className={`mx-auto mb-2 h-1.5 w-full rounded-full ${hudAccentClass[player.color]}`} />
+      <span className="mx-auto mb-2 inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border-2 border-white/45 bg-[#fff4dc] shadow-[0_4px_10px_rgba(0,0,0,0.2)]">
+        <GameAvatar
+          alt={player.name}
+          avatar={player.avatar}
+          imageClassName="h-full w-full object-contain p-1"
+          textClassName="text-sm font-black text-[#2c190d]"
+        />
+      </span>
+      <p className="truncate font-display text-lg leading-none">{player.name}</p>
+
+      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide">
+        <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full ${hudAccentClass[player.color]}`}>
+          D
+        </span>
+        {isTurn ? 'Tu turno' : 'En espera'}
+      </div>
+
+      <div className="mt-2 flex items-center justify-center gap-1.5">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <span
+            className={`h-2.5 w-2.5 rounded-full border border-white/15 ${
+              index < player.tokensInGoal ? hudAccentClass[player.color] : 'bg-white/20'
+            }`}
+            key={`${player.id}-progress-${index}`}
+          />
+        ))}
+      </div>
+    </article>
+  )
+}
+
+function TurnDiceLauncher({
+  isActive,
+  canRoll,
+  rolling,
+  dieA,
+  dieB,
+  preview,
+  onRoll,
+}: {
+  isActive: boolean
+  canRoll: boolean
+  rolling: boolean
+  dieA: null | number
+  dieB: null | number
+  preview: { dieA: DiceFaceValue; dieB: DiceFaceValue }
+  onRoll: () => void
+}) {
+  const isEnabled = isActive && canRoll && !rolling
+
+  return (
+    <div className="pointer-events-none mt-2 flex flex-col items-center gap-1.5">
+      <button
+        className={`pointer-events-auto flex items-center gap-2 rounded-2xl border px-2 py-2 transition-all ${
+          isEnabled
+            ? 'border-[#7cd5ff] bg-[#0d3358]/88 shadow-[0_0_0_3px_rgba(124,213,255,0.35)] hover:-translate-y-0.5'
+            : isActive
+              ? 'cursor-not-allowed border-[#5e738f] bg-[#0d3358]/55 opacity-80'
+              : 'cursor-not-allowed border-white/12 bg-[#0d3358]/45 opacity-60'
+        } ${rolling && isActive ? 'animate-pulse' : ''}`}
+        disabled={!isEnabled}
+        onClick={onRoll}
+        type="button"
+      >
+        <HudDie rolling={rolling && isActive} value={rolling && isActive ? preview.dieA : dieA} />
+        <HudDie rolling={rolling && isActive} value={rolling && isActive ? preview.dieB : dieB} />
+      </button>
+
+      <span className="rounded-full border border-white/20 bg-black/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#dbf4ff]">
+        {rolling && isActive ? 'Lanzando...' : isActive ? (canRoll ? 'Click para tirar' : 'Dados ya usados') : 'En espera'}
+      </span>
+    </div>
+  )
+}
+
+function PlayerHudSlot({
+  player,
+  turnPlayerId,
+  canRoll,
+  rolling,
+  dieA,
+  dieB,
+  preview,
+  onRoll,
+}: {
+  player?: MatchPlayer
+  turnPlayerId: string
+  canRoll: boolean
+  rolling: boolean
+  dieA: null | number
+  dieB: null | number
+  preview: { dieA: DiceFaceValue; dieB: DiceFaceValue }
+  onRoll: () => void
+}) {
+  if (!player) {
+    return null
   }
 
-  return parts.length > 0 ? parts.join(' + ') : onchainCopyByLanguage[language].waitingBonus
+  const isTurn = turnPlayerId === player.id
+
+  return (
+    <div className="pointer-events-none flex flex-col items-center">
+      <PlayerHudCard isTurn={isTurn} player={player} />
+      <TurnDiceLauncher
+        canRoll={canRoll}
+        dieA={dieA}
+        dieB={dieB}
+        isActive={isTurn}
+        onRoll={onRoll}
+        preview={preview}
+        rolling={rolling}
+      />
+    </div>
+  )
 }
 
 const tokenUiId = (owner: string, tokenId: number) => `${owner}-${tokenId}`
@@ -318,16 +414,41 @@ const trackEventToLog = (
   event: DojoTrackedEvent,
   addressLabel: (address: string) => string,
   colorBySeat: Record<number, PlayerColor>,
-  language: 'es' | 'en',
 ): MatchLogEvent => {
   if (event.type === 'DiceRolled') {
     return {
       id: nextId('event-roll'),
       type: 'roll',
-      message:
-        language === 'es'
-          ? `Dados lanzados: ${event.payload.dice_1} / ${event.payload.dice_2}`
-          : `Dice rolled: ${event.payload.dice_1} / ${event.payload.dice_2}`,
+      message: `Dice rolled: ${event.payload.dice_1} / ${event.payload.dice_2}`,
+      createdAt: Date.now(),
+    }
+  }
+
+  if (event.type === 'QuestionDrawn') {
+    return {
+      id: nextId('event-question'),
+      type: 'question',
+      message: `Pregunta lista para ${event.payload.question_id.toString()}.`,
+      createdAt: Date.now(),
+    }
+  }
+
+  if (event.type === 'AnswerRevealed') {
+    return {
+      id: nextId('event-answer'),
+      type: 'question',
+      message: `${addressLabel(event.payload.player)} marco opcion ${event.payload.selected_option + 1} · ${
+        event.payload.correct ? 'correcta' : 'incorrecta'
+      }.`,
+      createdAt: Date.now(),
+    }
+  }
+
+  if (event.type === 'AnswerResolved') {
+    return {
+      id: nextId('event-answer-status'),
+      type: 'question',
+      message: `${addressLabel(event.payload.player)} ${event.payload.correct ? 'respondio bien' : 'respondio mal'}.`,
       createdAt: Date.now(),
     }
   }
@@ -339,10 +460,7 @@ const trackEventToLog = (
     return {
       id: nextId('event-move'),
       type: 'move',
-      message:
-        language === 'es'
-          ? `${addressLabel(event.payload.player)} mueve ficha ${event.payload.token_id + 1} de ${fromUi || '-'} a ${toUi || '-'}.`
-          : `${addressLabel(event.payload.player)} moves token ${event.payload.token_id + 1} from ${fromUi || '-'} to ${toUi || '-'}.`,
+      message: `${addressLabel(event.payload.player)} mueve ficha ${event.payload.token_id + 1} de ${fromUi || '-'} a ${toUi || '-'}.`,
       createdAt: Date.now(),
     }
   }
@@ -353,10 +471,7 @@ const trackEventToLog = (
     return {
       id: nextId('event-capture'),
       type: 'capture',
-      message:
-        language === 'es'
-          ? `${addressLabel(event.payload.attacker)} captura ficha ${event.payload.defender_token_id + 1} de ${addressLabel(event.payload.defender)} en ${squareUi || '-'}.`
-          : `${addressLabel(event.payload.attacker)} captures token ${event.payload.defender_token_id + 1} from ${addressLabel(event.payload.defender)} on ${squareUi || '-'}.`,
+      message: `${addressLabel(event.payload.attacker)} captura ficha ${event.payload.defender_token_id + 1} de ${addressLabel(event.payload.defender)} en ${squareUi || '-'}.`,
       createdAt: Date.now(),
     }
   }
@@ -365,10 +480,7 @@ const trackEventToLog = (
     return {
       id: nextId('event-home'),
       type: 'home',
-      message:
-        language === 'es'
-          ? `${addressLabel(event.payload.player)} lleva ficha ${event.payload.token_id + 1} a meta (+${event.payload.bonus_awarded}).`
-          : `${addressLabel(event.payload.player)} sends token ${event.payload.token_id + 1} home (+${event.payload.bonus_awarded}).`,
+      message: `${addressLabel(event.payload.player)} lleva ficha ${event.payload.token_id + 1} a meta (+${event.payload.bonus_awarded}).`,
       createdAt: Date.now(),
     }
   }
@@ -379,10 +491,7 @@ const trackEventToLog = (
     return {
       id: nextId('event-bridge'),
       type: 'bridge',
-      message:
-        language === 'es'
-          ? `${event.type === 'BridgeFormed' ? 'Puente formado' : 'Puente roto'} en ${squareUi || '-'} por ${addressLabel(event.payload.owner)}.`
-          : `${event.type === 'BridgeFormed' ? 'Bridge formed' : 'Bridge broken'} on ${squareUi || '-'} by ${addressLabel(event.payload.owner)}.`,
+      message: `${event.type === 'BridgeFormed' ? 'Puente formado' : 'Puente roto'} en ${squareUi || '-'} por ${addressLabel(event.payload.owner)}.`,
       createdAt: Date.now(),
     }
   }
@@ -391,10 +500,7 @@ const trackEventToLog = (
     return {
       id: nextId('event-turn-end'),
       type: 'move',
-      message:
-        language === 'es'
-          ? `Turno ${event.payload.turn_index} finalizado. Siguiente: ${addressLabel(event.payload.next_player)}.`
-          : `Turn ${event.payload.turn_index} ended. Next: ${addressLabel(event.payload.next_player)}.`,
+      message: `Turno ${event.payload.turn_index} finalizado. Siguiente: ${addressLabel(event.payload.next_player)}.`,
       createdAt: Date.now(),
     }
   }
@@ -402,10 +508,7 @@ const trackEventToLog = (
   return {
     id: nextId('event-win'),
     type: 'home',
-    message:
-      language === 'es'
-        ? `Partida finalizada. Ganador: ${addressLabel(event.payload.winner)} (turno ${event.payload.turn_index}).`
-        : `Match finished. Winner: ${addressLabel(event.payload.winner)} (turn ${event.payload.turn_index}).`,
+    message: `Partida finalizada. Ganador: ${addressLabel(event.payload.winner)} (turno ${event.payload.turn_index}).`,
     createdAt: Date.now(),
   }
 }
@@ -416,45 +519,296 @@ type UiLegalMove = LegalMoveApi & {
   targetUiPosition: number
 }
 
+type ResolvedAnswerDisplay = {
+  answerState: 'correct' | 'incorrect'
+  player?: MatchPlayer
+  question: {
+    category: string
+    correctIndex: number
+    difficulty: TriviaDifficulty
+    icon: string
+    id: string
+    options: [string, string, string, string]
+    prompt: string
+    theme: 'blue'
+  }
+  selectedOption: number
+}
+
+const cloneSnapshot = (snapshot: DojoGameSnapshot): DojoGameSnapshot => ({
+  ...snapshot,
+  game: snapshot.game ? { ...snapshot.game } : null,
+  turn_state: snapshot.turn_state ? { ...snapshot.turn_state } : null,
+  dice_state: snapshot.dice_state ? { ...snapshot.dice_state } : null,
+  runtime_config: snapshot.runtime_config ? { ...snapshot.runtime_config } : null,
+  pending_question: snapshot.pending_question ? { ...snapshot.pending_question } : null,
+  players: snapshot.players.map((player) => ({ ...player })),
+  player_customizations: snapshot.player_customizations.map((customization) => ({ ...customization })),
+  tokens: snapshot.tokens.map((token) => ({ ...token })),
+  bonus_states: snapshot.bonus_states.map((bonus) => ({ ...bonus })),
+  occupancies: snapshot.occupancies.map((occupancy) => ({ ...occupancy })),
+  safe_track_square_refs: [...snapshot.safe_track_square_refs],
+})
+
+const applyOptimisticTargetSquare = (token: DojoGameSnapshot['tokens'][number], targetSquareRef: number) => {
+  if (targetSquareRef >= 1 && targetSquareRef <= TRACK_LENGTH) {
+    token.token_state = 1
+    token.track_pos = targetSquareRef - 1
+    token.home_lane_pos = 0
+    return
+  }
+
+  if (targetSquareRef >= 1000 && targetSquareRef < 2000) {
+    token.token_state = 2
+    token.track_pos = 0
+    token.home_lane_pos = (targetSquareRef - 1000) % 32
+    return
+  }
+
+  if (targetSquareRef >= 9000 && targetSquareRef <= 9003) {
+    token.token_state = 3
+    token.track_pos = 0
+    token.home_lane_pos = 0
+  }
+}
+
+const consumeOptimisticDice = (
+  diceState: NonNullable<DojoGameSnapshot['dice_state']>,
+  turnState: NonNullable<DojoGameSnapshot['turn_state']>,
+  move: { move_type: number; steps: number; token_id: number },
+) => {
+  if (move.move_type === 0) {
+    diceState.die_a_used = true
+  } else if (move.move_type === 1) {
+    diceState.die_b_used = true
+  } else if (move.move_type === 2) {
+    diceState.sum_used = true
+    diceState.die_a_used = true
+    diceState.die_b_used = true
+  } else if (move.move_type === 5) {
+    if (!diceState.die_a_used && diceState.die_a === move.steps) {
+      diceState.die_a_used = true
+    } else if (!diceState.die_b_used && diceState.die_b === move.steps) {
+      diceState.die_b_used = true
+    } else if (!diceState.sum_used && !diceState.die_a_used && !diceState.die_b_used && diceState.die_a + diceState.die_b === move.steps) {
+      diceState.sum_used = true
+      diceState.die_a_used = true
+      diceState.die_b_used = true
+    }
+  }
+
+  turnState.dice_1 = diceState.die_a
+  turnState.dice_2 = diceState.die_b
+  turnState.die1_used = diceState.die_a_used
+  turnState.die2_used = diceState.die_b_used
+  if (!turnState.has_moved_token) {
+    turnState.has_moved_token = true
+    turnState.first_moved_token_id = move.token_id
+  }
+}
+
+const applyOptimisticMoveToSnapshot = (
+  snapshot: DojoGameSnapshot,
+  activePlayerAddress: string,
+  move: UiLegalMove,
+): DojoGameSnapshot => {
+  const nextSnapshot = cloneSnapshot(snapshot)
+  const activePlayerKey = normalizeAddressForCompare(activePlayerAddress)
+  const player = nextSnapshot.players.find(
+    (entry) => normalizeAddressForCompare(entry.player) === activePlayerKey,
+  )
+  const token = nextSnapshot.tokens.find(
+    (entry) => normalizeAddressForCompare(entry.player) === activePlayerKey && entry.token_id === move.token_id,
+  )
+
+  if (!player || !token) {
+    return nextSnapshot
+  }
+
+  const wasInBase = token.token_state === 0
+  const wasInCenter = token.token_state === 3
+  applyOptimisticTargetSquare(token, move.target_square_ref)
+
+  if (wasInBase && token.token_state !== 0) {
+    player.tokens_in_base = Math.max(0, player.tokens_in_base - 1)
+  }
+
+  if (!wasInCenter && token.token_state === 3) {
+    player.tokens_in_goal += 1
+  }
+
+  if (nextSnapshot.dice_state && nextSnapshot.turn_state) {
+    consumeOptimisticDice(nextSnapshot.dice_state, nextSnapshot.turn_state, move)
+  }
+
+  return nextSnapshot
+}
+
+const applyOptimisticEndTurnToSnapshot = (snapshot: DojoGameSnapshot): DojoGameSnapshot => {
+  const nextSnapshot = cloneSnapshot(snapshot)
+  const activePlayers = nextSnapshot.players.filter((player) => player.is_active).sort((left, right) => left.seat - right.seat)
+
+  if (!nextSnapshot.game || !nextSnapshot.turn_state || activePlayers.length === 0) {
+    return nextSnapshot
+  }
+
+  const currentIndex = activePlayers.findIndex(
+    (player) => normalizeAddressForCompare(player.player) === normalizeAddressForCompare(nextSnapshot.game?.active_player),
+  )
+  const nextPlayer = activePlayers[(currentIndex + 1 + activePlayers.length) % activePlayers.length]
+
+  nextSnapshot.game.turn_index += 1
+  nextSnapshot.game.active_player = nextPlayer.player
+  nextSnapshot.turn_state.phase = 0
+  nextSnapshot.turn_state.active_player = nextPlayer.player
+  nextSnapshot.turn_state.dice_1 = 0
+  nextSnapshot.turn_state.dice_2 = 0
+  nextSnapshot.turn_state.die1_used = false
+  nextSnapshot.turn_state.die2_used = false
+  nextSnapshot.turn_state.question_id = 0n
+  nextSnapshot.turn_state.question_answered = false
+  nextSnapshot.turn_state.question_correct = false
+  nextSnapshot.turn_state.has_moved_token = false
+  nextSnapshot.turn_state.first_moved_token_id = 0
+  nextSnapshot.pending_question = null
+
+  if (nextSnapshot.dice_state) {
+    nextSnapshot.dice_state.die_a = 0
+    nextSnapshot.dice_state.die_b = 0
+    nextSnapshot.dice_state.die_a_used = false
+    nextSnapshot.dice_state.die_b_used = false
+    nextSnapshot.dice_state.sum_used = false
+  }
+
+  return nextSnapshot
+}
+
+const stabilizeSnapshot = (
+  nextSnapshot: DojoGameSnapshot,
+  previousSnapshot: DojoGameSnapshot | null,
+): DojoGameSnapshot => {
+  if (!previousSnapshot) {
+    return nextSnapshot
+  }
+
+  return {
+    ...nextSnapshot,
+    game: nextSnapshot.game ?? previousSnapshot.game,
+    turn_state: nextSnapshot.turn_state ?? previousSnapshot.turn_state,
+    dice_state: nextSnapshot.dice_state ?? previousSnapshot.dice_state,
+    runtime_config: nextSnapshot.runtime_config ?? previousSnapshot.runtime_config,
+    pending_question: nextSnapshot.pending_question ?? previousSnapshot.pending_question,
+    players: nextSnapshot.players.length > 0 ? nextSnapshot.players : previousSnapshot.players,
+    player_customizations:
+      nextSnapshot.player_customizations.length > 0
+        ? nextSnapshot.player_customizations
+        : previousSnapshot.player_customizations,
+    tokens: nextSnapshot.tokens.length > 0 ? nextSnapshot.tokens : previousSnapshot.tokens,
+    bonus_states: nextSnapshot.bonus_states.length > 0 ? nextSnapshot.bonus_states : previousSnapshot.bonus_states,
+    safe_track_square_refs:
+      nextSnapshot.safe_track_square_refs.length > 0
+        ? nextSnapshot.safe_track_square_refs
+        : previousSnapshot.safe_track_square_refs,
+  }
+}
+
+const buildOptimisticMovePath = (params: {
+  color: PlayerColor
+  currentUiPosition: number
+  move: UiLegalMove
+  token: DojoTokenModel
+}): number[] => {
+  if (params.token.token_state === 0) {
+    return params.move.targetUiPosition > 0 ? [params.move.targetUiPosition] : []
+  }
+
+  if (params.token.token_state === 2) {
+    const lane = finalLaneByColor[params.color]
+    const laneIndex = lane.indexOf(params.currentUiPosition)
+
+    if (laneIndex < 0) {
+      return []
+    }
+
+    return lane.slice(laneIndex + 1, laneIndex + 1 + params.move.steps)
+  }
+
+  if (params.token.token_state !== 1 || !isTrackPosition(params.currentUiPosition)) {
+    return []
+  }
+
+  const path: number[] = []
+  let current = params.currentUiPosition
+  let remaining = params.move.steps
+  let trackStepsDelta = 0
+
+  while (remaining > 0) {
+    const canEnterLane =
+      current === entrySquareByColor[params.color] &&
+      params.token.steps_total + trackStepsDelta >= stepsToLaneEntryByColor[params.color]
+
+    if (canEnterLane) {
+      const lanePath = finalLaneByColor[params.color].slice(0, remaining)
+      path.push(...lanePath)
+      break
+    }
+
+    const next = wrapPosition(current + 1)
+    path.push(next)
+    current = next
+    trackStepsDelta += 1
+    remaining -= 1
+  }
+
+  return path
+}
+
 export function MatchOnchainView() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   const { account } = useAccount()
-  const { address, isConnected, username } = useControllerWallet()
+  const { address, username } = useControllerWallet()
   const language = useAppSettingsStore((state) => state.language)
-  const selectedBoardThemeId = useAppSettingsStore((state) => state.selectedBoardThemeId)
-  const selectedDiceSkinId = useAppSettingsStore((state) => state.selectedDiceSkinId)
   const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
-  const selectedTokenSkinId = useAppSettingsStore((state) => state.selectedTokenSkinId)
   const selectedSkinSrc = getPlayerSkinSrc(selectedSkinId)
-  const ui = onchainCopyByLanguage[language]
-  const phaseLabel = phaseLabelByLanguage[language]
-  const gameStatusLabel = gameStatusLabelByLanguage[language]
-  const moveTypeLabel = moveTypeLabelByLanguage[language]
-  const boardTheme = getBoardThemeDefinition(selectedBoardThemeId)
-  const surfacePalette = getBoardThemeSurfacePalette(selectedBoardThemeId)
 
   const [gameIdInput, setGameIdInput] = useState(searchParams.get('gameId') || '')
   const [tokenIdInput, setTokenIdInput] = useState(searchParams.get('tokenId') || '')
   const [snapshot, setSnapshot] = useState<DojoGameSnapshot | null>(null)
   const [linkedTokenGameId, setLinkedTokenGameId] = useState<bigint | null>(null)
-  const [linkedTokenStatus, setLinkedTokenStatus] = useState<null | string>(null)
-  const [isResolvingTokenLink, setIsResolvingTokenLink] = useState(false)
+  const [, setLinkedTokenStatus] = useState<null | string>(null)
+  const [, setIsResolvingTokenLink] = useState(false)
   const [isLoadingSnapshot, setIsLoadingSnapshot] = useState(false)
   const [snapshotError, setSnapshotError] = useState<null | string>(null)
   const [legalMoves, setLegalMoves] = useState<LegalMoveApi[]>([])
   const [selectedTokenId, setSelectedTokenId] = useState<null | string>(null)
+  const [expandedTokenId, setExpandedTokenId] = useState<null | string>(null)
   const [isLogOpen, setIsLogOpen] = useState(false)
   const [logEvents, setLogEvents] = useState<MatchLogEvent[]>([])
   const [txPendingLabel, setTxPendingLabel] = useState<null | string>(null)
-  const [txHash, setTxHash] = useState<null | string>(null)
+  const [, setTxHash] = useState<null | string>(null)
   const [actionError, setActionError] = useState<null | string>(null)
   const [isAwaitingOnchainSync, setIsAwaitingOnchainSync] = useState(false)
-  const [hydratedQuestionError, setHydratedQuestionError] = useState<null | string>(null)
-  const [selectedAnswerOption, setSelectedAnswerOption] = useState<null | number>(null)
+  const [hudDiceRolling, setHudDiceRolling] = useState(false)
+  const [selectedAnswerIndex, setSelectedAnswerIndex] = useState<null | number>(null)
+  const [questionSecondsLeft, setQuestionSecondsLeft] = useState(0)
+  const [resolvedAnswerDisplay, setResolvedAnswerDisplay] = useState<null | ResolvedAnswerDisplay>(null)
+  const [rollNotice, setRollNotice] = useState<null | string>(null)
+  const [animatedTokenIds, setAnimatingTokenIds] = useState<string[]>([])
+  const [animatedTokenPositions, setAnimatedTokenPositions] = useState<Record<string, number>>({})
+  const [hudDicePreview, setHudDicePreview] = useState<{ dieA: DiceFaceValue; dieB: DiceFaceValue }>({
+    dieA: 1,
+    dieB: 1,
+  })
 
   const refreshDebounceRef = useRef<null | number>(null)
+  const hudRollIntervalRef = useRef<null | number>(null)
+  const hudRollTimeoutRef = useRef<null | number>(null)
   const playersByAddressRef = useRef<Record<string, string>>({})
   const colorBySeatRef = useRef<Record<number, PlayerColor>>(seatColorMap)
+  const pendingQuestionRef = useRef<ReturnType<typeof getHydratedQuestion>>(null)
+  const activePlayerCardRef = useRef<MatchPlayer | undefined>(undefined)
+  const answerOverlayTimeoutRef = useRef<null | number>(null)
+  const rollNoticeTimeoutRef = useRef<null | number>(null)
 
   useEffect(() => {
     setGameIdInput(searchParams.get('gameId') || '')
@@ -464,23 +818,6 @@ export function MatchOnchainView() {
   const requestedGameId = useMemo(() => parseBigNumberish(gameIdInput), [gameIdInput])
   const activeTokenId = useMemo(() => parseBigNumberish(tokenIdInput), [tokenIdInput])
   const activeGameId = requestedGameId ?? linkedTokenGameId
-
-  const applySearchParams = useCallback(
-    (next: { gameId?: string; tokenId?: string }) => {
-      const params = new URLSearchParams()
-
-      if (next.gameId && next.gameId.trim().length > 0) {
-        params.set('gameId', next.gameId.trim())
-      }
-
-      if (next.tokenId && next.tokenId.trim().length > 0) {
-        params.set('tokenId', next.tokenId.trim())
-      }
-
-      setSearchParams(params)
-    },
-    [setSearchParams],
-  )
 
   useEffect(() => {
     if (!isDojoConfigured || activeTokenId === null) {
@@ -504,7 +841,7 @@ export function MatchOnchainView() {
 
         if (!link) {
           setLinkedTokenGameId(null)
-          setLinkedTokenStatus(language === 'es' ? 'Token sin partida vinculada todavia.' : 'Token is not linked to a match yet.')
+          setLinkedTokenStatus('Token sin partida vinculada todavia.')
           return
         }
 
@@ -515,7 +852,7 @@ export function MatchOnchainView() {
       } catch (error) {
         if (!cancelled) {
           setLinkedTokenGameId(null)
-          setLinkedTokenStatus(mapErrorToUserMessage(error, language))
+          setLinkedTokenStatus(mapErrorToUserMessage(error))
         }
       } finally {
         if (!cancelled) {
@@ -529,81 +866,7 @@ export function MatchOnchainView() {
     return () => {
       cancelled = true
     }
-  }, [activeTokenId, language])
-
-  useEffect(() => {
-    if (!snapshot?.pending_question) {
-      setHydratedQuestionError(null)
-      setSelectedAnswerOption(null)
-      return
-    }
-
-    const pendingQuestion = snapshot.pending_question
-    setSelectedAnswerOption(null)
-
-    let cancelled = false
-
-    const hydrateQuestion = async () => {
-      try {
-        const questionSet = await readQuestionSet(pendingQuestion.set_id)
-
-        if (cancelled) {
-          return
-        }
-
-        if (!questionSet || !questionSet.enabled) {
-          setHydratedQuestionError(language === 'es' ? 'QuestionSet on-chain no disponible o deshabilitado.' : 'On-chain QuestionSet unavailable or disabled.')
-          return
-        }
-
-        if (questionSet.question_count !== LOCAL_QUESTION_SET_COUNT) {
-          setHydratedQuestionError(
-            language === 'es'
-              ? `QuestionSet local desalineado. Esperado count ${LOCAL_QUESTION_SET_COUNT}, on-chain ${questionSet.question_count}.`
-              : `Local QuestionSet is out of sync. Expected count ${LOCAL_QUESTION_SET_COUNT}, on-chain ${questionSet.question_count}.`,
-          )
-          return
-        }
-
-        if (normalizeAddressForCompare(questionSet.merkle_root) !== normalizeAddressForCompare(LOCAL_QUESTION_SET_ROOT)) {
-          setHydratedQuestionError(
-            language === 'es'
-              ? `Merkle root local desalineado. Usa ${LOCAL_QUESTION_SET_ROOT} para el set_id ${LOCAL_QUESTION_SET_ID.toString()}.`
-              : `Local Merkle root is out of sync. Use ${LOCAL_QUESTION_SET_ROOT} for set_id ${LOCAL_QUESTION_SET_ID.toString()}.`,
-          )
-          return
-        }
-
-        const hydrated = getHydratedQuestion(
-          pendingQuestion.question_index,
-          pendingQuestion.category,
-          pendingQuestion.difficulty,
-          language,
-        )
-
-        if (!hydrated) {
-          setHydratedQuestionError(
-            language === 'es'
-              ? `No existe pregunta local para index ${pendingQuestion.question_index}, categoria ${pendingQuestion.category}, dificultad ${pendingQuestion.difficulty}.`
-              : `No local question exists for index ${pendingQuestion.question_index}, category ${pendingQuestion.category}, difficulty ${pendingQuestion.difficulty}.`,
-          )
-          return
-        }
-
-        setHydratedQuestionError(null)
-      } catch (error) {
-        if (!cancelled) {
-          setHydratedQuestionError(mapErrorToUserMessage(error, language))
-        }
-      }
-    }
-
-    void hydrateQuestion()
-
-    return () => {
-      cancelled = true
-    }
-  }, [language, snapshot?.pending_question])
+  }, [activeTokenId])
 
   const refreshSnapshot = useCallback(async () => {
     if (!activeGameId || !isDojoConfigured) {
@@ -612,13 +875,15 @@ export function MatchOnchainView() {
     }
 
     try {
-      const nextSnapshot = await readDojoGameSnapshot(activeGameId)
-      setSnapshot(nextSnapshot)
+      const nextSnapshot = await readDojoGameSnapshot(activeGameId, {
+        includePlayerCustomizations: true,
+      })
+      setSnapshot((current) => stabilizeSnapshot(nextSnapshot, current))
       setSnapshotError(null)
     } catch (error) {
-      setSnapshotError(mapErrorToUserMessage(error, language))
+      setSnapshotError(mapErrorToUserMessage(error))
     }
-  }, [activeGameId, language])
+  }, [activeGameId])
 
   const scheduleSnapshotRefresh = useCallback(() => {
     if (refreshDebounceRef.current !== null) {
@@ -636,29 +901,49 @@ export function MatchOnchainView() {
   const normalizedActivePlayerAddress = normalizeAddressForCompare(activePlayerAddress)
   const isMyTurn = Boolean(address) && normalizedWalletAddress === normalizedActivePlayerAddress
 
+  const { getUsername } = useControllerUsernames({
+    addresses: (snapshot?.players ?? []).map((player) => player.player),
+    selfAddress: address,
+    selfUsername: username,
+  })
+
   const players = useMemo<MatchPlayer[]>(() => {
     if (!snapshot) {
       return []
     }
 
+    const customizationByPlayer = new Map(
+      snapshot.player_customizations.map((customization) => [
+        normalizeAddressForCompare(customization.player),
+        customization,
+      ]),
+    )
+
     return snapshot.players.map((player) => {
       const color = seatColorMap[player.color] || seatColorMap[player.seat] || 'green'
       const normalizedPlayerAddress = normalizeAddressForCompare(player.player)
       const isSelf = normalizedPlayerAddress === normalizedWalletAddress
-      const baseName = isSelf ? username || 'Tu jugador' : shortenAddress(player.player)
+      const resolvedName = getUsername(player.player)
+      const baseName = resolvedName || (isSelf ? username || 'Tu jugador' : shortenAddress(player.player))
+      const customization = customizationByPlayer.get(normalizedPlayerAddress)
+      const avatarSkinId = customization ? playerSkinIdFromIndex(customization.avatar_skin_id) : null
+      const visualSkinId = customization ? tokenSkinIdFromIndex(customization.token_skin_id) : undefined
 
       return {
         id: player.player,
         name: baseName,
         color,
-        avatar: isSelf && selectedSkinSrc ? selectedSkinSrc : color.slice(0, 2).toUpperCase(),
-        visualSkinId: isSelf ? selectedTokenSkinId : undefined,
+        avatar:
+          isSelf && selectedSkinSrc
+            ? selectedSkinSrc
+            : getPlayerSkinSrc(avatarSkinId) || color.slice(0, 2).toUpperCase(),
+        visualSkinId,
         tokensInBase: player.tokens_in_base,
         tokensInGoal: player.tokens_in_goal,
         isHost: player.is_host,
       }
     })
-  }, [snapshot, normalizedWalletAddress, selectedSkinSrc, selectedTokenSkinId, username])
+  }, [getUsername, snapshot, normalizedWalletAddress, selectedSkinSrc, username])
 
   const playersByAddress = useMemo(() => {
     return players.reduce<Record<string, MatchPlayer>>((acc, player) => {
@@ -667,25 +952,20 @@ export function MatchOnchainView() {
     }, {})
   }, [players])
 
-  const visualSkinByColor = useMemo(() => {
-    return players.reduce<Partial<Record<PlayerColor, TokenSkinId>>>((acc, player) => {
-      if (player.visualSkinId) {
-        acc[player.color] = player.visualSkinId
-      }
-
+  const playersByColor = useMemo(() => {
+    return players.reduce<Partial<Record<PlayerColor, MatchPlayer>>>((acc, player) => {
+      acc[player.color] = player
       return acc
     }, {})
   }, [players])
 
-  const diceSkinByPlayerId = useMemo(() => {
-    return assignDistinctDiceSkins(
-      players.map((player) => ({
-        playerId: player.id,
-        color: player.color,
-        preferredSkinId: normalizeAddressForCompare(player.id) === normalizedWalletAddress ? selectedDiceSkinId : undefined,
-      })),
-    )
-  }, [normalizedWalletAddress, players, selectedDiceSkinId])
+  const activePlayerCard = useMemo(() => {
+    if (!activePlayerAddress) {
+      return undefined
+    }
+
+    return playersByAddress[normalizeAddressForCompare(activePlayerAddress)]
+  }, [activePlayerAddress, playersByAddress])
 
   useEffect(() => {
     playersByAddressRef.current = Object.entries(playersByAddress).reduce<Record<string, string>>((acc, [key, value]) => {
@@ -693,6 +973,10 @@ export function MatchOnchainView() {
       return acc
     }, {})
   }, [playersByAddress])
+
+  useEffect(() => {
+    activePlayerCardRef.current = activePlayerCard
+  }, [activePlayerCard])
 
   const colorBySeat = useMemo(() => {
     return snapshot?.players.reduce<Record<number, PlayerColor>>((acc, player) => {
@@ -721,7 +1005,7 @@ export function MatchOnchainView() {
       const ownerKey = normalizeAddressForCompare(token.player)
       const seat = seatByAddress[ownerKey] ?? 0
       const color = colorBySeat[seat] || 'green'
-      const isSelfToken = ownerKey === normalizedWalletAddress
+      const owner = playersByAddress[ownerKey]
 
       let position = 0
 
@@ -738,37 +1022,30 @@ export function MatchOnchainView() {
         label: `Ficha ${token.token_id + 1}`,
         ownerId: token.player,
         color,
-        cosmeticId: isSelfToken ? selectedTokenSkinId : undefined,
-        position,
+        cosmeticId: owner?.visualSkinId,
+        position: animatedTokenPositions[tokenUiId(token.player, token.token_id)] ?? position,
       }
     })
-  }, [snapshot, seatByAddress, colorBySeat, normalizedWalletAddress, selectedTokenSkinId])
-
-  const activeBonusState = useMemo(() => {
-    if (!snapshot || !activePlayerAddress) {
-      return null
-    }
-
-    const activePlayerKey = normalizeAddressForCompare(activePlayerAddress)
-
-    return (
-      snapshot.bonus_states.find(
-        (bonusState) => normalizeAddressForCompare(bonusState.player) === activePlayerKey,
-      ) || null
-    )
-  }, [snapshot, activePlayerAddress])
+  }, [animatedTokenPositions, snapshot, seatByAddress, colorBySeat, playersByAddress])
 
   const blockedSquares = useMemo(() => {
-    if (!snapshot) {
-      return []
-    }
+    const bySquare = uiTokens.reduce<Record<number, MatchToken[]>>((acc, token) => {
+      if (token.position <= 0) {
+        return acc
+      }
 
-    return snapshot.occupancies
-      .filter((entry) => entry.has_blockade)
-      .map((entry) => mapSquareRefToUiPosition(entry.square_ref, colorBySeat))
-      .filter((square): square is number => square > 0)
-      .filter((square, index, collection) => collection.indexOf(square) === index)
-  }, [snapshot, colorBySeat])
+      if (!acc[token.position]) {
+        acc[token.position] = []
+      }
+
+      acc[token.position].push(token)
+      return acc
+    }, {})
+
+    return Object.values(bySquare)
+      .filter((group) => group.length === 2 && group[0].color === group[1].color)
+      .map((group) => group[0].position)
+  }, [uiTokens])
 
   const safeSquares = useMemo(() => {
     const source = snapshot?.safe_track_square_refs.length
@@ -777,6 +1054,91 @@ export function MatchOnchainView() {
 
     return source.map((trackSquareRef) => mapTrackSquareRefToUi(trackSquareRef))
   }, [snapshot?.safe_track_square_refs])
+
+  const activePendingQuestion = useMemo(() => {
+    if (!snapshot?.pending_question || snapshot.turn_state?.phase !== 1) {
+      return null
+    }
+
+    const hydrated = getHydratedQuestion(
+      snapshot.pending_question.question_index,
+      snapshot.pending_question.category,
+      snapshot.pending_question.difficulty,
+      language,
+    )
+
+    if (!hydrated) {
+      return null
+    }
+
+    return {
+      ...hydrated,
+      id: `q-${snapshot.turn_state?.question_id.toString() || snapshot.pending_question.question_index}`,
+    }
+  }, [language, snapshot?.pending_question, snapshot?.turn_state?.phase, snapshot?.turn_state?.question_id])
+
+  useEffect(() => {
+    pendingQuestionRef.current = activePendingQuestion
+  }, [activePendingQuestion])
+
+  const modalQuestion = useMemo(() => {
+    if (!activePendingQuestion) {
+      return null
+    }
+
+    return {
+      category: language === 'es' ? 'Pregunta' : 'Question',
+      correctIndex: activePendingQuestion.correctOption,
+      difficulty: questionDifficultyByLevel[snapshot?.pending_question?.difficulty ?? 0] || 'easy',
+      icon: '❓',
+      id: activePendingQuestion.id,
+      options: activePendingQuestion.displayOptions,
+      prompt: activePendingQuestion.displayPrompt,
+      theme: 'blue' as const,
+    }
+  }, [activePendingQuestion, language, snapshot?.pending_question?.difficulty])
+
+  useEffect(() => {
+    if (!snapshot?.turn_state || snapshot.turn_state.phase !== 1) {
+      setQuestionSecondsLeft(0)
+      return
+    }
+
+    const syncSecondsLeft = () => {
+      const deadlineSeconds = Number(snapshot.turn_state?.deadline ?? 0n)
+      const nowSeconds = Math.floor(Date.now() / 1000)
+      setQuestionSecondsLeft(Math.max(0, deadlineSeconds - nowSeconds))
+    }
+
+    syncSecondsLeft()
+    const intervalId = window.setInterval(syncSecondsLeft, 250)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [snapshot?.turn_state])
+
+  useEffect(() => {
+    setSelectedAnswerIndex(null)
+  }, [snapshot?.turn_state?.question_id, snapshot?.turn_state?.phase])
+
+  useEffect(() => {
+    setSelectedTokenId(null)
+    setExpandedTokenId(null)
+    setAnimatingTokenIds([])
+    setAnimatedTokenPositions({})
+  }, [snapshot?.turn_state?.phase, snapshot?.turn_state?.question_id, snapshot?.turn_state?.deadline])
+
+  useEffect(() => {
+    return () => {
+      if (answerOverlayTimeoutRef.current !== null) {
+        window.clearTimeout(answerOverlayTimeoutRef.current)
+      }
+      if (rollNoticeTimeoutRef.current !== null) {
+        window.clearTimeout(rollNoticeTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const playerLabelFromAddress = useCallback((playerAddress: string) => {
     if (!playerAddress) {
@@ -789,11 +1151,56 @@ export function MatchOnchainView() {
 
   const onTrackedEvent = useCallback(
     (event: DojoTrackedEvent) => {
-      const nextLog = trackEventToLog(event, playerLabelFromAddress, colorBySeatRef.current, language)
+      const nextLog = trackEventToLog(event, playerLabelFromAddress, colorBySeatRef.current)
+
+      if (event.type === 'DiceRolled') {
+        const rollerName = activePlayerCardRef.current?.name || 'Jugador'
+        setRollNotice(`${rollerName} tiro ${event.payload.dice_1} y ${event.payload.dice_2}.`)
+
+        if (rollNoticeTimeoutRef.current !== null) {
+          window.clearTimeout(rollNoticeTimeoutRef.current)
+        }
+
+        rollNoticeTimeoutRef.current = window.setTimeout(() => {
+          setRollNotice(null)
+          rollNoticeTimeoutRef.current = null
+        }, 2200)
+      }
+
+      if (event.type === 'AnswerRevealed' && pendingQuestionRef.current) {
+        const question = pendingQuestionRef.current
+        const answerState = event.payload.correct ? 'correct' : 'incorrect'
+        const player = activePlayerCardRef.current
+
+        setResolvedAnswerDisplay({
+          answerState,
+          player,
+          question: {
+            category: language === 'es' ? 'Pregunta' : 'Question',
+            correctIndex: question.correctOption,
+            difficulty: questionDifficultyByLevel[snapshot?.pending_question?.difficulty ?? 0] || 'easy',
+            icon: '❓',
+            id: `resolved-${event.payload.question_id.toString()}`,
+            options: question.displayOptions,
+            prompt: question.displayPrompt,
+            theme: 'blue',
+          },
+          selectedOption: event.payload.selected_option,
+        })
+
+        if (answerOverlayTimeoutRef.current !== null) {
+          window.clearTimeout(answerOverlayTimeoutRef.current)
+        }
+
+        answerOverlayTimeoutRef.current = window.setTimeout(() => {
+          setResolvedAnswerDisplay(null)
+          answerOverlayTimeoutRef.current = null
+        }, 1800)
+      }
 
       setLogEvents((current) => [nextLog, ...current].slice(0, 120))
     },
-    [language, playerLabelFromAddress],
+    [language, playerLabelFromAddress, snapshot?.pending_question?.difficulty],
   )
 
   useEffect(() => {
@@ -811,13 +1218,15 @@ export function MatchOnchainView() {
       setSnapshotError(null)
 
       try {
-        const initialSnapshot = await readDojoGameSnapshot(activeGameId)
+        const initialSnapshot = await readDojoGameSnapshot(activeGameId, {
+          includePlayerCustomizations: true,
+        })
 
         if (cancelled) {
           return
         }
 
-        setSnapshot(initialSnapshot)
+        setSnapshot((current) => stabilizeSnapshot(initialSnapshot, current))
 
         unsubscribe = await subscribeDojoGame({
           gameId: activeGameId,
@@ -827,7 +1236,7 @@ export function MatchOnchainView() {
         })
       } catch (error) {
         if (!cancelled) {
-          setSnapshotError(mapErrorToUserMessage(error, language))
+          setSnapshotError(mapErrorToUserMessage(error))
         }
       } finally {
         if (!cancelled) {
@@ -845,6 +1254,16 @@ export function MatchOnchainView() {
       if (refreshDebounceRef.current !== null) {
         window.clearTimeout(refreshDebounceRef.current)
         refreshDebounceRef.current = null
+      }
+
+      if (hudRollIntervalRef.current !== null) {
+        window.clearInterval(hudRollIntervalRef.current)
+        hudRollIntervalRef.current = null
+      }
+
+      if (hudRollTimeoutRef.current !== null) {
+        window.clearTimeout(hudRollTimeoutRef.current)
+        hudRollTimeoutRef.current = null
       }
     }
   }, [activeGameId, scheduleSnapshotRefresh, onTrackedEvent])
@@ -869,7 +1288,7 @@ export function MatchOnchainView() {
       } catch (error) {
         if (!cancelled) {
           setLegalMoves([])
-          setActionError(mapErrorToUserMessage(error, language))
+          setActionError(mapErrorToUserMessage(error))
         }
       }
     }
@@ -879,7 +1298,7 @@ export function MatchOnchainView() {
     return () => {
       cancelled = true
     }
-  }, [activeGameId, language, snapshot])
+  }, [activeGameId, snapshot])
 
   const uiLegalMoves = useMemo<UiLegalMove[]>(() => {
     if (!activePlayerAddress) {
@@ -941,40 +1360,69 @@ export function MatchOnchainView() {
     }, {})
   }, [uiLegalMoves])
 
-  const hydratedQuestion = useMemo(() => {
-    if (!snapshot?.pending_question || hydratedQuestionError) {
-      return null
-    }
+  const tokenChoiceMap = useMemo(() => {
+    return uiLegalMoves.reduce<Record<string, UiLegalMove>>((acc, move) => {
+      acc[move.id] = move
+      return acc
+    }, {})
+  }, [uiLegalMoves])
 
-    return getHydratedQuestion(
-      snapshot.pending_question.question_index,
-      snapshot.pending_question.category,
-      snapshot.pending_question.difficulty,
-      language,
+  const tokenDiceChoices = useMemo(() => {
+    return Object.entries(movesByToken).reduce<Record<string, Array<{ id: string; label: string; value: number }>>>(
+      (acc, [tokenId, moves]) => {
+        acc[tokenId] = moves.map((move) => ({
+          id: move.id,
+          label: moveTypeLabel[move.move_type as MoveType] || 'MOVE',
+          value: move.steps,
+        }))
+        return acc
+      },
+      {},
     )
-  }, [hydratedQuestionError, language, snapshot?.pending_question])
+  }, [movesByToken])
 
-  const activePlayerLabel = playerLabelFromAddress(activePlayerAddress)
-  const winnerLabel = playerLabelFromAddress(snapshot?.game?.winner || '')
-  const activeDiceSkinId = useMemo<DiceSkinId>(() => {
-    if (!activePlayerAddress) {
-      return selectedDiceSkinId
-    }
+  const animateTokenPath = useCallback((tokenId: string, path: number[]) => {
+    return new Promise<void>((resolve) => {
+      if (path.length === 0) {
+        resolve()
+        return
+      }
 
-    const activePlayerKey = normalizeAddressForCompare(activePlayerAddress)
-    const activePlayer = playersByAddress[activePlayerKey]
+      setAnimatingTokenIds([tokenId])
+      let index = 0
 
-    if (!activePlayer) {
-      return selectedDiceSkinId
-    }
+      const stepForward = () => {
+        const nextPosition = path[index]
+        setAnimatedTokenPositions((current) => ({ ...current, [tokenId]: nextPosition }))
+        index += 1
 
-    return diceSkinByPlayerId[activePlayer.id] || selectedDiceSkinId
-  }, [activePlayerAddress, diceSkinByPlayerId, playersByAddress, selectedDiceSkinId])
+        if (index >= path.length) {
+          window.setTimeout(() => {
+            setAnimatingTokenIds([])
+            resolve()
+          }, 140)
+          return
+        }
+
+        window.setTimeout(stepForward, TOKEN_STEP_ANIMATION_MS)
+      }
+
+      stepForward()
+    })
+  }, [])
 
   const runTransaction = useCallback(
-    async (label: string, action: () => Promise<string>) => {
+    async (
+      label: string,
+      action: () => Promise<string>,
+      options?: {
+        onConfirmed?: () => Promise<void> | void
+        onOptimistic?: () => void
+        onRollback?: () => void
+      },
+    ) => {
       if (!account || !activeGameId) {
-        setActionError(ui.connectWallet)
+        setActionError('Conecta Controller Wallet para ejecutar transacciones on-chain.')
         return
       }
 
@@ -982,12 +1430,14 @@ export function MatchOnchainView() {
       setTxPendingLabel(label)
       setTxHash(null)
       setIsAwaitingOnchainSync(true)
+      options?.onOptimistic?.()
 
       try {
         const submittedHash = await action()
         setTxHash(submittedHash)
 
         await account.waitForTransaction(submittedHash)
+        await options?.onConfirmed?.()
         await refreshSnapshot()
 
         if (activeTokenId !== null) {
@@ -995,22 +1445,95 @@ export function MatchOnchainView() {
           setLinkedTokenGameId(link?.game_id ?? null)
           setLinkedTokenStatus(
             link
-              ? language === 'es'
-                ? `Token vinculado a game_id ${link.game_id.toString()} · score ${link.score.toString()} · status ${link.lifecycle_status}`
-                : `Token linked to game_id ${link.game_id.toString()} · score ${link.score.toString()} · status ${link.lifecycle_status}`
-              : language === 'es'
-                ? 'Token sin partida vinculada todavia.'
-                : 'Token is not linked to a match yet.',
+              ? `Token vinculado a game_id ${link.game_id.toString()} · score ${link.score.toString()} · status ${link.lifecycle_status}`
+              : 'Token sin partida vinculada todavia.',
           )
         }
       } catch (error) {
-        setActionError(mapErrorToUserMessage(error, language))
+        options?.onRollback?.()
+        setActionError(mapErrorToUserMessage(error))
       } finally {
         setTxPendingLabel(null)
         setIsAwaitingOnchainSync(false)
       }
     },
-    [account, activeGameId, activeTokenId, language, refreshSnapshot, ui.connectWallet],
+    [account, activeGameId, activeTokenId, refreshSnapshot],
+  )
+
+  const onApplyMove = useCallback(
+    (move: UiLegalMove) => {
+      if (!account || !activeGameId || !snapshot) {
+        return
+      }
+
+      const previousSnapshot = cloneSnapshot(snapshot)
+      const previousLegalMoves = [...legalMoves]
+      const movingToken = snapshot.tokens.find(
+        (entry) =>
+          normalizeAddressForCompare(entry.player) === normalizeAddressForCompare(activePlayerAddress) &&
+          entry.token_id === move.token_id,
+      )
+      const currentUiToken = uiTokens.find((token) => token.id === move.tokenUiId)
+      const currentUiPosition = currentUiToken?.position ?? 0
+      const currentColor = currentUiToken?.color ?? 'green'
+
+      void runTransaction(
+        'Applying move',
+        () =>
+          applyMove(account, activeGameId, {
+            moveType: move.move_type,
+            tokenId: move.token_id,
+            steps: move.steps,
+          }),
+        {
+          onOptimistic: () => {
+            setExpandedTokenId(null)
+            setSelectedTokenId(move.tokenUiId)
+
+            void (async () => {
+              if (movingToken) {
+                const path = buildOptimisticMovePath({
+                  color: currentColor,
+                  currentUiPosition,
+                  move,
+                  token: movingToken,
+                })
+                await animateTokenPath(move.tokenUiId, path)
+              }
+
+              setSnapshot((current) =>
+                current ? applyOptimisticMoveToSnapshot(current, activePlayerAddress, move) : current,
+              )
+              setAnimatedTokenPositions((current) => {
+                if (!(move.tokenUiId in current)) {
+                  return current
+                }
+
+                const next = { ...current }
+                delete next[move.tokenUiId]
+                return next
+              })
+            })()
+          },
+          onConfirmed: async () => {
+            const nextMoves = await computeLegalMoves(activeGameId)
+            setLegalMoves(nextMoves)
+            if (nextMoves.length === 0) {
+              setSelectedTokenId(null)
+            }
+          },
+          onRollback: () => {
+            setSnapshot(previousSnapshot)
+            setLegalMoves(previousLegalMoves)
+            setSelectedTokenId(null)
+            setExpandedTokenId(null)
+            setAnimatingTokenIds([])
+            setAnimatedTokenPositions({})
+          },
+        },
+      )
+    },
+    [account, activeGameId, activePlayerAddress, animateTokenPath, legalMoves, runTransaction, snapshot, uiTokens],
   )
 
   const onRoll = useCallback(() => {
@@ -1018,485 +1541,368 @@ export function MatchOnchainView() {
       return
     }
 
-    void runTransaction(ui.rollAndQuestion, () => rollTwoDiceAndDrawQuestion(account, activeGameId))
-  }, [account, activeGameId, runTransaction, ui.rollAndQuestion])
+    void runTransaction('Roll + question (VRF)', () => rollTwoDiceAndDrawQuestion(account, activeGameId))
+  }, [account, activeGameId, runTransaction])
 
-  const onSubmitAnswer = useCallback(() => {
-    if (!account || !activeGameId || !snapshot?.turn_state || !snapshot.pending_question) {
-      setActionError(ui.noPendingQuestion)
-      return
-    }
-
-    if (!hydratedQuestion) {
-      setActionError(hydratedQuestionError || ui.currentQuestionUnavailable)
-      return
-    }
-
-    if (selectedAnswerOption === null) {
-      setActionError(ui.selectAnswer)
-      return
-    }
-
-    const turnState = snapshot.turn_state
-    const pendingQuestion = snapshot.pending_question
-
-    void runTransaction(ui.submitAnswer, () =>
-      submitAnswer(account, activeGameId, {
-        questionId: turnState.question_id,
-        questionIndex: pendingQuestion.question_index,
-        category: pendingQuestion.category,
-        difficulty: pendingQuestion.difficulty,
-        correctOption: hydratedQuestion.correctOption,
-        selectedOption: selectedAnswerOption,
-        merkleProof: hydratedQuestion.merkleProof,
-        merkleDirections: hydratedQuestion.merkleDirections,
-      }),
-    )
-  }, [
-    account,
-    activeGameId,
-    hydratedQuestion,
-    hydratedQuestionError,
-    snapshot,
-    selectedAnswerOption,
-    runTransaction,
-    ui.currentQuestionUnavailable,
-    ui.noPendingQuestion,
-    ui.selectAnswer,
-    ui.submitAnswer,
-  ])
-
-  const onApplyMove = useCallback(
-    (move: UiLegalMove) => {
-      if (!account || !activeGameId) {
+  const onSelectAnswer = useCallback(
+    (optionIndex: number) => {
+      if (!account || !activeGameId || !snapshot?.pending_question || !snapshot?.turn_state || !activePendingQuestion) {
         return
       }
 
-      void runTransaction(
-        `${ui.applyMove} ${moveTypeLabel[move.move_type as MoveType]} (${move.steps})`,
-        () =>
-          applyMove(account, activeGameId, {
-            moveType: move.move_type,
-            tokenId: move.token_id,
-            steps: move.steps,
-          }),
+      const pendingQuestion = snapshot.pending_question
+      const turnState = snapshot.turn_state
+
+      setSelectedAnswerIndex(optionIndex)
+
+      void runTransaction('Submitting answer', () =>
+        submitAnswer(account, activeGameId, {
+          questionId: turnState.question_id,
+          questionIndex: pendingQuestion.question_index,
+          category: pendingQuestion.category,
+          difficulty: pendingQuestion.difficulty,
+          correctOption: activePendingQuestion.correctOption,
+          selectedOption: optionIndex,
+          merkleProof: activePendingQuestion.merkleProof,
+          merkleDirections: activePendingQuestion.merkleDirections,
+        }),
       )
     },
-    [account, activeGameId, moveTypeLabel, runTransaction, ui.applyMove],
+    [account, activeGameId, activePendingQuestion, runTransaction, snapshot?.pending_question, snapshot?.turn_state],
+  )
+
+  const movementEnabled = isMyTurn && snapshot?.turn_state?.phase === 2 && !txPendingLabel && !isAwaitingOnchainSync
+
+  const onTokenClick = useCallback(
+    (tokenId: string) => {
+      if (!movementEnabled) {
+        return
+      }
+
+      setSelectedTokenId(tokenId)
+
+      const choices = tokenDiceChoices[tokenId] || []
+      if (choices.length === 0) {
+        setExpandedTokenId(null)
+        return
+      }
+
+      if (choices.length === 1) {
+        const selectedMove = tokenChoiceMap[choices[0].id]
+        if (selectedMove) {
+          onApplyMove(selectedMove)
+        }
+        return
+      }
+
+      setExpandedTokenId(tokenId)
+    },
+    [movementEnabled, onApplyMove, tokenChoiceMap, tokenDiceChoices],
+  )
+
+  const onTokenHover = useCallback(
+    (tokenId: string | null) => {
+      if (!movementEnabled || !tokenId) {
+        setExpandedTokenId(null)
+        return
+      }
+
+      if ((tokenDiceChoices[tokenId] || []).length > 1) {
+        setExpandedTokenId(tokenId)
+      }
+    },
+    [movementEnabled, tokenDiceChoices],
+  )
+
+  const onTokenDiceChoiceSelect = useCallback(
+    (_tokenId: string, choiceId: string) => {
+      if (!movementEnabled) {
+        return
+      }
+
+      const selectedMove = tokenChoiceMap[choiceId]
+      if (!selectedMove) {
+        return
+      }
+
+      onApplyMove(selectedMove)
+    },
+    [movementEnabled, onApplyMove, tokenChoiceMap],
   )
 
   const onEndTurn = useCallback(() => {
-    if (!account || !activeGameId) {
+    if (!account || !activeGameId || !movementEnabled || !snapshot) {
       return
     }
 
-    void runTransaction(ui.endTurn, () => endTurn(account, activeGameId))
-  }, [account, activeGameId, runTransaction, ui.endTurn])
+    const previousSnapshot = cloneSnapshot(snapshot)
+    const previousLegalMoves = [...legalMoves]
 
-  const onSkipShop = useCallback(() => {
-    if (!account || !activeGameId) {
-      return
-    }
-
-    void runTransaction(ui.skipShop, () => skipShop(account, activeGameId))
-  }, [account, activeGameId, runTransaction, ui.skipShop])
-
-  const onForceSkipTurn = useCallback(() => {
-    if (!account || !activeGameId) {
-      return
-    }
-
-    void runTransaction(ui.forceSkipTurn, () => forceSkipTurn(account, activeGameId))
-  }, [account, activeGameId, runTransaction, ui.forceSkipTurn])
-
-  const onBindToken = useCallback(() => {
-    if (!account || !activeGameId || activeTokenId === null) {
-      setActionError(language === 'es' ? 'Carga un token_id y un game_id validos para vincular la entrada EGS.' : 'Load a valid token_id and game_id to bind the EGS entry.')
-      return
-    }
-
-    void runTransaction(language === 'es' ? 'Vincular token EGS' : 'Bind EGS token', () => bindEgsToken(account, activeGameId, activeTokenId))
-  }, [account, activeGameId, activeTokenId, language, runTransaction])
-
-  const nowSecs = Math.floor(Date.now() / 1000)
-  const deadline = Number(snapshot?.turn_state?.deadline || 0n)
-  const deadlineExpired = deadline > 0 && nowSecs > deadline
+    void runTransaction('Ending turn', () => endTurn(account, activeGameId), {
+      onOptimistic: () => {
+        setExpandedTokenId(null)
+        setSelectedTokenId(null)
+        setLegalMoves([])
+        setSnapshot((current) => (current ? applyOptimisticEndTurnToSnapshot(current) : current))
+      },
+      onConfirmed: async () => {
+        setLegalMoves([])
+      },
+      onRollback: () => {
+        setSnapshot(previousSnapshot)
+        setLegalMoves(previousLegalMoves)
+      },
+    })
+  }, [account, activeGameId, legalMoves, movementEnabled, runTransaction, snapshot])
 
   const canRoll = isMyTurn && snapshot?.turn_state?.phase === 0
-  const canSubmitAnswer = isMyTurn && snapshot?.turn_state?.phase === 1
-  const canMove = isMyTurn && snapshot?.turn_state?.phase === 2
-  const canEndTurn = isMyTurn && snapshot?.turn_state?.phase === 2
-  const canSkipShop = isMyTurn && snapshot?.turn_state?.phase === 3
+  const canRollAction = canRoll && !hudDiceRolling && !txPendingLabel && !isAwaitingOnchainSync
+  const visualSkinByColor = useMemo(() => {
+    return players.reduce<Partial<Record<PlayerColor, MatchPlayer['visualSkinId']>>>((acc, player) => {
+      acc[player.color] = player.visualSkinId
+      return acc
+    }, {})
+  }, [players])
+  const triggerHudDiceRoll = useCallback(() => {
+    if (!canRoll || hudDiceRolling) {
+      return
+    }
+
+    setHudDiceRolling(true)
+
+    if (hudRollIntervalRef.current !== null) {
+      window.clearInterval(hudRollIntervalRef.current)
+    }
+
+    hudRollIntervalRef.current = window.setInterval(() => {
+      setHudDicePreview({
+        dieA: (Math.floor(Math.random() * 6) + 1) as DiceFaceValue,
+        dieB: (Math.floor(Math.random() * 6) + 1) as DiceFaceValue,
+      })
+    }, 90)
+
+    if (hudRollTimeoutRef.current !== null) {
+      window.clearTimeout(hudRollTimeoutRef.current)
+    }
+
+    hudRollTimeoutRef.current = window.setTimeout(() => {
+      if (hudRollIntervalRef.current !== null) {
+        window.clearInterval(hudRollIntervalRef.current)
+        hudRollIntervalRef.current = null
+      }
+
+      setHudDiceRolling(false)
+      onRoll()
+    }, 620)
+  }, [canRoll, hudDiceRolling, onRoll])
 
   return (
     <section
       className="min-h-screen bg-cover bg-center bg-no-repeat px-3 py-4 sm:px-4 sm:py-6"
-      style={{ backgroundColor: boardTheme.backgroundColor, backgroundImage: boardTheme.backgroundImage }}
+      style={{ backgroundImage: "url('/home-background.jpg')" }}
     >
-      <header className="hidden game-panel overflow-hidden bg-gradient-to-r from-[#11427e] via-[#1f68b5] to-[#2e7fd4] text-white">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#9cd8ff]">{language === 'es' ? 'Partida' : 'Match'}</p>
-            <h2 className="font-display text-3xl uppercase tracking-wide text-[#ffeb9f]">{ui.onchainMode}</h2>
-            <p className="text-sm font-semibold text-[#def2ff]">
-              {language === 'es' ? 'Estado en vivo por Dojo/Torii + transacciones Starknet.' : 'Live state via Dojo/Torii + Starknet transactions.'}
-            </p>
-          </div>
-
-          <div className="grid gap-1 text-xs font-black uppercase tracking-wide text-[#d9edff]">
-            <p>{language === 'es' ? 'Red' : 'Network'}: {appEnv.defaultNetwork}</p>
-            <p>{language === 'es' ? 'Wallet' : 'Wallet'}: {isConnected && address ? shortenAddress(address) : language === 'es' ? 'desconectada' : 'disconnected'}</p>
-            <p>{language === 'es' ? 'Namespace Dojo' : 'Dojo namespace'}: {appEnv.namespace}</p>
-          </div>
-        </div>
-      </header>
-
-      <article className="game-panel text-board-night" style={{ backgroundImage: surfacePalette.sidePanelBackground, borderColor: surfacePalette.sidePanelBorder }}>
-        <div className="game-wood px-4 py-2 text-center">
-          <p className="font-display text-2xl uppercase tracking-wide">{ui.gameSessionTitle}</p>
-        </div>
-
-        <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
-          <input
-            className="rounded-xl border px-3 py-2 text-sm font-bold text-board-night"
-            style={{ background: surfacePalette.sideInputBackground, borderColor: surfacePalette.sideInputBorder }}
-            onChange={(event) => setGameIdInput(event.target.value)}
-            placeholder={ui.gameIdPlaceholder}
-            value={gameIdInput}
-          />
-
-          <input
-            className="rounded-xl border px-3 py-2 text-sm font-bold text-board-night"
-            style={{ background: surfacePalette.sideInputBackground, borderColor: surfacePalette.sideInputBorder }}
-            onChange={(event) => setTokenIdInput(event.target.value)}
-            placeholder={ui.tokenIdPlaceholder}
-            value={tokenIdInput}
-          />
-
-          <button
-            className="action-button-primary max-w-[220px]"
-            onClick={() => applySearchParams({ gameId: gameIdInput, tokenId: tokenIdInput })}
-            type="button"
-          >
-            {ui.loadSession}
-          </button>
-
-          <Link className="action-button-secondary max-w-[200px]" to="/board-mock">
-            {ui.goToMock}
-          </Link>
-        </div>
-
-        <div className="mt-4">
-          <Link className="action-button-secondary max-w-[220px]" to="/">
-            {ui.backHome}
-          </Link>
-        </div>
-
-        {!isDojoConfigured ? (
-          <p className="mt-3 rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
-            {language === 'es' ? 'Faltan variables Dojo/Torii (world, torii URL o manifest) en `.env`.' : 'Missing Dojo/Torii variables (world, torii URL or manifest) in `.env`.'}
-          </p>
-        ) : null}
-
-        {requestedGameId === null && gameIdInput.trim().length > 0 ? (
-          <p className="mt-3 rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
-            {ui.gameIdInvalid}
-          </p>
-        ) : null}
-
-        {activeTokenId === null && tokenIdInput.trim().length > 0 ? (
-          <p className="mt-3 rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
-            {ui.tokenIdInvalid}
-          </p>
-        ) : null}
-
-        {activeTokenId !== null ? (
-          <p className="mt-3 rounded-xl border border-[#1c5da6] bg-[#e8f3ff] px-3 py-2 text-sm font-bold text-[#174b80]">
-            {isResolvingTokenLink ? (language === 'es' ? 'Buscando token EGS...' : 'Searching EGS token...') : linkedTokenStatus || ui.scoreLoaded}
-          </p>
-        ) : null}
-
-        {activeTokenId !== null && activeGameId !== null && linkedTokenGameId === null ? (
-          <button className="action-button-primary mt-3 max-w-[260px]" onClick={onBindToken} type="button">
-            {ui.bindToken}
-          </button>
-        ) : null}
-
-        {snapshotError ? (
-          <p className="mt-3 rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
-            {snapshotError}
-          </p>
-        ) : null}
-
-        {actionError ? (
-          <p className="mt-3 rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
-            {actionError}
-          </p>
-        ) : null}
-
-        {txPendingLabel ? (
-          <p className="mt-3 rounded-xl border border-[#1c5da6] bg-[#e8f3ff] px-3 py-2 text-sm font-bold text-[#174b80]">
-            {language === 'es' ? 'Tx pendiente' : 'Pending tx'}: {txPendingLabel}
-            {txHash ? ` - ${txHash}` : ''}
-          </p>
-        ) : null}
-
-        {!txPendingLabel && isAwaitingOnchainSync ? (
-          <p className="mt-3 rounded-xl border border-[#1c5da6] bg-[#e8f3ff] px-3 py-2 text-sm font-bold text-[#174b80]">
-            {ui.awaitSync}
-          </p>
-        ) : null}
-      </article>
-
-      {activeGameId !== null ? (
-        <>
-          <article className="game-panel" style={{ backgroundImage: surfacePalette.headerBackground, borderColor: surfacePalette.headerBorder, color: surfacePalette.headerText }}>
-            {isLoadingSnapshot ? (
-                <p className="text-sm font-black uppercase tracking-wide">{ui.loadingSnapshot}</p>
-            ) : (
-              <div className="grid gap-2 text-xs font-black uppercase tracking-wide md:grid-cols-2 xl:grid-cols-4">
-                <p>{language === 'es' ? 'Game ID' : 'Game ID'}: {snapshot?.game?.game_id.toString() || activeGameId.toString()}</p>
-                <p>{ui.gameStatus}: {gameStatusLabel[snapshot?.game?.status || 0] || 'UNKNOWN'}</p>
-                <p>{language === 'es' ? 'Fase' : 'Phase'}: {phaseLabel[snapshot?.turn_state?.phase || 0] || 'UNKNOWN'}</p>
-                <p>{ui.gameTurn}: {snapshot?.game?.turn_index || 0}</p>
-                <p>{language === 'es' ? 'Jugador activo' : 'Active player'}: {activePlayerLabel}</p>
-                <p>{language === 'es' ? 'Ganador' : 'Winner'}: {snapshot?.game?.winner && snapshot.game.winner !== '0x0' ? winnerLabel : ui.pending}</p>
-                <div className="flex items-center gap-2">
-                  <span>{language === 'es' ? 'Dados' : 'Dice'}:</span>
-                  {snapshot?.dice_state ? (
-                    <span className="flex items-center gap-1.5">
-                      <GameDie className="h-7 w-7" skinId={activeDiceSkinId} value={snapshot.dice_state.die_a} />
-                      <GameDie className="h-7 w-7" skinId={activeDiceSkinId} value={snapshot.dice_state.die_b} />
-                    </span>
-                  ) : (
-                    <span>-</span>
-                  )}
-                </div>
-                <p>
-                  {ui.bonusActive}: {activeBonusState ? buildBonusText(activeBonusState.pending_bonus_10, activeBonusState.pending_bonus_20, language) : ui.waitingBonus}
-                </p>
-              </div>
-            )}
-          </article>
-
-          <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-            <article className="game-panel p-3 xl:p-4" style={{ backgroundImage: surfacePalette.mainPanelBackground, borderColor: surfacePalette.mainPanelBorder }}>
-              <div className="mb-3 flex items-center justify-between rounded-2xl border px-3 py-2 shadow-wood" style={{ backgroundImage: surfacePalette.headerBackground, borderColor: surfacePalette.headerBorder }}>
-                <p className="font-display text-xl uppercase tracking-[0.08em]" style={{ color: surfacePalette.headerText }}>{ui.boardTitle}</p>
-                <span className="rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em]" style={{ backgroundImage: surfacePalette.badgeBackground, borderColor: surfacePalette.badgeBorder, color: surfacePalette.badgeText }}>
-                  {ui.boardBadge}
-                </span>
-              </div>
-
-              <div className="relative mx-auto max-w-[980px] pb-16 pt-16 lg:px-[150px] lg:pb-0 lg:pt-0">
-                <Board3D
-                  blockedSquares={blockedSquares}
-                  highlightedSquares={highlightedSquares}
-                  movableTokenIds={highlightedTokenIds}
-                  onTokenClick={(tokenId) => {
-                    if (!movesByToken[tokenId]) {
-                      setSelectedTokenId(null)
-                      return
-                    }
-
-                    setSelectedTokenId((current) => (current === tokenId ? null : tokenId))
-                  }}
-                  players={players}
-                  safeSquares={safeSquares}
-                  selectedTokenId={selectedTokenId}
-                  surfacePalette={surfacePalette}
-                  tokenHints={tokenHints}
-                  tokens={uiTokens}
-                  visualSkinByColor={visualSkinByColor}
-                />
-              </div>
-            </article>
-
-            <aside className="space-y-4">
-              <article className="game-panel text-board-night" style={{ backgroundImage: surfacePalette.accentPanelBackground, borderColor: surfacePalette.sidePanelBorder }}>
-                <div className="game-wood px-4 py-2 text-center">
-                  <p className="font-display text-2xl uppercase tracking-wide">{ui.actionsTitle}</p>
-                </div>
-
-                <div className="mt-3 grid gap-2">
-                  <button
-                    className={`action-button-primary ${canRoll && !txPendingLabel ? '' : 'cursor-not-allowed opacity-60'}`}
-                    disabled={!canRoll || Boolean(txPendingLabel)}
-                    onClick={onRoll}
-                    type="button"
-                  >
-                    {ui.rollAction}
-                  </button>
-
-                  <button
-                    className={`action-button-secondary ${canEndTurn && !txPendingLabel ? '' : 'cursor-not-allowed opacity-60'}`}
-                    disabled={!canEndTurn || Boolean(txPendingLabel)}
-                    onClick={onEndTurn}
-                    type="button"
-                  >
-                    {ui.endTurn}
-                  </button>
-
-                  <button
-                    className={`action-button-secondary ${canSkipShop && !txPendingLabel ? '' : 'cursor-not-allowed opacity-60'}`}
-                    disabled={!canSkipShop || Boolean(txPendingLabel)}
-                    onClick={onSkipShop}
-                    type="button"
-                  >
-                    {ui.skipShop}
-                  </button>
-
-                  <button
-                    className={`action-button-secondary ${deadlineExpired && !txPendingLabel ? '' : 'cursor-not-allowed opacity-60'}`}
-                    disabled={!deadlineExpired || Boolean(txPendingLabel)}
-                    onClick={onForceSkipTurn}
-                    type="button"
-                  >
-                    {ui.forceSkipTurn}
-                  </button>
-
-                  <button className="action-button-secondary" onClick={() => setIsLogOpen(true)} type="button">
-                    {ui.logEvents}
-                  </button>
-                </div>
-
-                <p className="mt-3 rounded-xl border px-3 py-2 text-xs font-black uppercase tracking-wide text-board-night" style={{ background: surfacePalette.sideInputBackground, borderColor: surfacePalette.sideInputBorder }}>
-                  {ui.deadline}: {deadline > 0 ? `${deadline} (${deadlineExpired ? ui.deadlineExpired : ui.deadlineOpen})` : language === 'es' ? 'sin deadline' : 'no deadline'}
-                </p>
-              </article>
-              <article className="game-panel text-board-night" style={{ backgroundImage: surfacePalette.sidePanelBackground, borderColor: surfacePalette.sidePanelBorder }}>
-                <div className="game-wood px-4 py-2 text-center">
-                  <p className="font-display text-2xl uppercase tracking-wide">{ui.answerTitle}</p>
-                </div>
-
-                <div className="mt-3 space-y-2 text-sm font-bold">
-                  <p>
-                    {ui.questionId}: {snapshot?.turn_state?.question_id ? snapshot.turn_state.question_id.toString() : '-'}
-                  </p>
-                  <p>
-                    {language === 'es' ? 'index / cat / dif' : 'index / cat / diff'}:{' '}
-                    {snapshot?.pending_question
-                      ? `${snapshot.pending_question.question_index} / ${snapshot.pending_question.category} / ${snapshot.pending_question.difficulty}`
-                      : '-'}
-                  </p>
-
-                  {hydratedQuestion ? (
-                    <>
-                      <div className="rounded-xl border px-3 py-3" style={{ background: surfacePalette.sideInputBackground, borderColor: surfacePalette.sideInputBorder }}>
-                        <p className="text-xs font-black uppercase tracking-wide text-[#7a5b18]">
-                          {ui.localSourceVerified}
-                        </p>
-                        <p className="mt-2 text-base font-bold leading-snug text-board-night">
-                          {hydratedQuestion.displayPrompt}
-                        </p>
-                      </div>
-
-                      <div className="grid gap-2">
-                        {hydratedQuestion.displayOptions.map((option, index) => {
-                          const isSelected = selectedAnswerOption === index
-
-                          return (
-                            <button
-                              className={`rounded-xl border px-3 py-2 text-left text-sm font-bold transition ${
-                                isSelected
-                                  ? 'border-[#8d6a17] bg-[#ffe596] text-[#5e4300]'
-                                  : 'border-[#c9a85a] bg-[#fff4d8] text-board-night hover:bg-[#fff0c2]'
-                              }`}
-                              key={`${hydratedQuestion.questionIndex}-${index}`}
-                              onClick={() => setSelectedAnswerOption(index)}
-                              type="button"
-                            >
-                              {ui.optionPrefix} {index + 1}. {option}
-                            </button>
-                          )
-                        })}
-                      </div>
-
-                      <p className="rounded-xl border px-3 py-2 text-xs font-black uppercase tracking-wide text-board-night" style={{ background: surfacePalette.sideInputBackground, borderColor: surfacePalette.sideInputBorder }}>
-                        {ui.proofNodes}: {hydratedQuestion.merkleProof.length} · root: {LOCAL_QUESTION_SET_ROOT}
-                      </p>
-                    </>
-                  ) : (
-                    <p className="rounded-xl border border-[#ad4b1d] bg-[#ffe6d9] px-3 py-2 text-sm font-bold text-[#7a2a08]">
-                      {hydratedQuestionError || ui.hydratedPending}
-                    </p>
-                  )}
-
-                  <button
-                    className={`action-button-primary ${canSubmitAnswer && !txPendingLabel ? '' : 'cursor-not-allowed opacity-60'}`}
-                    disabled={!canSubmitAnswer || Boolean(txPendingLabel) || !hydratedQuestion || selectedAnswerOption === null}
-                    onClick={onSubmitAnswer}
-                    type="button"
-                  >
-                    {ui.submitAnswer}
-                  </button>
-                </div>
-              </article>
-
-              <article className="game-panel text-board-night" style={{ backgroundImage: surfacePalette.sidePanelBackground, borderColor: surfacePalette.sidePanelBorder }}>
-                <div className="game-wood px-4 py-2 text-center">
-                  <p className="font-display text-2xl uppercase tracking-wide">{ui.legalMoveTitle}</p>
-                </div>
-
-                <ul className="mt-3 max-h-[320px] space-y-2 overflow-y-auto text-sm font-bold">
-                  {displayedMoves.length === 0 ? (
-                      <li className="rounded-xl border px-3 py-2" style={{ background: surfacePalette.sideInputBackground, borderColor: surfacePalette.sideInputBorder }}>
-                        {canMove ? ui.movesFilterEmpty : ui.movePhaseInactive}
-                      </li>
-                    ) : (
-                      displayedMoves.map((move) => (
-                        <li className="rounded-xl border px-3 py-2" key={move.id} style={{ background: surfacePalette.sideInputBackground, borderColor: surfacePalette.sideInputBorder }}>
-                        <p>
-                          {moveTypeLabel[move.move_type as MoveType]} - {language === 'es' ? 'ficha' : 'token'} {move.token_id + 1} - {language === 'es' ? 'pasos' : 'steps'} {move.steps}
-                        </p>
-                        <p>
-                          {language === 'es' ? 'ref_casilla' : 'square_ref'} {move.target_square_ref} {'->'} ui {move.targetUiPosition}
-                        </p>
-                        <button
-                          className={`action-button-primary mt-2 ${canMove && !txPendingLabel ? '' : 'cursor-not-allowed opacity-60'}`}
-                          disabled={!canMove || Boolean(txPendingLabel)}
-                          onClick={() => onApplyMove(move)}
-                          type="button"
-                        >
-                           {ui.applyMove}
-                         </button>
-                      </li>
-                    ))
-                  )}
-                </ul>
-              </article>
-
-            </aside>
-          </div>
-
-          <article className="game-panel text-board-night" style={{ backgroundImage: surfacePalette.sidePanelBackground, borderColor: surfacePalette.sidePanelBorder }}>
-            <div className="game-wood px-4 py-2 text-center">
-              <p className="font-display text-2xl uppercase tracking-wide">{ui.playersTitle}</p>
+      <div className="mx-auto w-full max-w-[1480px]">
+        {activeGameId !== null ? (
+          <article className="game-panel mx-auto bg-gradient-to-b from-[#efcd9a] via-[#e6bf86] to-[#d6a86d] p-3 xl:p-4">
+            <div className="mb-3 flex items-center justify-between rounded-2xl border border-[#4e2f14] bg-gradient-to-r from-[#845223] via-[#9b632e] to-[#7b4b1e] px-3 py-2 shadow-wood">
+              <p className="font-display text-xl uppercase tracking-[0.08em] text-[#fff0c7]">Board 3D on-chain</p>
+              <span className="rounded-full border border-[#7a4e12] bg-gradient-to-b from-[#f8d772] to-[#e4b23a] px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#603d0b]">
+                mismo HUD de /board-mock, estado real Dojo
+              </span>
             </div>
 
-            <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              {players.map((player) => {
-                const theme = getPlayerVisualThemeByColor(player.color, player.visualSkinId)
+            {snapshotError ? (
+              <div className="mb-3 rounded-2xl border border-[#9e4f38] bg-[#fff1e8] px-4 py-3 text-sm font-bold text-[#6c2412] shadow-[0_6px_18px_rgba(72,24,8,0.14)]">
+                {snapshotError}
+              </div>
+            ) : null}
 
-                return (
-                  <li className="rounded-xl border border-[#c9a85a] bg-[#fff4d8] px-3 py-2" key={player.id}>
-                    <p className="font-display text-lg leading-none">{player.name}</p>
-                    <p className="mt-1 text-xs font-black uppercase tracking-wide">
-                      {language === 'es' ? 'color' : 'color'}: {player.visualSkinId || player.color}{' '}
-                      {player.isHost ? (language === 'es' ? '- anfitrion' : '- host') : ''}
-                    </p>
-                    <p className="text-xs font-bold">{language === 'es' ? 'Casa' : 'Home'}: {player.tokensInBase}</p>
-                    <p className="text-xs font-bold">{language === 'es' ? 'Meta' : 'Goal'}: {player.tokensInGoal}</p>
-                    <div className={`mt-2 h-2 rounded-full ${theme.stripClass}`} />
-                  </li>
-                )
-              })}
-            </ul>
+            {actionError ? (
+              <div className="mb-3 rounded-2xl border border-[#9e4f38] bg-[#fff1e8] px-4 py-3 text-sm font-bold text-[#6c2412] shadow-[0_6px_18px_rgba(72,24,8,0.14)]">
+                {actionError}
+              </div>
+            ) : null}
+
+            {isLoadingSnapshot && !snapshot ? (
+              <div className="mb-3 rounded-2xl border border-[#8d6c38] bg-[#fff7df] px-4 py-3 text-sm font-bold text-[#6b4a15] shadow-[0_6px_18px_rgba(72,54,8,0.12)]">
+                Cargando estado on-chain del tablero...
+              </div>
+            ) : null}
+
+            {rollNotice ? (
+              <div className="mb-3 rounded-2xl border border-[#7f5b24] bg-[#fff4d3] px-4 py-3 text-sm font-bold text-[#65431a] shadow-[0_6px_18px_rgba(72,54,8,0.12)]">
+                {rollNotice}
+              </div>
+            ) : null}
+
+            {snapshot?.turn_state?.phase === 2 && isMyTurn ? (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#7f5b24] bg-[#fff4d3] px-4 py-3 shadow-[0_6px_18px_rgba(72,54,8,0.12)]">
+                <div className="text-sm font-bold text-[#65431a]">
+                  {legalMoves.length > 0
+                    ? 'Selecciona una ficha para moverla on-chain.'
+                    : 'No quedan movimientos legales. Puedes terminar el turno.'}
+                </div>
+                <button
+                  className="rounded-full border border-[#7b4e15] bg-gradient-to-b from-[#ffd670] to-[#e6aa1b] px-4 py-2 text-sm font-black uppercase tracking-[0.12em] text-[#5a3507] shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_4px_0_rgba(118,80,15,0.45)] disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={Boolean(txPendingLabel) || isAwaitingOnchainSync || legalMoves.length > 0}
+                  onClick={onEndTurn}
+                  type="button"
+                >
+                  {txPendingLabel === 'Ending turn' ? 'Terminando...' : 'Terminar turno'}
+                </button>
+              </div>
+            ) : null}
+
+            <div className="relative mx-auto max-w-[980px] pb-16 pt-16 lg:px-[150px] lg:pb-0 lg:pt-0">
+              <Board3D
+                animatingTokenIds={animatedTokenIds}
+                blockedSquares={blockedSquares}
+                expandedTokenId={expandedTokenId}
+                highlightedSquares={highlightedSquares}
+                movableTokenIds={highlightedTokenIds}
+                onTokenClick={onTokenClick}
+                onTokenHover={onTokenHover}
+                onTokenDiceChoiceSelect={onTokenDiceChoiceSelect}
+                players={players}
+                safeSquares={safeSquares}
+                selectedTokenId={selectedTokenId}
+                tokenDiceChoices={tokenDiceChoices}
+                tokenHints={tokenHints}
+                tokens={uiTokens}
+                visualSkinByColor={visualSkinByColor}
+              />
+
+              <div className="pointer-events-none absolute inset-x-0 top-2 flex items-start justify-between px-2 lg:hidden">
+                <PlayerHudSlot
+                  canRoll={canRollAction}
+                  dieA={snapshot?.dice_state?.die_a ?? null}
+                  dieB={snapshot?.dice_state?.die_b ?? null}
+                  onRoll={triggerHudDiceRoll}
+                  player={playersByColor.green}
+                  preview={hudDicePreview}
+                  rolling={hudDiceRolling}
+                  turnPlayerId={activePlayerAddress}
+                />
+                <PlayerHudSlot
+                  canRoll={canRollAction}
+                  dieA={snapshot?.dice_state?.die_a ?? null}
+                  dieB={snapshot?.dice_state?.die_b ?? null}
+                  onRoll={triggerHudDiceRoll}
+                  player={playersByColor.red}
+                  preview={hudDicePreview}
+                  rolling={hudDiceRolling}
+                  turnPlayerId={activePlayerAddress}
+                />
+              </div>
+
+              <div className="pointer-events-none absolute inset-x-0 bottom-2 flex items-end justify-between px-2 lg:hidden">
+                <PlayerHudSlot
+                  canRoll={canRollAction}
+                  dieA={snapshot?.dice_state?.die_a ?? null}
+                  dieB={snapshot?.dice_state?.die_b ?? null}
+                  onRoll={triggerHudDiceRoll}
+                  player={playersByColor.yellow}
+                  preview={hudDicePreview}
+                  rolling={hudDiceRolling}
+                  turnPlayerId={activePlayerAddress}
+                />
+                <PlayerHudSlot
+                  canRoll={canRollAction}
+                  dieA={snapshot?.dice_state?.die_a ?? null}
+                  dieB={snapshot?.dice_state?.die_b ?? null}
+                  onRoll={triggerHudDiceRoll}
+                  player={playersByColor.blue}
+                  preview={hudDicePreview}
+                  rolling={hudDiceRolling}
+                  turnPlayerId={activePlayerAddress}
+                />
+              </div>
+
+              <div className="pointer-events-none absolute inset-0 hidden lg:block">
+                <div className="absolute left-4 top-[17%] -translate-y-1/2">
+                  <PlayerHudSlot
+                    canRoll={canRollAction}
+                    dieA={snapshot?.dice_state?.die_a ?? null}
+                    dieB={snapshot?.dice_state?.die_b ?? null}
+                    onRoll={triggerHudDiceRoll}
+                    player={playersByColor.green}
+                    preview={hudDicePreview}
+                    rolling={hudDiceRolling}
+                    turnPlayerId={activePlayerAddress}
+                  />
+                </div>
+
+                <div className="absolute right-4 top-[17%] -translate-y-1/2">
+                  <PlayerHudSlot
+                    canRoll={canRollAction}
+                    dieA={snapshot?.dice_state?.die_a ?? null}
+                    dieB={snapshot?.dice_state?.die_b ?? null}
+                    onRoll={triggerHudDiceRoll}
+                    player={playersByColor.red}
+                    preview={hudDicePreview}
+                    rolling={hudDiceRolling}
+                    turnPlayerId={activePlayerAddress}
+                  />
+                </div>
+
+                <div className="absolute bottom-[17%] left-4 translate-y-1/2">
+                  <PlayerHudSlot
+                    canRoll={canRollAction}
+                    dieA={snapshot?.dice_state?.die_a ?? null}
+                    dieB={snapshot?.dice_state?.die_b ?? null}
+                    onRoll={triggerHudDiceRoll}
+                    player={playersByColor.yellow}
+                    preview={hudDicePreview}
+                    rolling={hudDiceRolling}
+                    turnPlayerId={activePlayerAddress}
+                  />
+                </div>
+
+                <div className="absolute bottom-[17%] right-4 translate-y-1/2">
+                  <PlayerHudSlot
+                    canRoll={canRollAction}
+                    dieA={snapshot?.dice_state?.die_a ?? null}
+                    dieB={snapshot?.dice_state?.die_b ?? null}
+                    onRoll={triggerHudDiceRoll}
+                    player={playersByColor.blue}
+                    preview={hudDicePreview}
+                    rolling={hudDiceRolling}
+                    turnPlayerId={activePlayerAddress}
+                  />
+                </div>
+              </div>
+            </div>
           </article>
-        </>
-      ) : null}
+        ) : null}
+
+        {modalQuestion && snapshot?.turn_state?.phase === 1 ? (
+          <TriviaQuestionModal
+            answerState="idle"
+            difficulty={modalQuestion.difficulty}
+            interactionLocked={!isMyTurn || txPendingLabel === 'Submitting answer'}
+            isAiTurn={false}
+            onSelectOption={onSelectAnswer}
+            player={activePlayerCard}
+            question={modalQuestion}
+            secondsLeft={questionSecondsLeft}
+            selectedOption={selectedAnswerIndex}
+          />
+        ) : resolvedAnswerDisplay ? (
+          <TriviaQuestionModal
+            answerState={resolvedAnswerDisplay.answerState}
+            difficulty={resolvedAnswerDisplay.question.difficulty}
+            interactionLocked
+            isAiTurn={false}
+            onSelectOption={() => undefined}
+            player={resolvedAnswerDisplay.player}
+            question={resolvedAnswerDisplay.question}
+            secondsLeft={0}
+            selectedOption={resolvedAnswerDisplay.selectedOption}
+          />
+        ) : null}
 
         <LogDrawer events={logEvents} onClose={() => setIsLogOpen(false)} open={isLogOpen} />
+      </div>
     </section>
   )
 }

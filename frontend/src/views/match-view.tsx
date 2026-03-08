@@ -979,7 +979,7 @@ type TokenDiceChoiceWithMove = {
 
 type HoveredChoicePreview = {
   tokenId: string
-  choiceId: MoveResource
+  choiceId: string
   steps: number
 }
 
@@ -2723,7 +2723,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     setHoveredChoicePreview(null)
   }
 
-  const onTokenDiceChoiceHover = (tokenId: string, choiceId: MoveResource | null) => {
+  const onTokenDiceChoiceHover = (tokenId: string, choiceId: string | null) => {
     if (!movementEnabled) {
       setHoveredChoicePreview(null)
       return
@@ -2748,7 +2748,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
     })
   }
 
-  const onTokenDiceChoiceSelect = (tokenId: string, choiceId: MoveResource) => {
+  const onTokenDiceChoiceSelect = (tokenId: string, choiceId: string) => {
     if (isPlacementFlowBlocking || isTokenMoving || isAiControlledTurn || !movementEnabled) {
       return
     }
