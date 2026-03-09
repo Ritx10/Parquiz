@@ -1,7 +1,7 @@
 import { useAccount } from '@starknet-react/core'
 import { memo, type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { applyMove, bindEgsToken, computeLegalMoves, endTurn, forfeitGame, forceSkipTurn, rollTwoDiceAndDrawQuestion, submitAnswer } from '../api'
+import { applyMove, computeLegalMoves, endTurn, forfeitGame, forceSkipTurn, rollTwoDiceAndDrawQuestion, submitAnswer } from '../api'
 import {
   readDojoGameSnapshot,
   readEgsTokenGameLink,
@@ -210,13 +210,6 @@ const onchainCopyByLanguage = {
     emptyBoardTitle: 'No hay una partida on-chain activa',
     endingTurn: 'Terminando...',
     endTurn: 'Terminar turno',
-    egsLinkAction: 'Vincular token',
-    egsLinkHelp: 'Haz Advanced Mint en Denshokan, pega el token ID aqui y vincula esta partida para que cuente en las stats de EGS.',
-    egsLinkInputLabel: 'Token ID de EGS',
-    egsLinkInputPlaceholder: 'Pega tu token ID',
-    egsLinkTitle: 'Seguimiento con EGS',
-    egsLinking: 'Vinculando token...',
-    egsTokenRequired: 'Introduce un token ID valido antes de vincularlo.',
     forfeit: 'Abandonar partida',
     forfeiting: 'Abandonando...',
     forfeitConfirm: 'Abandonaras esta partida inmediatamente. Quieres continuar?',
@@ -266,13 +259,6 @@ const onchainCopyByLanguage = {
     emptyBoardTitle: 'No active on-chain match selected',
     endingTurn: 'Ending...',
     endTurn: 'End turn',
-    egsLinkAction: 'Link token',
-    egsLinkHelp: 'Use Advanced Mint on Denshokan, paste the token ID here, and link this match so it counts toward EGS stats.',
-    egsLinkInputLabel: 'EGS token ID',
-    egsLinkInputPlaceholder: 'Paste your token ID',
-    egsLinkTitle: 'Track this match with EGS',
-    egsLinking: 'Linking token...',
-    egsTokenRequired: 'Enter a valid token ID before linking it.',
     forfeit: 'Forfeit game',
     forfeiting: 'Forfeiting...',
     forfeitConfirm: 'You will immediately leave this game. Continue?',
@@ -1350,7 +1336,6 @@ export function MatchOnchainView() {
 
   const [gameIdInput, setGameIdInput] = useState(searchParams.get('gameId') || '')
   const [tokenIdInput, setTokenIdInput] = useState(searchParams.get('tokenId') || '')
-  const [egsTokenIdInput, setEgsTokenIdInput] = useState(searchParams.get('tokenId') || '')
   const [snapshot, setSnapshot] = useState<DojoGameSnapshot | null>(null)
   const [linkedTokenGameId, setLinkedTokenGameId] = useState<bigint | null>(null)
   const [linkedTokenStatus, setLinkedTokenStatus] = useState<null | string>(null)
@@ -1405,7 +1390,6 @@ export function MatchOnchainView() {
   useEffect(() => {
     setGameIdInput(searchParams.get('gameId') || '')
     setTokenIdInput(searchParams.get('tokenId') || '')
-    setEgsTokenIdInput(searchParams.get('tokenId') || '')
   }, [searchParams])
 
   const applyBoardQuery = useCallback(
@@ -1445,7 +1429,6 @@ export function MatchOnchainView() {
 
   const requestedGameId = useMemo(() => parseBigNumberish(gameIdInput), [gameIdInput])
   const activeTokenId = useMemo(() => parseBigNumberish(tokenIdInput), [tokenIdInput])
-  const pendingEgsTokenId = useMemo(() => parseBigNumberish(egsTokenIdInput), [egsTokenIdInput])
   const activeGameId = requestedGameId ?? linkedTokenGameId
 
   useEffect(() => {
@@ -2632,23 +2615,6 @@ export function MatchOnchainView() {
     })
   }, [account, activeGameId, currentWalletPlayer?.is_active, navigate, runTransaction, txPendingLabel, ui.forfeit, ui.forfeitConfirm])
 
-  const onLinkEgsToken = useCallback(() => {
-    if (!account || !activeGameId || !currentWalletPlayer?.is_active || txPendingLabel) {
-      return
-    }
-
-    if (pendingEgsTokenId === null) {
-      setActionError(ui.egsTokenRequired)
-      return
-    }
-
-    void runTransaction(ui.egsLinkAction, () => bindEgsToken(account, activeGameId, pendingEgsTokenId), {
-      onConfirmed: () => {
-        setTokenIdInput(egsTokenIdInput.trim())
-      },
-    })
-  }, [account, activeGameId, currentWalletPlayer?.is_active, egsTokenIdInput, pendingEgsTokenId, runTransaction, txPendingLabel, ui.egsLinkAction, ui.egsTokenRequired])
-
   const canRoll = isMyTurn && snapshot?.turn_state?.phase === 0
   const canRollAction = canRoll && !hudDiceRolling && !txPendingLabel && !isAwaitingOnchainSync
   const pendingStatusMessage = useMemo(() => {
@@ -2849,37 +2815,6 @@ export function MatchOnchainView() {
                 }}
               >
                 {isResolvingTokenLink ? ui.linkPending : `${ui.tokenLinkLabel}: ${linkedTokenStatus}`}
-              </div>
-            ) : null}
-
-            {snapshot?.game?.status === 1 && currentWalletPlayer?.is_active ? (
-              <div className="mb-3 rounded-2xl border border-[#7f5b24] bg-[#fff7df] px-4 py-4 shadow-[0_6px_18px_rgba(72,54,8,0.12)]">
-                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#7a4e12]">{ui.egsLinkTitle}</p>
-                <p className="mt-2 text-sm font-bold leading-6 text-[#6b4a15]">{ui.egsLinkHelp}</p>
-
-                <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-end">
-                  <label className="flex-1">
-                    <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.12em] text-[#8a5b1c]">
-                      {ui.egsLinkInputLabel}
-                    </span>
-                    <input
-                      className="w-full rounded-2xl border border-[#d9b977] bg-white/90 px-4 py-3 text-sm font-bold text-[#5b3710] outline-none transition focus:border-[#b67b1d]"
-                      onChange={(event) => setEgsTokenIdInput(event.target.value)}
-                      placeholder={ui.egsLinkInputPlaceholder}
-                      type="text"
-                      value={egsTokenIdInput}
-                    />
-                  </label>
-
-                  <button
-                    className="rounded-full border border-[#7b4e15] bg-gradient-to-b from-[#ffd670] to-[#e6aa1b] px-4 py-3 text-sm font-black uppercase tracking-[0.12em] text-[#5a3507] shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_4px_0_rgba(118,80,15,0.45)] disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={Boolean(txPendingLabel) || isAwaitingOnchainSync}
-                    onClick={onLinkEgsToken}
-                    type="button"
-                  >
-                    {txPendingLabel === ui.egsLinkAction ? ui.egsLinking : ui.egsLinkAction}
-                  </button>
-                </div>
               </div>
             ) : null}
 
