@@ -21,7 +21,7 @@ const soundEffectPathById: Record<SoundEffectId, string> = {
   experience: '/sonidos-juego/Experiencia.mp3',
   icon: '/sonidos-juego/Icono.mp3',
   gameStart: '/sonidos-juego/Inicio.mp3',
-  incorrect: '/sonidos-juego/RespuestaIncorrecta%20.mp3',
+  incorrect: '/sonidos-juego/RespuestaIncorrecta.mp3',
   podium: '/sonidos-juego/Podios.mp3',
   winner: '/sonidos-juego/Ganadores.mp3',
 }
