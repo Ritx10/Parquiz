@@ -153,6 +153,11 @@ const egsEntrypoints = [
     entrypoint: 'bind_egs_token',
     description: 'Links a playable tournament token to one on-chain ParQuiz match',
   },
+  {
+    label: 'Publish EGS Settings',
+    entrypoint: 'publish_egs_settings',
+    description: 'Publishes a locked config as EGS settings from the registered adapter',
+  },
 ] as const
 
 const asMethods = <T extends ReadonlyArray<{ label: string; entrypoint: string; description: string }>>(

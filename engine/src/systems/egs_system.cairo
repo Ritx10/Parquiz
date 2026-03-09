@@ -532,9 +532,8 @@ pub mod egs_system {
         fn publish_egs_settings(ref self: ContractState, settings_id: u64) {
             let mut world = self.world_default();
             let caller = get_caller_address();
-            assert_admin_or_init(ref world, caller);
-
             let config: GameConfig = load_locked_settings_config(@world, settings_id.try_into().unwrap());
+            assert_admin_or_config_creator(ref world, caller, config.creator);
             publish_settings_to_token(ref world, config);
         }
 
@@ -808,6 +807,9 @@ pub mod egs_system {
         if config.adapter_address == zero_address() {
             return;
         }
+        if get_contract_address() != config.adapter_address {
+            return;
+        }
         if !token_supports_settings_extension(config.token_address) {
             return;
         }
@@ -830,6 +832,21 @@ pub mod egs_system {
         }
 
         assert(admin.account == caller, 'not_admin');
+    }
+
+    fn assert_admin_or_config_creator(
+        ref world: dojo::world::WorldStorage,
+        caller: ContractAddress,
+        config_creator: ContractAddress,
+    ) {
+        let mut admin: AdminAccount = world.read_model(GLOBAL_STATE_SINGLETON_ID);
+
+        if admin.singleton_id != GLOBAL_STATE_SINGLETON_ID || admin.account == zero_address() {
+            admin = AdminAccount { singleton_id: GLOBAL_STATE_SINGLETON_ID, account: caller };
+            world.write_model(@admin);
+        }
+
+        assert(admin.account == caller || config_creator == caller, 'not_admin_or_creator');
     }
 
     fn egs_game_name() -> ByteArray {

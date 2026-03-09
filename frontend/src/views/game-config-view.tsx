@@ -1,6 +1,6 @@
 import { useAccount } from '@starknet-react/core'
 import { useEffect, useMemo, useState } from 'react'
-import { createGameConfig, lockGameConfig, readLatestGameConfigByCreator } from '../api'
+import { createGameConfig, lockGameConfig, publishEgsSettings, readLatestGameConfigByCreator } from '../api'
 import { shortenAddress, useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import { type AppLanguage, type ExitHomeRule, useAppSettingsStore } from '../store/app-settings-store'
 
@@ -78,8 +78,9 @@ const copy = {
     savedLocalWithWalletNote: 'Configuracion guardada',
     savedLocalWithSyncError: 'No se pudo sincronizar la configuracion. Intentalo de nuevo.',
     savedAndSynced: 'Configuracion guardada',
-   },
-   en: {
+    savedLockedPendingPublish: 'Configuracion guardada. La publicacion EGS fallo; puedes reintentar luego.',
+    },
+    en: {
     title: 'GENERAL & GAME CONFIGURATION',
     generalTitle: '1. GENERAL SETTINGS',
     gameTitle: '2. GAME SETTINGS',
@@ -113,11 +114,12 @@ const copy = {
     exitSix: 'EXIT 6',
     saved: 'Configuration saved',
     missingWallet: 'Connect Controller Wallet to save a config.',
-    savedLocalOnly: 'Configuration saved',
-    savedLocalWithWalletNote: 'Configuration saved',
-    savedLocalWithSyncError: 'Could not sync the configuration. Please try again.',
-    savedAndSynced: 'Configuration saved',
-   },
+     savedLocalOnly: 'Configuration saved',
+     savedLocalWithWalletNote: 'Configuration saved',
+     savedLocalWithSyncError: 'Could not sync the configuration. Please try again.',
+     savedAndSynced: 'Configuration saved',
+     savedLockedPendingPublish: 'Configuration saved. EGS publish failed; you can retry later.',
+    },
 } as const
 
 type StatusTone = 'error' | 'success' | 'warning'
@@ -232,8 +234,16 @@ export function GameConfigView({ embedded = false, onClose }: GameConfigViewProp
       await account.waitForTransaction(lockHash)
 
       setSelectedConfigId(latestConfig.config_id.toString())
-      setStatusTone('success')
-      setStatusMessage(text.savedAndSynced)
+
+      try {
+        const publishHash = await publishEgsSettings(account, latestConfig.config_id)
+        await account.waitForTransaction(publishHash)
+        setStatusTone('success')
+        setStatusMessage(text.savedAndSynced)
+      } catch {
+        setStatusTone('warning')
+        setStatusMessage(text.savedLockedPendingPublish)
+      }
     } catch (error) {
       const details = error instanceof Error ? error.message : `${error}`
 

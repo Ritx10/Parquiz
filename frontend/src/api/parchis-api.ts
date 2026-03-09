@@ -139,6 +139,14 @@ export const lockGameConfig = async (account: AccountInterface, configId: FeltLi
   })
 }
 
+export const publishEgsSettings = async (account: AccountInterface, configId: FeltLike) => {
+  return executeCall(account, {
+    contractAddress: egsSystem(),
+    entrypoint: 'publish_egs_settings',
+    calldata: CallData.compile({ settings_id: asBigInt(configId) }),
+  })
+}
+
 export const createLobby = async (account: AccountInterface, codeHash: FeltLike, configId: FeltLike) => {
   return executeCall(account, {
     contractAddress: lobbySystem(),
