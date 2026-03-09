@@ -32,7 +32,7 @@ const defaultRanking: RankingEntry[] = [
 
 const rankingCopyByLanguage = {
   es: {
-    backHome: 'VOLVER AL MENU',
+    backHome: 'VOLVER AL INICIO',
     championship: 'CAMPEONATO - CLASIFICACION FINAL',
     finalRanking: 'PARQUIZ CHAMPIONSHIP',
     rewardsTitle: 'RECOMPENSAS',
@@ -51,7 +51,7 @@ const rankingCopyByLanguage = {
     } as Record<PodiumPlace, string>,
   },
   en: {
-    backHome: 'BACK TO MENU',
+    backHome: 'BACK TO HOME',
     championship: 'CHAMPIONSHIP - FINAL RANKING',
     finalRanking: 'PARQUIZ CHAMPIONSHIP',
     rewardsTitle: 'REWARDS',
@@ -364,7 +364,7 @@ export default function FinalRankingScreen({ currentPlayerId, placements }: Fina
 
   return (
     <div
-      className="fixed inset-0 z-[300] overflow-hidden text-white"
+      className="fixed inset-0 z-[300] overflow-x-hidden overflow-y-auto text-white"
       style={{ backgroundColor: boardTheme.backgroundColor, backgroundImage: boardTheme.backgroundImage, backgroundPosition: 'center', backgroundSize: 'cover' }}
     >
       <motion.div
