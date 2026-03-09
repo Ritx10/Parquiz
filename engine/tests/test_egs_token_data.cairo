@@ -7,10 +7,11 @@ mod tests {
         ContractDef, ContractDefTrait, NamespaceDef, TestResource, WorldStorageTestTrait,
         spawn_test_world,
     };
-    use parquiz_engine::constants::{GLOBAL_STATE_SINGLETON_ID, config_status};
-    use parquiz_engine::models::{EgsTokenGameLink, GameConfig, GlobalState};
+    use parquiz_engine::constants::{EGS_CONFIG_SINGLETON_ID, GLOBAL_STATE_SINGLETON_ID, config_status};
+    use parquiz_engine::models::{EgsConfig, EgsTokenGameLink, GameConfig, GlobalState};
     use parquiz_engine::systems::egs_system::{
-        IMINIGAME_ID, IMINIGAME_SETTINGS_ID, IMinigameSettingsDetailsDispatcher,
+        IMINIGAME_ID, IMINIGAME_SETTINGS_ID, IMinigameDispatcher,
+        IMinigameDispatcherTrait, IMinigameSettingsDetailsDispatcher,
         IMinigameSettingsDetailsDispatcherTrait, IMinigameSettingsDispatcher,
         IMinigameSettingsDispatcherTrait, IMinigameTokenDataDispatcher,
         IMinigameTokenDataDispatcherTrait, ISRC5Dispatcher, ISRC5DispatcherTrait,
@@ -32,8 +33,10 @@ mod tests {
     }
 
     fn setup_world() -> (
-        dojo::world::WorldStorage, IMinigameTokenDataDispatcher, ISRC5Dispatcher,
+        dojo::world::WorldStorage, IMinigameDispatcher, IMinigameTokenDataDispatcher,
+        ISRC5Dispatcher,
     ) {
+        let egs_config_model = declare("m_EgsConfig").unwrap().contract_class();
         let token_link_model = declare("m_EgsTokenGameLink").unwrap().contract_class();
         let global_state_model = declare("m_GlobalState").unwrap().contract_class();
         let game_config_model = declare("m_GameConfig").unwrap().contract_class();
@@ -43,6 +46,7 @@ mod tests {
         let namespace = NamespaceDef {
             namespace: "parquiz",
             resources: [
+                TestResource::Model(*egs_config_model.class_hash),
                 TestResource::Model(*global_state_model.class_hash),
                 TestResource::Model(*game_config_model.class_hash),
                 TestResource::Model(*token_link_model.class_hash),
@@ -57,17 +61,33 @@ mod tests {
         let (egs_address, _) = world.dns(@"egs_system").unwrap();
         (
             world,
+            IMinigameDispatcher { contract_address: egs_address },
             IMinigameTokenDataDispatcher { contract_address: egs_address },
             ISRC5Dispatcher { contract_address: egs_address },
         )
     }
 
     #[test]
-    fn egs_system_exposes_minigame_token_data() {
-        let (mut world, token_data, src5) = setup_world();
+    fn egs_system_exposes_minigame_interface_and_token_data() {
+        let (mut world, minigame, token_data, src5) = setup_world();
+        let (egs_address, _) = world.dns(@"egs_system").unwrap();
+        let token_address: ContractAddress = 0x123.try_into().unwrap();
+        let objectives_address: ContractAddress = 0x456.try_into().unwrap();
 
         let first_token_id = 101;
         let second_token_id = 202;
+
+        world.write_model_test(
+            @EgsConfig {
+                singleton_id: EGS_CONFIG_SINGLETON_ID,
+                adapter_address: egs_address,
+                registry_address: zero_address(),
+                token_address,
+                settings_address: zero_address(),
+                objectives_address,
+                enabled: true,
+            },
+        );
 
         world.write_model_test(
             @EgsTokenGameLink {
@@ -95,6 +115,9 @@ mod tests {
         );
 
         assert(src5.supports_interface(IMINIGAME_ID), 'src5 mismatch');
+        assert(minigame.token_address() == token_address, 'token address mismatch');
+        assert(minigame.settings_address() == egs_address, 'settings address mismatch');
+        assert(minigame.objectives_address() == objectives_address, 'objectives address mismatch');
         assert(token_data.score(first_token_id) == 777, 'score mismatch');
         assert(token_data.game_over(first_token_id), 'game over mismatch');
 
@@ -114,7 +137,7 @@ mod tests {
 
     #[test]
     fn egs_system_exposes_locked_game_configs_as_settings() {
-        let (mut world, _token_data, src5) = setup_world();
+        let (mut world, _minigame, _token_data, src5) = setup_world();
         let (egs_address, _) = world.dns(@"egs_system").unwrap();
         let settings = IMinigameSettingsDispatcher { contract_address: egs_address };
         let settings_details = IMinigameSettingsDetailsDispatcher { contract_address: egs_address };

@@ -8,6 +8,82 @@ pub trait IEgsSystem<T> {
     fn publish_all_egs_settings(ref self: T);
 }
 
+#[derive(Drop, Serde, Copy, Clone)]
+pub struct GameContext {
+    pub name: felt252,
+    pub value: felt252,
+}
+
+#[derive(Drop, Serde, Clone)]
+pub struct GameContextDetails {
+    pub name: ByteArray,
+    pub description: ByteArray,
+    pub id: Option<u32>,
+    pub context: Span<GameContext>,
+}
+
+#[derive(Drop, Serde)]
+pub struct MintGameParams {
+    pub player_name: Option<felt252>,
+    pub settings_id: Option<u32>,
+    pub start: Option<u64>,
+    pub end: Option<u64>,
+    pub objective_id: Option<u32>,
+    pub context: Option<GameContextDetails>,
+    pub client_url: Option<ByteArray>,
+    pub renderer_address: Option<ContractAddress>,
+    pub skills_address: Option<ContractAddress>,
+    pub to: ContractAddress,
+    pub soulbound: bool,
+    pub paymaster: bool,
+    pub salt: u16,
+    pub metadata: u16,
+}
+
+#[derive(Drop, Serde)]
+pub struct MintParams {
+    pub game_address: ContractAddress,
+    pub player_name: Option<felt252>,
+    pub settings_id: Option<u32>,
+    pub start: Option<u64>,
+    pub end: Option<u64>,
+    pub objective_id: Option<u32>,
+    pub context: Option<GameContextDetails>,
+    pub client_url: Option<ByteArray>,
+    pub renderer_address: Option<ContractAddress>,
+    pub skills_address: Option<ContractAddress>,
+    pub to: ContractAddress,
+    pub soulbound: bool,
+    pub paymaster: bool,
+    pub salt: u16,
+    pub metadata: u16,
+}
+
+#[starknet::interface]
+pub trait IMinigame<T> {
+    fn token_address(self: @T) -> ContractAddress;
+    fn settings_address(self: @T) -> ContractAddress;
+    fn objectives_address(self: @T) -> ContractAddress;
+    fn mint_game(
+        self: @T,
+        player_name: Option<felt252>,
+        settings_id: Option<u32>,
+        start: Option<u64>,
+        end: Option<u64>,
+        objective_id: Option<u32>,
+        context: Option<GameContextDetails>,
+        client_url: Option<ByteArray>,
+        renderer_address: Option<ContractAddress>,
+        skills_address: Option<ContractAddress>,
+        to: ContractAddress,
+        soulbound: bool,
+        paymaster: bool,
+        salt: u16,
+        metadata: u16,
+    ) -> felt252;
+    fn mint_game_batch(self: @T, mints: Array<MintGameParams>) -> Array<felt252>;
+}
+
 #[starknet::interface]
 pub trait IMinigameTokenData<T> {
     fn score(self: @T, token_id: felt252) -> u64;
@@ -22,7 +98,7 @@ pub struct GameSetting {
     pub value: felt252,
 }
 
-#[derive(Drop, Serde)]
+#[derive(Drop, Serde, Clone)]
 pub struct GameSettingDetails {
     pub name: ByteArray,
     pub description: ByteArray,
@@ -44,16 +120,38 @@ pub trait IMinigameSettingsDetails<T> {
 
 #[starknet::interface]
 pub trait IMinigameToken<T> {
+    fn game_registry_address(self: @T) -> ContractAddress;
     fn is_playable(self: @T, token_id: felt252) -> bool;
     fn assert_is_playable(self: @T, token_id: felt252);
     fn settings_id(self: @T, token_id: felt252) -> u32;
+    fn mint(
+        ref self: T,
+        game_address: ContractAddress,
+        player_name: Option<felt252>,
+        settings_id: Option<u32>,
+        start: Option<u64>,
+        end: Option<u64>,
+        objective_id: Option<u32>,
+        context: Option<GameContextDetails>,
+        client_url: Option<ByteArray>,
+        renderer_address: Option<ContractAddress>,
+        skills_address: Option<ContractAddress>,
+        to: ContractAddress,
+        soulbound: bool,
+        paymaster: bool,
+        salt: u16,
+        metadata: u16,
+    ) -> felt252;
+    fn mint_batch(ref self: T, mints: Array<MintParams>) -> Array<felt252>;
     fn update_game(ref self: T, token_id: felt252);
 }
 
 pub const IMINIGAME_ID: felt252 =
-    0x1050f9a792acfa175e26783e365e1b0b38ff3440b960d0ffdfc0ff9d7dc9f2a;
+    0x3d1730c22937da340212dec5546ff5826895259966fa6a92d1191ab068cc2b4;
 pub const IMINIGAME_SETTINGS_ID: felt252 =
     0x1a58ab3ee416cc018f93236fd0bb995de89ee536626c268491121e51a46a0f4;
+pub const IMINIGAME_TOKEN_SETTINGS_ID: felt252 =
+    0x3c6f5c714fef5141bb7edbbbf738c80782154e825a5675355c937aa9bc07bae;
 
 #[starknet::interface]
 pub trait ISRC5<T> {
@@ -66,7 +164,7 @@ pub trait IERC721<T> {
 }
 
 #[starknet::interface]
-pub trait IMinigameTokenSettingsPublisher<T> {
+pub trait IMinigameTokenSettings<T> {
     fn create_settings(
         ref self: T,
         game_address: ContractAddress,
@@ -112,17 +210,136 @@ pub mod egs_system {
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use super::{
         GameSetting, GameSettingDetails, IERC721Dispatcher, IERC721DispatcherTrait, IEgsSystem,
-        IMinigameRegistryDispatcher, IMinigameRegistryDispatcherTrait, IMinigameSettings,
-        IMinigameSettingsDetails, IMinigameTokenData, IMinigameTokenDispatcher,
-        IMinigameTokenDispatcherTrait, IMinigameTokenSettingsPublisherDispatcher,
-        IMinigameTokenSettingsPublisherDispatcherTrait, IMINIGAME_ID, IMINIGAME_SETTINGS_ID,
-        ISRC5,
+        GameContextDetails, IMinigame, IMinigameRegistryDispatcher,
+        IMinigameRegistryDispatcherTrait, IMinigameSettings, IMinigameSettingsDetails,
+        IMinigameTokenData, IMinigameTokenDispatcher, IMinigameTokenDispatcherTrait,
+        IMinigameTokenSettingsDispatcher, IMinigameTokenSettingsDispatcherTrait,
+        IMINIGAME_ID, IMINIGAME_SETTINGS_ID, IMINIGAME_TOKEN_SETTINGS_ID, ISRC5,
+        ISRC5Dispatcher, ISRC5DispatcherTrait,
+        MintGameParams, MintParams,
     };
 
     #[abi(embed_v0)]
     impl SRC5Impl of ISRC5<ContractState> {
         fn supports_interface(self: @ContractState, interface_id: felt252) -> bool {
             interface_id == IMINIGAME_ID || interface_id == IMINIGAME_SETTINGS_ID
+        }
+    }
+
+    #[abi(embed_v0)]
+    impl MinigameImpl of IMinigame<ContractState> {
+        fn token_address(self: @ContractState) -> ContractAddress {
+            let world = self.world_default();
+            let config: EgsConfig = world.read_model(EGS_CONFIG_SINGLETON_ID);
+            config.token_address
+        }
+
+        fn settings_address(self: @ContractState) -> ContractAddress {
+            let world = self.world_default();
+            let config: EgsConfig = world.read_model(EGS_CONFIG_SINGLETON_ID);
+            if config.settings_address != zero_address() {
+                return config.settings_address;
+            }
+
+            get_contract_address()
+        }
+
+        fn objectives_address(self: @ContractState) -> ContractAddress {
+            let world = self.world_default();
+            let config: EgsConfig = world.read_model(EGS_CONFIG_SINGLETON_ID);
+            config.objectives_address
+        }
+
+        fn mint_game(
+            self: @ContractState,
+            player_name: Option<felt252>,
+            settings_id: Option<u32>,
+            start: Option<u64>,
+            end: Option<u64>,
+            objective_id: Option<u32>,
+            context: Option<GameContextDetails>,
+            client_url: Option<ByteArray>,
+            renderer_address: Option<ContractAddress>,
+            skills_address: Option<ContractAddress>,
+            to: ContractAddress,
+            soulbound: bool,
+            paymaster: bool,
+            salt: u16,
+            metadata: u16,
+        ) -> felt252 {
+            let world = self.world_default();
+            let config: EgsConfig = world.read_model(EGS_CONFIG_SINGLETON_ID);
+            assert_token_contract_ready(config);
+
+            let game_address = get_contract_address();
+            token_dispatcher(config)
+                .mint(
+                    game_address,
+                    player_name,
+                    settings_id,
+                    start,
+                    end,
+                    objective_id,
+                    context,
+                    client_url,
+                    renderer_address,
+                    skills_address,
+                    to,
+                    soulbound,
+                    paymaster,
+                    salt,
+                    metadata,
+                )
+        }
+
+        fn mint_game_batch(self: @ContractState, mints: Array<MintGameParams>) -> Array<felt252> {
+            let world = self.world_default();
+            let config: EgsConfig = world.read_model(EGS_CONFIG_SINGLETON_ID);
+            assert_token_contract_ready(config);
+
+            let game_address = get_contract_address();
+            let mut mint_params = array![];
+            let mut index = 0;
+
+            loop {
+                if index >= mints.len() {
+                    break;
+                }
+
+                let mint = mints.at(index);
+                let context_clone = match mint.context {
+                    Option::Some(ctx) => Option::Some(ctx.clone()),
+                    Option::None => Option::None,
+                };
+                let client_url_clone = match mint.client_url {
+                    Option::Some(url) => Option::Some(url.clone()),
+                    Option::None => Option::None,
+                };
+
+                mint_params
+                    .append(
+                        MintParams {
+                            game_address,
+                            player_name: *mint.player_name,
+                            settings_id: *mint.settings_id,
+                            start: *mint.start,
+                            end: *mint.end,
+                            objective_id: *mint.objective_id,
+                            context: context_clone,
+                            client_url: client_url_clone,
+                            renderer_address: *mint.renderer_address,
+                            skills_address: *mint.skills_address,
+                            to: *mint.to,
+                            soulbound: *mint.soulbound,
+                            paymaster: *mint.paymaster,
+                            salt: *mint.salt,
+                            metadata: *mint.metadata,
+                        },
+                    );
+                index += 1;
+            }
+
+            token_dispatcher(config).mint_batch(mint_params)
         }
     }
 
@@ -475,8 +692,8 @@ pub mod egs_system {
 
     fn token_settings_dispatcher(
         config: EgsConfig,
-    ) -> IMinigameTokenSettingsPublisherDispatcher {
-        IMinigameTokenSettingsPublisherDispatcher { contract_address: config.token_address }
+    ) -> IMinigameTokenSettingsDispatcher {
+        IMinigameTokenSettingsDispatcher { contract_address: config.token_address }
     }
 
     fn maybe_sync_token_contract_state(
@@ -507,8 +724,16 @@ pub mod egs_system {
     }
 
     fn assert_token_contract_ready(config: EgsConfig) {
-        assert(config.enabled, 'egs_disabled');
         assert(config.token_address != zero_address(), 'token_missing');
+    }
+
+    fn token_supports_settings_extension(token_address: ContractAddress) -> bool {
+        if token_address == zero_address() {
+            return false;
+        }
+
+        let src5 = ISRC5Dispatcher { contract_address: token_address };
+        src5.supports_interface(IMINIGAME_TOKEN_SETTINGS_ID)
     }
 
     fn settings_exists_internal(world: @dojo::world::WorldStorage, settings_id: u32) -> bool {
@@ -581,6 +806,9 @@ pub mod egs_system {
             return;
         }
         if config.adapter_address == zero_address() {
+            return;
+        }
+        if !token_supports_settings_extension(config.token_address) {
             return;
         }
 
