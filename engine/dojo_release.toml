@@ -1,7 +1,7 @@
 [world]
 name = "ParQuiz Engine"
 description = "Authoritative on-chain game engine for ParQuiz built with Dojo."
-seed = "parquiz"
+seed = "parquiz-sepolia-v2"
 icon_uri = "https://raw.githubusercontent.com/Ritx10/Parquiz/main/engine/assets/icon.png"
 cover_uri = "https://raw.githubusercontent.com/Ritx10/Parquiz/main/engine/assets/cover.png"
 website = "https://github.com/Ritx10/Parquiz"

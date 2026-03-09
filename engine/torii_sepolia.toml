@@ -1,0 +1,20 @@
+world_address = "0x074968a339785547927cc470d4b8f4d3c487ba552dd12aecff0e8b93441b10d3"
+rpc = "https://api.cartridge.gg/x/starknet/sepolia"
+[indexing]
+controllers = true
+contracts = [
+  "erc20:0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+  "erc20:0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+]
+[sql]
+historical = [
+  "parquiz-Game",
+  "parquiz-TurnState",
+  "parquiz-Token",
+  "parquiz-PendingQuestion",
+  "parquiz-GameFinalPlacement",
+  "parquiz-TokenMoved",
+  "parquiz-QuestionDrawn",
+  "parquiz-AnswerSubmitted",
+  "parquiz-GameWon",
+]
