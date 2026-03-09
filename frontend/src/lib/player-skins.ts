@@ -48,8 +48,6 @@ const freeSkinPresentationBySlug: Record<string, SkinPresentation> = {
 
 const premiumSkinPresentationBySlug: Record<string, SkinPresentation> = {
   image: { name: { es: 'Capi Samurai', en: 'Capi Samurai' }, subtitle: { es: 'Armadura legendaria', en: 'Legendary armor' } },
-  'image-2': { name: { es: 'Capi Artista', en: 'Capi Artist' }, subtitle: { es: 'Pincel y paleta renacentista', en: 'Renaissance brush and palette' } },
-  'image-2-2': { name: { es: 'Capi Buzo', en: 'Capi Diver' }, subtitle: { es: 'Traje de buceo clasico', en: 'Classic diving suit' } },
   'image-3': { name: { es: 'Capi Pirata', en: 'Capi Pirate' }, subtitle: { es: 'Capitana de los mares', en: 'Captain of the seas' } },
   'image-4': { name: { es: 'Capi Faraon', en: 'Capi Pharaoh' }, subtitle: { es: 'Realeza del antiguo Egipto', en: 'Royalty of ancient Egypt' } },
   'image-5': { name: { es: 'Capi Darth', en: 'Capi Darth' }, subtitle: { es: 'Lado oscuro galactico', en: 'Galactic dark side' } },
@@ -63,14 +61,16 @@ const premiumSkinPresentationBySlug: Record<string, SkinPresentation> = {
   'image-13': { name: { es: 'Capi Astronauta Pro', en: 'Capi Astronaut Pro' }, subtitle: { es: 'Mision espacial avanzada', en: 'Advanced space mission' } },
   'image-14': { name: { es: 'Capi Blancanieves', en: 'Capi Snow White' }, subtitle: { es: 'Manzana encantada', en: 'Enchanted apple' } },
   'image-15': { name: { es: 'Capi Tiana', en: 'Capi Tiana' }, subtitle: { es: 'Princesa del pantano', en: 'Bayou princess' } },
-  'image-16': { name: { es: 'Capi Cyberpunk', en: 'Capi Cyberpunk' }, subtitle: { es: 'Neon y tecnologia', en: 'Neon and tech' } },
-  'image-16-2': { name: { es: 'Capi Ariel', en: 'Capi Ariel' }, subtitle: { es: 'Sirena del oceano', en: 'Ocean mermaid' } },
-  'image-17': { name: { es: 'Capi Rapunzel', en: 'Capi Rapunzel' }, subtitle: { es: 'Cabello magico y arte', en: 'Magic hair and art' } },
-  'image-18': { name: { es: 'Capi Moana', en: 'Capi Moana' }, subtitle: { es: 'Espiritu del oceano', en: 'Ocean spirit' } },
-  'image-19': { name: { es: 'Capi Jasmine', en: 'Capi Jasmine' }, subtitle: { es: 'Lampara y aventura', en: 'Lamp and adventure' } },
-  'image-20': { name: { es: 'Capi Vaquero', en: 'Capi Cowboy' }, subtitle: { es: 'Duelo del viejo oeste', en: 'Old west duel' } },
-  'image-21': { name: { es: 'Capi Caballero', en: 'Capi Gentleman' }, subtitle: { es: 'Elegancia con baston', en: 'Elegance with a cane' } },
-  'image-22': { name: { es: 'Capi Cisne', en: 'Capi Swan' }, subtitle: { es: 'Tutu y alas blancas', en: 'Tutu and white wings' } },
+  'image-16': { name: { es: 'Capi Ariel', en: 'Capi Ariel' }, subtitle: { es: 'Sirena del oceano', en: 'Ocean mermaid' } },
+  'image-17': { name: { es: 'Capi Cyberpunk', en: 'Capi Cyberpunk' }, subtitle: { es: 'Neon y tecnologia', en: 'Neon and tech' } },
+  'image-18': { name: { es: 'Capi Rapunzel', en: 'Capi Rapunzel' }, subtitle: { es: 'Cabello magico y arte', en: 'Magic hair and art' } },
+  'image-19': { name: { es: 'Capi Moana', en: 'Capi Moana' }, subtitle: { es: 'Espiritu del oceano', en: 'Ocean spirit' } },
+  'image-2-2': { name: { es: 'Capi Jasmine', en: 'Capi Jasmine' }, subtitle: { es: 'Lampara y aventura', en: 'Lamp and adventure' } },
+  'image-2': { name: { es: 'Capi Buzo', en: 'Capi Diver' }, subtitle: { es: 'Traje de buceo clasico', en: 'Classic diving suit' } },
+  'image-20': { name: { es: 'Capi Artista', en: 'Capi Artist' }, subtitle: { es: 'Pincel y paleta renacentista', en: 'Renaissance brush and palette' } },
+  'image-21': { name: { es: 'Capi Vaquero', en: 'Capi Cowboy' }, subtitle: { es: 'Duelo del viejo oeste', en: 'Old west duel' } },
+  'image-22': { name: { es: 'Capi Caballero', en: 'Capi Gentleman' }, subtitle: { es: 'Elegancia con baston', en: 'Elegance with a cane' } },
+  'image-23': { name: { es: 'Capi Cisne', en: 'Capi Swan' }, subtitle: { es: 'Tutu y alas blancas', en: 'Tutu and white wings' } },
 }
 
 const rewardSkinPresentationBySlug: Record<string, SkinPresentation> = {

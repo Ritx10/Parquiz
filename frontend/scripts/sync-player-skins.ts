@@ -16,7 +16,9 @@ const slugify = (value: string) =>
     .toLowerCase()
 
 const listFilesRecursive = (directoryPath: string): string[] => {
-  return readdirSync(directoryPath).flatMap((entryName) => {
+  return readdirSync(directoryPath)
+    .sort((left, right) => left.localeCompare(right, 'en'))
+    .flatMap((entryName) => {
     if (entryName.startsWith('.')) {
       return []
     }
@@ -29,7 +31,7 @@ const listFilesRecursive = (directoryPath: string): string[] => {
     }
 
     return SUPPORTED_EXTENSIONS.has(extname(entryName).toLowerCase()) ? [entryPath] : []
-  })
+    })
 }
 
 const findProjectDirectory = (name: string) => {
