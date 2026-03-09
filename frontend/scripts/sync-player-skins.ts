@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { basename, extname, join, resolve } from 'node:path'
 
 const SUPPORTED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.avif', '.gif', '.heic'])
@@ -143,10 +144,14 @@ const assetsRoot = join(projectRoot, 'src', 'assets', 'player-skins')
 const freeDestination = join(assetsRoot, 'free')
 const premiumDestination = join(assetsRoot, 'premium')
 const rewardDestination = join(assetsRoot, 'reward')
+const downloadsRoot = join(homedir(), 'Downloads')
 
 const freeSource = findProjectDirectory('CapisGratis')
 const premiumSource = findProjectDirectory('CapisPago')
-const specialPremiumSource = findProjectDirectory('CapiEspecial')
+const downloadsRewardSource = join(downloadsRoot, 'CapiEspecial')
+const specialPremiumSource = existsSync(downloadsRewardSource)
+  ? downloadsRewardSource
+  : findProjectDirectory('CapiEspecial')
 
 if (!freeSource) {
   throw new Error('Missing source folder in repository: frontend/CapisGratis')
@@ -184,9 +189,5 @@ console.log(`Synced ${premiumCount} premium capi skins from ${premiumSource.repl
 if (specialPremiumSource) {
   console.log(`Synced ${rewardCount} reward capi skins from ${specialPremiumSource.replace(`${projectRoot}/`, '')}`)
 } else {
-  console.log('Optional frontend/CapiEspecial folder was not found; no reward skins were imported.')
-}
-
-if (!specialPremiumSource) {
-  console.log('Optional frontend/CapiEspecial folder was not found; no extra premium skins were imported.')
+  console.log('Optional CapiEspecial folder was not found in ~/Downloads or frontend; no reward skins were imported.')
 }
