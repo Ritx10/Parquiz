@@ -498,29 +498,56 @@ Useful engine areas:
 
 ## Local Development
 
-### Engine
+To run the full game locally, it is best to run steps `1` through `6` from `engine/`.
 
-From `engine/`:
+Use separate terminals for the long-running processes:
+
+### Engine stack (`engine/`)
+
+Terminal 1:
 
 ```bash
-katana --dev --dev.no-fee
-sozo build --profile dev
-sozo migrate --profile dev
-torii --world <WORLD_ADDRESS> --indexing.controllers
+cd engine
+katana --dev --dev.no-fee --http.addr 0.0.0.0 --http.cors_origins "*" --cartridge.paymaster --explorer
 ```
 
-To seed the local question set and VRF provider, follow `engine/README.md`.
-
-### Frontend
-
-From `frontend/`:
+Terminal 2:
 
 ```bash
+cd engine
+sozo build --profile dev
+sozo migrate --profile dev
+sozo execute --profile dev --wait parquiz-admin_system set_vrf_provider 0x15f542e25a4ce31481f986888c179b6e57412be340b8095f72f75a328fbb27b
+sozo execute --profile dev --wait parquiz-admin_system set_question_set 1 0x79d1cead79eeb7c7906a4ed96ccb1a3407cd11a25712a473b88fc982bec2087 180 2 1
+torii \
+  --world 0x0092c575ff3ab5a8cd02e3d59856bab57570516f518816f2436252eb86e8953d \
+  --rpc http://127.0.0.1:5050 \
+  --http.addr 0.0.0.0 \
+  --http.port 8080 \
+  --grpc.addr 0.0.0.0 \
+  --grpc.port 50051 \
+  --config ./torii_dev.toml \
+  --indexing.controllers \
+  --runner.check_contracts
+```
+
+Notes:
+
+- Step `4` sets the VRF provider for Katana.
+- Step `5` populates the local question set.
+- `./torii_dev.toml` is the project-relative path to the Torii config when you run the command from `engine/`.
+
+### Frontend (`frontend/`)
+
+Terminal 3:
+
+```bash
+cd frontend
 bun install
 bun run dev
 ```
 
-The frontend environment is controlled by `frontend/.env` and `frontend/.env.example`.
+The frontend environment is controlled by `frontend/.env`, `frontend/.env.katana`, and `frontend/.env.example`.
 
 Important env values include:
 
