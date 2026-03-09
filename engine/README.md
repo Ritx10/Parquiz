@@ -48,6 +48,13 @@ sozo execute --profile dev --wait parquiz-admin_system set_vrf_provider 0x15f542
 sozo execute --profile dev --wait parquiz-admin_system set_question_set 1 0x3a1ec27286ab0b11fb3e34e1266c3977349e39fc2f2fcf42ebd117b6e78e786 63 1 1
 ```
 
+6. Seed the local progression/shop catalog so profile purchases and cosmetic loadouts work:
+
+```bash
+cd ../frontend
+bun run profile:seed:dev
+```
+
 ### Full Local Reset
 
 With a fresh Katana instance, this sequence brings the whole stack back up:
@@ -61,13 +68,26 @@ sozo build --profile dev
 sozo migrate --profile dev
 sozo execute --profile dev --wait parquiz-admin_system set_vrf_provider 0x15f542e25a4ce31481f986888c179b6e57412be340b8095f72f75a328fbb27b
 sozo execute --profile dev --wait parquiz-admin_system set_question_set 1 0x3a1ec27286ab0b11fb3e34e1266c3977349e39fc2f2fcf42ebd117b6e78e786 63 1 1
-torii --world 0x92c575ff3ab5a8cd02e3d59856bab57570516f518816f2436252eb86e8953d --indexing.controllers --http.cors_origins "*"
 
 # terminal 3
+cd ../frontend
+bun run profile:seed:dev
+
+# terminal 4
+cd ../engine
+torii --world 0x92c575ff3ab5a8cd02e3d59856bab57570516f518816f2436252eb86e8953d --indexing.controllers --http.cors_origins "*"
+
+# terminal 5
 cd ../frontend
 cp .env.katana .env
 bun run dev
 ```
+
+Notes:
+
+- `bun run profile:seed:dev` writes progression config, placement rewards, and the full cosmetic catalog expected by the current shop UI.
+- If you migrate a fresh local world, restart Torii after the migrate so it indexes the latest models.
+- If the shop shows missing items or the board view starts spamming Torii 500s, the usual cause is Torii still indexing an older world/schema. Restart Torii after `sozo migrate --profile dev`.
 
 ## Sepolia Bootstrap
 
@@ -77,12 +97,16 @@ From `frontend/` run:
 
 ```bash
 DOJO_KEYSTORE_PASSWORD='<your-keystore-password>' bun run questions:seed:release
+DOJO_KEYSTORE_PASSWORD='<your-keystore-password>' bun run profile:seed:release
 ```
 
 Then verify the world state:
 
 ```bash
 sozo --profile release model get parquiz-QuestionSet 1
+sozo --profile release model get parquiz-ProgressionConfig 4
+sozo --profile release model get parquiz-CosmeticDefinition 1 2
+sozo --profile release model get parquiz-PlacementRewardConfig 1
 ```
 
 ## Next Implementation Targets

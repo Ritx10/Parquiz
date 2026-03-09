@@ -519,6 +519,20 @@ sozo build --profile dev
 sozo migrate --profile dev
 sozo execute --profile dev --wait parquiz-admin_system set_vrf_provider 0x15f542e25a4ce31481f986888c179b6e57412be340b8095f72f75a328fbb27b
 sozo execute --profile dev --wait parquiz-admin_system set_question_set 1 0x79d1cead79eeb7c7906a4ed96ccb1a3407cd11a25712a473b88fc982bec2087 180 2 1
+```
+
+Terminal 3:
+
+```bash
+cd frontend
+bun install
+bun run profile:seed:dev
+```
+
+Terminal 4:
+
+```bash
+cd engine
 torii \
   --world 0x0092c575ff3ab5a8cd02e3d59856bab57570516f518816f2436252eb86e8953d \
   --rpc http://127.0.0.1:5050 \
@@ -535,15 +549,16 @@ Notes:
 
 - Step `4` sets the VRF provider for Katana.
 - Step `5` populates the local question set.
+- Terminal `3` seeds the progression config, placement rewards, and cosmetic definitions used by the current shop/profile system.
 - `./torii_dev.toml` is the project-relative path to the Torii config when you run the command from `engine/`.
+- After any fresh `sozo migrate --profile dev`, restart Torii so it indexes the newest models.
 
 ### Frontend (`frontend/`)
 
-Terminal 3:
+Terminal 5:
 
 ```bash
 cd frontend
-bun install
 bun run dev
 ```
 
