@@ -34,18 +34,11 @@ export const PARTICIPATION_BONUS_XP = 10
 export const calculateMatchRewardSummary = (params: {
   captureCount: number
   correctAnswers: number
-  highestCorrectAnswers: number
-  highestCorrectAnswersCount: number
   place: PodiumPlace
 }) => {
   const baseCoins = coinsRewardByPlace[params.place]
   const baseXp = xpRewardByPlace[params.place]
-  const bonusKnowledgeXp =
-    params.correctAnswers > 0 &&
-    params.correctAnswers === params.highestCorrectAnswers &&
-    params.highestCorrectAnswersCount === 1
-      ? KNOWLEDGE_BONUS_XP
-      : 0
+  const bonusKnowledgeXp = params.correctAnswers > 0 ? KNOWLEDGE_BONUS_XP : 0
   const bonusCapturesXp = params.captureCount > 0 ? CAPTURE_BONUS_XP : 0
   const bonusParticipationXp = PARTICIPATION_BONUS_XP
 

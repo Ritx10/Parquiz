@@ -1336,21 +1336,12 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   const buildRewardedPlacements = useCallback(
     (placements: FinalPlacement[]) => {
       const statsByPlayer = playerStatsRef.current
-      const highestCorrectAnswers = placements.reduce((highest, placement) => {
-        const correctAnswers = statsByPlayer[placement.id]?.correctAnswers || 0
-        return correctAnswers > highest ? correctAnswers : highest
-      }, 0)
-      const highestCorrectAnswersCount = placements.filter(
-        (placement) => (statsByPlayer[placement.id]?.correctAnswers || 0) === highestCorrectAnswers,
-      ).length
 
       return placements.map((placement) => {
         const stats = statsByPlayer[placement.id] || { captures: 0, correctAnswers: 0 }
         const rewardSummary = calculateMatchRewardSummary({
           captureCount: stats.captures,
           correctAnswers: stats.correctAnswers,
-          highestCorrectAnswers,
-          highestCorrectAnswersCount,
           place: placement.place,
         })
 

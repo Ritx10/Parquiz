@@ -41,8 +41,6 @@ const rankingCopyByLanguage = {
     bonusQuestions: 'Bonus preguntas',
     bonusCaptures: 'Bonus capturas',
     bonusParticipation: 'Bonus participacion',
-    correctAnswers: 'Respuestas correctas',
-    captures: 'Capturas',
     placeLabel: {
       1: 'PRIMER LUGAR',
       2: 'SEGUNDO LUGAR',
@@ -60,8 +58,6 @@ const rankingCopyByLanguage = {
     bonusQuestions: 'Question bonus',
     bonusCaptures: 'Capture bonus',
     bonusParticipation: 'Participation bonus',
-    correctAnswers: 'Correct answers',
-    captures: 'Captures',
     placeLabel: {
       1: 'FIRST PLACE',
       2: 'SECOND PLACE',
@@ -510,7 +506,6 @@ export default function FinalRankingScreen({ currentPlayerId, placements }: Fina
                 <div className="rounded-[18px] border border-white/12 bg-black/12 px-4 py-3">{ui.bonusQuestions}: +{currentPlayerRewards.bonusKnowledgeXp} XP</div>
                 <div className="rounded-[18px] border border-white/12 bg-black/12 px-4 py-3">{ui.bonusCaptures}: +{currentPlayerRewards.bonusCapturesXp} XP</div>
                 <div className="rounded-[18px] border border-white/12 bg-black/12 px-4 py-3">{ui.bonusParticipation}: +{currentPlayerRewards.bonusParticipationXp} XP</div>
-                <div className="rounded-[18px] border border-white/12 bg-black/12 px-4 py-3">{ui.correctAnswers}: {currentPlayerRewards.correctAnswers} · {ui.captures}: {currentPlayerRewards.captureCount}</div>
               </div>
             </div>
           ) : null}
