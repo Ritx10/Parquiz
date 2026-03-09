@@ -111,6 +111,7 @@ const configSystem = () => requireAddress('config system', appEnv.configSystemAd
 const lobbySystem = () => requireAddress('lobby system', appEnv.lobbySystemAddress)
 const turnSystem = () => requireAddress('turn system', appEnv.turnSystemAddress)
 const customizationSystem = () => requireAddress('customization system', appEnv.customizationSystemAddress)
+const profileSystem = () => requireAddress('profile system', appEnv.profileSystemAddress)
 const egsSystem = () => requireAddress('EGS system', appEnv.egsSystemAddress)
 
 export const createGameConfig = async (
@@ -207,6 +208,48 @@ export const setPlayerCustomization = async (
       avatar_skin_id: avatarSkinId,
       dice_skin_id: diceSkinId,
       token_skin_id: tokenSkinId,
+    }),
+  })
+}
+
+export const setPlayerLoadout = async (
+  account: AccountInterface,
+  avatarSkinId: number,
+  diceSkinId: number,
+  tokenSkinId: number,
+  boardThemeId: number,
+) => {
+  return executeCall(account, {
+    contractAddress: customizationSystem(),
+    entrypoint: 'set_player_loadout',
+    calldata: CallData.compile({
+      avatar_skin_id: avatarSkinId,
+      dice_skin_id: diceSkinId,
+      token_skin_id: tokenSkinId,
+      board_theme_id: boardThemeId,
+    }),
+  })
+}
+
+export const ensurePlayerProfile = async (account: AccountInterface) => {
+  return executeCall(account, {
+    contractAddress: profileSystem(),
+    entrypoint: 'ensure_player_profile',
+    calldata: CallData.compile({}),
+  })
+}
+
+export const purchaseCosmetic = async (
+  account: AccountInterface,
+  kind: number,
+  itemId: number,
+) => {
+  return executeCall(account, {
+    contractAddress: profileSystem(),
+    entrypoint: 'purchase_cosmetic',
+    calldata: CallData.compile({
+      kind,
+      item_id: itemId,
     }),
   })
 }

@@ -160,6 +160,7 @@ export type DojoPlayerCustomizationModel = {
   avatar_skin_id: number
   dice_skin_id: number
   token_skin_id: number
+  board_theme_id: number
   updated_at: bigint
 }
 
@@ -169,6 +170,79 @@ export type DojoGamePlayerCustomizationModel = {
   avatar_skin_id: number
   dice_skin_id: number
   token_skin_id: number
+}
+
+export type DojoPlayerProfileModel = {
+  player: string
+  level: number
+  xp: number
+  coins: number
+  created_at: bigint
+  updated_at: bigint
+}
+
+export type DojoCosmeticDefinitionModel = {
+  kind: number
+  item_id: number
+  price_coins: number
+  required_level: number
+  enabled: boolean
+  purchasable: boolean
+}
+
+export type DojoPlayerInventoryItemModel = {
+  player: string
+  kind: number
+  item_id: number
+  owned: boolean
+  source: number
+  acquired_at: bigint
+}
+
+export type DojoProgressionConfigModel = {
+  singleton_id: number
+  base_xp_per_level: number
+  level_xp_growth: number
+  level_up_coin_reward: number
+  correct_answer_xp: number
+  exit_home_xp: number
+  capture_xp: number
+  bonus_questions_xp: number
+  bonus_captures_xp: number
+  bonus_participation_xp: number
+  special_reward_level: number
+  special_reward_avatar_skin_id: number
+}
+
+export type DojoPlacementRewardConfigModel = {
+  place: number
+  base_xp: number
+  base_coins: number
+}
+
+export type DojoGamePlayerStatsModel = {
+  game_id: bigint
+  player: string
+  correct_answers: number
+  captures: number
+  exit_home_count: number
+}
+
+export type DojoGameFinalPlacementModel = {
+  game_id: bigint
+  player: string
+  seat: number
+  place: number
+  goal_count: number
+  progress_score: number
+  base_xp: number
+  base_coins: number
+  bonus_questions_xp: number
+  bonus_captures_xp: number
+  bonus_participation_xp: number
+  total_xp: number
+  total_coins: number
+  settled_at: bigint
 }
 
 export type DojoGlobalStateModel = {

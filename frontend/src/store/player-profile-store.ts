@@ -17,6 +17,7 @@ import {
   type PlayerSkinId,
 } from '../lib/player-skins'
 import {
+  defaultOwnedTokenSkinIds,
   normalizeOwnedTokenSkinIds,
   normalizeTokenSkinId,
   type TokenSkinId,
@@ -31,10 +32,16 @@ export type PlayerProfile = {
   ownedDiceSkinIds: DiceSkinId[]
   ownedPlayerSkinIds: PlayerSkinId[]
   ownedTokenSkinIds: TokenSkinId[]
+  processedRewardKeys: string[]
   selectedBoardThemeId: BoardThemeId
   selectedDiceSkinId: DiceSkinId
   selectedSkinId: null | PlayerSkinId
   selectedTokenSkinId: TokenSkinId
+}
+
+export type PlayerProfileRewardGrant = {
+  coins?: number
+  xp?: number
 }
 
 type StoredProfiles = Record<string, Partial<PlayerProfile>>
@@ -42,8 +49,14 @@ type StoredProfiles = Record<string, Partial<PlayerProfile>>
 type PlayerProfileState = {
   profiles: Record<string, PlayerProfile>
   ensureProfile: (profileKey: string) => void
+  replaceProfile: (profileKey: string, profile: Partial<PlayerProfile>) => void
   awardCoins: (profileKey: string, amount: number) => void
   awardXp: (profileKey: string, amount: number) => void
+  claimRewardEvent: (profileKey: string, rewardKey: string, reward: PlayerProfileRewardGrant) => boolean
+  purchaseBoardTheme: (profileKey: string, themeId: BoardThemeId, cost: number) => boolean
+  purchaseDiceSkin: (profileKey: string, skinId: DiceSkinId, cost: number) => boolean
+  purchasePlayerSkin: (profileKey: string, skinId: PlayerSkinId, cost: number) => boolean
+  purchaseTokenSkin: (profileKey: string, skinId: TokenSkinId, cost: number) => boolean
   setCoins: (profileKey: string, coins: number) => void
   unlockBoardTheme: (profileKey: string, themeId: BoardThemeId) => void
   unlockDiceSkin: (profileKey: string, skinId: DiceSkinId) => void
@@ -57,6 +70,7 @@ type PlayerProfileState = {
 
 const STORAGE_KEY = 'parquiz.player-profile.v2'
 const LEVEL_REWARD_COINS = 50
+const MAX_PROCESSED_REWARD_KEYS = 400
 
 export const getXpRequiredForLevel = (level: number) => 100 + Math.max(1, Math.floor(level)) * 50
 
@@ -68,7 +82,8 @@ export const defaultPlayerProfile: PlayerProfile = {
   ownedBoardThemeIds: normalizeOwnedBoardThemeIds(undefined, 'theme-classic'),
   ownedDiceSkinIds: normalizeOwnedDiceSkinIds(undefined, 'blue'),
   ownedPlayerSkinIds: normalizeOwnedPlayerSkinIds(undefined, defaultOwnedPlayerSkinIds[0]),
-  ownedTokenSkinIds: normalizeOwnedTokenSkinIds(undefined, 'blue'),
+  ownedTokenSkinIds: normalizeOwnedTokenSkinIds(defaultOwnedTokenSkinIds, 'blue'),
+  processedRewardKeys: [],
   selectedBoardThemeId: 'theme-classic',
   selectedDiceSkinId: 'blue',
   selectedSkinId: null,
@@ -82,6 +97,56 @@ const sanitizeInteger = (value: unknown, fallback: number, minimum = 0) => {
 
   return Math.max(minimum, Math.floor(value))
 }
+
+const sanitizeProcessedRewardKeys = (value: unknown) => {
+  const nextKeys = Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    : []
+
+  return Array.from(new Set(nextKeys)).slice(-MAX_PROCESSED_REWARD_KEYS)
+}
+
+const appendProcessedRewardKey = (keys: string[], rewardKey: string) => {
+  if (!rewardKey) {
+    return keys
+  }
+
+  const nextKeys = keys.includes(rewardKey) ? keys : [...keys, rewardKey]
+  return nextKeys.slice(-MAX_PROCESSED_REWARD_KEYS)
+}
+
+const createDefaultPlayerProfile = (): PlayerProfile => ({
+  ...defaultPlayerProfile,
+  ownedBoardThemeIds: [...defaultPlayerProfile.ownedBoardThemeIds],
+  ownedDiceSkinIds: [...defaultPlayerProfile.ownedDiceSkinIds],
+  ownedPlayerSkinIds: [...defaultPlayerProfile.ownedPlayerSkinIds],
+  ownedTokenSkinIds: [...defaultPlayerProfile.ownedTokenSkinIds],
+  processedRewardKeys: [],
+})
+
+const applyProfileProgression = (profile: PlayerProfile, reward: PlayerProfileRewardGrant) => {
+  let nextCoins = profile.coins + sanitizeInteger(reward.coins, 0)
+  let nextLevel = profile.level
+  let nextXp = profile.xp + sanitizeInteger(reward.xp, 0)
+
+  while (nextXp >= getXpRequiredForLevel(nextLevel)) {
+    nextXp -= getXpRequiredForLevel(nextLevel)
+    nextLevel += 1
+    nextCoins += LEVEL_REWARD_COINS
+  }
+
+  return {
+    coins: nextCoins,
+    level: nextLevel,
+    ownedPlayerSkinIds:
+      specialRewardSkinId && nextLevel >= 10
+        ? normalizeOwnedPlayerSkinIds(profile.ownedPlayerSkinIds, specialRewardSkinId)
+        : profile.ownedPlayerSkinIds,
+    xp: nextXp,
+  } satisfies Partial<PlayerProfile>
+}
+
+const sanitizeCost = (cost: number) => Math.max(0, Math.floor(cost))
 
 const normalizeProfile = (value?: Partial<PlayerProfile>): PlayerProfile => {
   const selectedBoardThemeId = normalizeBoardThemeId(value?.selectedBoardThemeId)
@@ -99,6 +164,7 @@ const normalizeProfile = (value?: Partial<PlayerProfile>): PlayerProfile => {
     ownedDiceSkinIds: normalizeOwnedDiceSkinIds(value?.ownedDiceSkinIds, selectedDiceSkinId),
     ownedPlayerSkinIds: normalizeOwnedPlayerSkinIds(value?.ownedPlayerSkinIds, selectedSkinId),
     ownedTokenSkinIds: normalizeOwnedTokenSkinIds(value?.ownedTokenSkinIds, selectedTokenSkinId),
+    processedRewardKeys: sanitizeProcessedRewardKeys(value?.processedRewardKeys),
     selectedBoardThemeId,
     selectedDiceSkinId,
     selectedSkinId,
@@ -155,7 +221,7 @@ const initialProfiles = readStoredProfiles()
 persistProfiles(initialProfiles)
 
 const getProfile = (profiles: Record<string, PlayerProfile>, profileKey: string) =>
-  profiles[profileKey] || defaultPlayerProfile
+  profiles[profileKey] || createDefaultPlayerProfile()
 
 const updateProfile = (
   profiles: Record<string, PlayerProfile>,
@@ -172,7 +238,7 @@ const updateProfile = (
 export const resolvePlayerProfileKey = (address?: null | string, username?: null | string) =>
   address?.toLowerCase() || username?.toLowerCase() || 'guest'
 
-export const usePlayerProfileStore = create<PlayerProfileState>((set) => ({
+export const usePlayerProfileStore = create<PlayerProfileState>((set, get) => ({
   profiles: initialProfiles,
   ensureProfile: (profileKey) => {
     set((state) => {
@@ -182,7 +248,20 @@ export const usePlayerProfileStore = create<PlayerProfileState>((set) => ({
 
       const nextProfiles = {
         ...state.profiles,
-        [profileKey]: defaultPlayerProfile,
+        [profileKey]: createDefaultPlayerProfile(),
+      }
+      persistProfiles(nextProfiles)
+      return { profiles: nextProfiles }
+    })
+  },
+  replaceProfile: (profileKey, profile) => {
+    set((state) => {
+      const nextProfiles = {
+        ...state.profiles,
+        [profileKey]: normalizeProfile({
+          ...createDefaultPlayerProfile(),
+          ...profile,
+        }),
       }
       persistProfiles(nextProfiles)
       return { profiles: nextProfiles }
@@ -205,29 +284,132 @@ export const usePlayerProfileStore = create<PlayerProfileState>((set) => ({
         return state
       }
 
-      const profile = getProfile(state.profiles, profileKey)
-      let nextLevel = profile.level
-      let nextXp = profile.xp + gainedXp
-      let nextCoins = profile.coins
-
-      while (nextXp >= getXpRequiredForLevel(nextLevel)) {
-        nextXp -= getXpRequiredForLevel(nextLevel)
-        nextLevel += 1
-        nextCoins += LEVEL_REWARD_COINS
-      }
-
-      const nextProfiles = updateProfile(state.profiles, profileKey, () => ({
-        coins: nextCoins,
-        level: nextLevel,
-        ownedPlayerSkinIds:
-          specialRewardSkinId && nextLevel >= 10
-            ? normalizeOwnedPlayerSkinIds(profile.ownedPlayerSkinIds, specialRewardSkinId)
-            : profile.ownedPlayerSkinIds,
-        xp: nextXp,
-      }))
+      const nextProfiles = updateProfile(state.profiles, profileKey, (profile) =>
+        applyProfileProgression(profile, { xp: gainedXp }),
+      )
       persistProfiles(nextProfiles)
       return { profiles: nextProfiles }
     })
+  },
+  claimRewardEvent: (profileKey, rewardKey, reward) => {
+    const normalizedRewardKey = rewardKey.trim()
+
+    if (!normalizedRewardKey) {
+      return false
+    }
+
+    const state = get()
+    const profile = getProfile(state.profiles, profileKey)
+
+    if (profile.processedRewardKeys.includes(normalizedRewardKey)) {
+      return false
+    }
+
+    const nextProfiles = updateProfile(state.profiles, profileKey, (currentProfile) => ({
+      ...applyProfileProgression(currentProfile, reward),
+      processedRewardKeys: appendProcessedRewardKey(currentProfile.processedRewardKeys, normalizedRewardKey),
+    }))
+
+    persistProfiles(nextProfiles)
+    set({ profiles: nextProfiles })
+    return true
+  },
+  purchaseBoardTheme: (profileKey, themeId, cost) => {
+    const normalizedThemeId = normalizeBoardThemeId(themeId)
+    const state = get()
+    const profile = getProfile(state.profiles, profileKey)
+    const price = sanitizeCost(cost)
+
+    if (profile.ownedBoardThemeIds.includes(normalizedThemeId)) {
+      return true
+    }
+
+    if (profile.coins < price) {
+      return false
+    }
+
+    const nextProfiles = updateProfile(state.profiles, profileKey, (currentProfile) => ({
+      coins: currentProfile.coins - price,
+      ownedBoardThemeIds: normalizeOwnedBoardThemeIds(currentProfile.ownedBoardThemeIds, normalizedThemeId),
+    }))
+
+    persistProfiles(nextProfiles)
+    set({ profiles: nextProfiles })
+    return true
+  },
+  purchaseDiceSkin: (profileKey, skinId, cost) => {
+    const normalizedSkinId = normalizeDiceSkinId(skinId)
+    const state = get()
+    const profile = getProfile(state.profiles, profileKey)
+    const price = sanitizeCost(cost)
+
+    if (profile.ownedDiceSkinIds.includes(normalizedSkinId)) {
+      return true
+    }
+
+    if (profile.coins < price) {
+      return false
+    }
+
+    const nextProfiles = updateProfile(state.profiles, profileKey, (currentProfile) => ({
+      coins: currentProfile.coins - price,
+      ownedDiceSkinIds: normalizeOwnedDiceSkinIds(currentProfile.ownedDiceSkinIds, normalizedSkinId),
+    }))
+
+    persistProfiles(nextProfiles)
+    set({ profiles: nextProfiles })
+    return true
+  },
+  purchasePlayerSkin: (profileKey, skinId, cost) => {
+    const normalizedSkinId = normalizePlayerSkinId(skinId)
+
+    if (!normalizedSkinId) {
+      return false
+    }
+
+    const state = get()
+    const profile = getProfile(state.profiles, profileKey)
+    const price = sanitizeCost(cost)
+
+    if (profile.ownedPlayerSkinIds.includes(normalizedSkinId)) {
+      return true
+    }
+
+    if (profile.coins < price) {
+      return false
+    }
+
+    const nextProfiles = updateProfile(state.profiles, profileKey, (currentProfile) => ({
+      coins: currentProfile.coins - price,
+      ownedPlayerSkinIds: normalizeOwnedPlayerSkinIds(currentProfile.ownedPlayerSkinIds, normalizedSkinId),
+    }))
+
+    persistProfiles(nextProfiles)
+    set({ profiles: nextProfiles })
+    return true
+  },
+  purchaseTokenSkin: (profileKey, skinId, cost) => {
+    const normalizedSkinId = normalizeTokenSkinId(skinId)
+    const state = get()
+    const profile = getProfile(state.profiles, profileKey)
+    const price = sanitizeCost(cost)
+
+    if (profile.ownedTokenSkinIds.includes(normalizedSkinId)) {
+      return true
+    }
+
+    if (profile.coins < price) {
+      return false
+    }
+
+    const nextProfiles = updateProfile(state.profiles, profileKey, (currentProfile) => ({
+      coins: currentProfile.coins - price,
+      ownedTokenSkinIds: normalizeOwnedTokenSkinIds(currentProfile.ownedTokenSkinIds, normalizedSkinId),
+    }))
+
+    persistProfiles(nextProfiles)
+    set({ profiles: nextProfiles })
+    return true
   },
   setCoins: (profileKey, coins) => {
     set((state) => {
@@ -274,9 +456,11 @@ export const usePlayerProfileStore = create<PlayerProfileState>((set) => ({
   },
   setSelectedBoardThemeId: (profileKey, themeId) => {
     set((state) => {
+      const normalizedThemeId = normalizeBoardThemeId(themeId)
       const nextProfiles = updateProfile(state.profiles, profileKey, (profile) => ({
-        ownedBoardThemeIds: normalizeOwnedBoardThemeIds(profile.ownedBoardThemeIds, themeId),
-        selectedBoardThemeId: themeId,
+        selectedBoardThemeId: profile.ownedBoardThemeIds.includes(normalizedThemeId)
+          ? normalizedThemeId
+          : profile.selectedBoardThemeId,
       }))
       persistProfiles(nextProfiles)
       return { profiles: nextProfiles }
@@ -284,9 +468,11 @@ export const usePlayerProfileStore = create<PlayerProfileState>((set) => ({
   },
   setSelectedDiceSkinId: (profileKey, skinId) => {
     set((state) => {
+      const normalizedSkinId = normalizeDiceSkinId(skinId)
       const nextProfiles = updateProfile(state.profiles, profileKey, (profile) => ({
-        ownedDiceSkinIds: normalizeOwnedDiceSkinIds(profile.ownedDiceSkinIds, skinId),
-        selectedDiceSkinId: skinId,
+        selectedDiceSkinId: profile.ownedDiceSkinIds.includes(normalizedSkinId)
+          ? normalizedSkinId
+          : profile.selectedDiceSkinId,
       }))
       persistProfiles(nextProfiles)
       return { profiles: nextProfiles }
@@ -296,8 +482,10 @@ export const usePlayerProfileStore = create<PlayerProfileState>((set) => ({
     set((state) => {
       const normalizedSkinId = normalizePlayerSkinId(skinId)
       const nextProfiles = updateProfile(state.profiles, profileKey, (profile) => ({
-        ownedPlayerSkinIds: normalizeOwnedPlayerSkinIds(profile.ownedPlayerSkinIds, normalizedSkinId),
-        selectedSkinId: normalizedSkinId,
+        selectedSkinId:
+          !normalizedSkinId || profile.ownedPlayerSkinIds.includes(normalizedSkinId)
+            ? normalizedSkinId
+            : profile.selectedSkinId,
       }))
       persistProfiles(nextProfiles)
       return { profiles: nextProfiles }
@@ -305,9 +493,11 @@ export const usePlayerProfileStore = create<PlayerProfileState>((set) => ({
   },
   setSelectedTokenSkinId: (profileKey, skinId) => {
     set((state) => {
+      const normalizedSkinId = normalizeTokenSkinId(skinId)
       const nextProfiles = updateProfile(state.profiles, profileKey, (profile) => ({
-        ownedTokenSkinIds: normalizeOwnedTokenSkinIds(profile.ownedTokenSkinIds, skinId),
-        selectedTokenSkinId: skinId,
+        selectedTokenSkinId: profile.ownedTokenSkinIds.includes(normalizedSkinId)
+          ? normalizedSkinId
+          : profile.selectedTokenSkinId,
       }))
       persistProfiles(nextProfiles)
       return { profiles: nextProfiles }

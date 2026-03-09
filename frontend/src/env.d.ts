@@ -11,6 +11,7 @@ interface ImportMetaEnv {
   readonly VITE_LOBBY_SYSTEM_ADDRESS?: string
   readonly VITE_TURN_SYSTEM_ADDRESS?: string
   readonly VITE_CUSTOMIZATION_SYSTEM_ADDRESS?: string
+  readonly VITE_PROFILE_SYSTEM_ADDRESS?: string
   readonly VITE_ADMIN_SYSTEM_ADDRESS?: string
   readonly VITE_EGS_SYSTEM_ADDRESS?: string
   readonly VITE_VRF_PROVIDER_ADDRESS?: string

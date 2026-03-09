@@ -4,12 +4,20 @@ import { dojoRuntimeConfig, isDojoConfigured } from '../config/dojo'
 import { appEnv } from '../config/env'
 import type {
   DojoBoardSquareModel,
+  DojoCosmeticDefinitionModel,
   DojoGamePlayerCustomizationModel,
+  DojoGameFinalPlacementModel,
+  DojoGamePlayerStatsModel,
   DojoBonusStateModel,
   DojoEgsTokenGameLinkModel,
   DojoGameConfigModel,
   DojoGameModel,
   DojoGlobalStateModel,
+  DojoPlacementRewardConfigModel,
+  DojoPlayerCustomizationModel,
+  DojoPlayerInventoryItemModel,
+  DojoPlayerProfileModel,
+  DojoProgressionConfigModel,
   DojoLobbyCodeIndexModel,
   DojoGamePlayerModel,
   DojoGameRuntimeConfigModel,
@@ -63,6 +71,8 @@ export type DojoGameSnapshot = {
   pending_question: DojoPendingQuestionModel | null
   players: DojoGamePlayerModel[]
   player_customizations: DojoGamePlayerCustomizationModel[]
+  player_stats: DojoGamePlayerStatsModel[]
+  final_placements: DojoGameFinalPlacementModel[]
   tokens: DojoTokenModel[]
   bonus_states: DojoBonusStateModel[]
   occupancies: DojoSquareOccupancyModel[]
@@ -93,6 +103,8 @@ const emptySnapshot: DojoGameSnapshot = {
   pending_question: null,
   players: [],
   player_customizations: [],
+  player_stats: [],
+  final_placements: [],
   tokens: [],
   bonus_states: [],
   occupancies: [],
@@ -511,6 +523,88 @@ const normalizeGamePlayerCustomizationModel = (raw: RawModel): DojoGamePlayerCus
   token_skin_id: toNumber(raw.token_skin_id),
 })
 
+const normalizePlayerCustomizationModel = (raw: RawModel): DojoPlayerCustomizationModel => ({
+  player: normalizeAddress(raw.player),
+  avatar_skin_id: toNumber(raw.avatar_skin_id),
+  dice_skin_id: toNumber(raw.dice_skin_id),
+  token_skin_id: toNumber(raw.token_skin_id),
+  board_theme_id: toNumber(raw.board_theme_id),
+  updated_at: toBigInt(raw.updated_at),
+})
+
+const normalizePlayerProfileModel = (raw: RawModel): DojoPlayerProfileModel => ({
+  player: normalizeAddress(raw.player),
+  level: toNumber(raw.level),
+  xp: toNumber(raw.xp),
+  coins: toNumber(raw.coins),
+  created_at: toBigInt(raw.created_at),
+  updated_at: toBigInt(raw.updated_at),
+})
+
+const normalizePlayerInventoryItemModel = (raw: RawModel): DojoPlayerInventoryItemModel => ({
+  player: normalizeAddress(raw.player),
+  kind: toNumber(raw.kind),
+  item_id: toNumber(raw.item_id),
+  owned: toBoolean(raw.owned),
+  source: toNumber(raw.source),
+  acquired_at: toBigInt(raw.acquired_at),
+})
+
+const normalizeCosmeticDefinitionModel = (raw: RawModel): DojoCosmeticDefinitionModel => ({
+  kind: toNumber(raw.kind),
+  item_id: toNumber(raw.item_id),
+  price_coins: toNumber(raw.price_coins),
+  required_level: toNumber(raw.required_level),
+  enabled: toBoolean(raw.enabled),
+  purchasable: toBoolean(raw.purchasable),
+})
+
+const normalizeProgressionConfigModel = (raw: RawModel): DojoProgressionConfigModel => ({
+  singleton_id: toNumber(raw.singleton_id),
+  base_xp_per_level: toNumber(raw.base_xp_per_level),
+  level_xp_growth: toNumber(raw.level_xp_growth),
+  level_up_coin_reward: toNumber(raw.level_up_coin_reward),
+  correct_answer_xp: toNumber(raw.correct_answer_xp),
+  exit_home_xp: toNumber(raw.exit_home_xp),
+  capture_xp: toNumber(raw.capture_xp),
+  bonus_questions_xp: toNumber(raw.bonus_questions_xp),
+  bonus_captures_xp: toNumber(raw.bonus_captures_xp),
+  bonus_participation_xp: toNumber(raw.bonus_participation_xp),
+  special_reward_level: toNumber(raw.special_reward_level),
+  special_reward_avatar_skin_id: toNumber(raw.special_reward_avatar_skin_id),
+})
+
+const normalizePlacementRewardConfigModel = (raw: RawModel): DojoPlacementRewardConfigModel => ({
+  place: toNumber(raw.place),
+  base_xp: toNumber(raw.base_xp),
+  base_coins: toNumber(raw.base_coins),
+})
+
+const normalizeGamePlayerStatsModel = (raw: RawModel): DojoGamePlayerStatsModel => ({
+  game_id: toBigInt(raw.game_id),
+  player: normalizeAddress(raw.player),
+  correct_answers: toNumber(raw.correct_answers),
+  captures: toNumber(raw.captures),
+  exit_home_count: toNumber(raw.exit_home_count),
+})
+
+const normalizeGameFinalPlacementModel = (raw: RawModel): DojoGameFinalPlacementModel => ({
+  game_id: toBigInt(raw.game_id),
+  player: normalizeAddress(raw.player),
+  seat: toNumber(raw.seat),
+  place: toNumber(raw.place),
+  goal_count: toNumber(raw.goal_count),
+  progress_score: toNumber(raw.progress_score),
+  base_xp: toNumber(raw.base_xp),
+  base_coins: toNumber(raw.base_coins),
+  bonus_questions_xp: toNumber(raw.bonus_questions_xp),
+  bonus_captures_xp: toNumber(raw.bonus_captures_xp),
+  bonus_participation_xp: toNumber(raw.bonus_participation_xp),
+  total_xp: toNumber(raw.total_xp),
+  total_coins: toNumber(raw.total_coins),
+  settled_at: toBigInt(raw.settled_at),
+})
+
 const normalizeGlobalStateModel = (raw: RawModel): DojoGlobalStateModel => ({
   singleton_id: toNumber(raw.singleton_id),
   next_game_id: toBigInt(raw.next_game_id),
@@ -766,6 +860,8 @@ export const readDojoGameSnapshot = async (
     runtimeConfigRaw,
     playerRows,
     playerCustomizationRows,
+    playerStatsRows,
+    finalPlacementRows,
     tokenRows,
     bonusRows,
     boardSquareRows,
@@ -778,6 +874,8 @@ export const readDojoGameSnapshot = async (
     includePlayerCustomizations
       ? withFallback(fetchModelsByKeys(client, 'GamePlayerCustomization', playerKeys), [])
       : Promise.resolve([]),
+    withFallback(fetchModelsByKeys(client, 'GamePlayerStats', playerKeys), []),
+    withFallback(fetchModelsByKeys(client, 'GameFinalPlacement', playerKeys), []),
     withFallback(fetchModelsByKeys(client, 'Token', tokenKeys), []),
     withFallback(fetchModelsByKeys(client, 'BonusState', playerKeys), []),
     includeBoardSquares
@@ -795,6 +893,12 @@ export const readDojoGameSnapshot = async (
   const player_customizations = playerCustomizationRows
     .map((row) => normalizeGamePlayerCustomizationModel(row))
     .sort((left, right) => left.player.localeCompare(right.player))
+  const player_stats = playerStatsRows
+    .map((row) => normalizeGamePlayerStatsModel(row))
+    .sort((left, right) => left.player.localeCompare(right.player))
+  const final_placements = finalPlacementRows
+    .map((row) => normalizeGameFinalPlacementModel(row))
+    .sort((left, right) => left.place - right.place || left.seat - right.seat)
   const tokens = tokenRows
     .map((row) => normalizeTokenModel(row))
     .sort((left, right) =>
@@ -818,6 +922,8 @@ export const readDojoGameSnapshot = async (
     pending_question,
     players,
     player_customizations,
+    player_stats,
+    final_placements,
     tokens,
     bonus_states,
     occupancies: [],
@@ -854,6 +960,104 @@ export const readGlobalState = async (): Promise<DojoGlobalStateModel | null> =>
   const row = await fetchModelByKeys(client, 'GlobalState', [1])
 
   return row ? normalizeGlobalStateModel(row) : null
+}
+
+export const readPlayerProfile = async (playerAddress: string): Promise<DojoPlayerProfileModel | null> => {
+  const client = await getToriiClient()
+  const row = await fetchModelByKeys(client, 'PlayerProfile', [playerAddress])
+
+  if (!row) {
+    return null
+  }
+
+  const profile = normalizePlayerProfileModel(row)
+  return profile.player === normalizeAddress(playerAddress) ? profile : null
+}
+
+export const readPlayerCustomization = async (playerAddress: string): Promise<DojoPlayerCustomizationModel | null> => {
+  const client = await getToriiClient()
+  const row = await fetchModelByKeys(client, 'PlayerCustomization', [playerAddress])
+
+  if (!row) {
+    return null
+  }
+
+  const customization = normalizePlayerCustomizationModel(row)
+  return customization.player === normalizeAddress(playerAddress) ? customization : null
+}
+
+export const readPlayerInventory = async (playerAddress: string): Promise<DojoPlayerInventoryItemModel[]> => {
+  const client = await getToriiClient()
+  const rows = await fetchModelsByMember(client, 'PlayerInventoryItem', 'player', playerAddress, 256)
+
+  return rows
+    .map((row) => normalizePlayerInventoryItemModel(row))
+    .filter((row) => row.owned)
+    .sort((left, right) => left.kind - right.kind || left.item_id - right.item_id)
+}
+
+export const readCosmeticDefinitions = async (): Promise<DojoCosmeticDefinitionModel[]> => {
+  const client = await getToriiClient()
+  const rows = await fetchAllModels(client, 'CosmeticDefinition', 256)
+
+  return rows
+    .map((row) => normalizeCosmeticDefinitionModel(row))
+    .filter((row) => row.required_level >= 1)
+    .sort((left, right) => left.kind - right.kind || left.item_id - right.item_id)
+}
+
+export const readProgressionConfig = async (): Promise<DojoProgressionConfigModel | null> => {
+  const client = await getToriiClient()
+  const row = await fetchModelByKeys(client, 'ProgressionConfig', [4])
+
+  if (!row) {
+    return null
+  }
+
+  const config = normalizeProgressionConfigModel(row)
+  return config.singleton_id === 4 ? config : null
+}
+
+export const readPlacementRewardConfigs = async (): Promise<DojoPlacementRewardConfigModel[]> => {
+  const client = await getToriiClient()
+  const rows = await fetchModelsByKeys(
+    client,
+    'PlacementRewardConfig',
+    Array.from({ length: 4 }, (_, index) => [index + 1]),
+  )
+
+  return rows
+    .map((row) => normalizePlacementRewardConfigModel(row))
+    .filter((row) => row.place >= 1 && row.place <= 4)
+    .sort((left, right) => left.place - right.place)
+}
+
+export const readGamePlayerStats = async (gameId: bigint): Promise<DojoGamePlayerStatsModel[]> => {
+  const client = await getToriiClient()
+  const rows = await fetchModelsByMember(client, 'GamePlayerStats', 'game_id', gameId, 16)
+
+  return rows
+    .map((row) => normalizeGamePlayerStatsModel(row))
+    .sort((left, right) => left.player.localeCompare(right.player))
+}
+
+export const readGameFinalPlacements = async (gameId: bigint): Promise<DojoGameFinalPlacementModel[]> => {
+  const client = await getToriiClient()
+  const rows = await fetchModelsByMember(client, 'GameFinalPlacement', 'game_id', gameId, 16)
+
+  return rows
+    .map((row) => normalizeGameFinalPlacementModel(row))
+    .sort((left, right) => left.place - right.place || left.seat - right.seat)
+}
+
+export const readPlayerProfileBundle = async (playerAddress: string) => {
+  const [profile, customization, inventory] = await Promise.all([
+    readPlayerProfile(playerAddress),
+    readPlayerCustomization(playerAddress),
+    readPlayerInventory(playerAddress),
+  ])
+
+  return { customization, inventory, profile }
 }
 
 export const readPublicLobbyIndex = async (configId: bigint): Promise<DojoPublicLobbyIndexModel | null> => {
@@ -944,6 +1148,8 @@ export const subscribeDojoGame = async (params: SubscribeDojoGameParams): Promis
     { modelName: 'PendingQuestion', member: 'game_id', value: params.gameId },
     { modelName: 'GamePlayer', member: 'game_id', value: params.gameId },
     { modelName: 'GamePlayerCustomization', member: 'game_id', value: params.gameId },
+    { modelName: 'GamePlayerStats', member: 'game_id', value: params.gameId },
+    { modelName: 'GameFinalPlacement', member: 'game_id', value: params.gameId },
     { modelName: 'Token', member: 'game_id', value: params.gameId },
     { modelName: 'BonusState', member: 'game_id', value: params.gameId },
   ]

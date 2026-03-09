@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GameAvatar } from '../components/game/game-avatar'
 import { getPlayerSkinName, getPlayerSkinSubtitle, getStarterPlayerSkins } from '../lib/player-skins'
-import { usePlayerProfileActions } from '../lib/use-player-profile'
+import { usePlayerProfile, usePlayerProfileActions } from '../lib/use-player-profile'
 import { useAppSettingsStore } from '../store/app-settings-store'
 
 const copy = {
@@ -27,29 +27,33 @@ const copy = {
 export function SkinSelectionView() {
   const navigate = useNavigate()
   const language = useAppSettingsStore((state) => state.language)
-  const persistedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
+  const profile = usePlayerProfile()
   const { setSelectedSkinId } = usePlayerProfileActions()
-  const [selectedSkinId, setLocalSelectedSkinId] = useState<null | string>(persistedSkinId)
+  const [selectedSkinId, setLocalSelectedSkinId] = useState<null | string>(profile.selectedSkinId)
   const starterSkins = useMemo(() => getStarterPlayerSkins(), [])
   const ui = copy[language]
 
   useEffect(() => {
-    if (persistedSkinId) {
+    if (profile.selectedSkinId) {
       navigate('/', { replace: true })
     }
-  }, [navigate, persistedSkinId])
+  }, [navigate, profile.selectedSkinId])
+
+  useEffect(() => {
+    setLocalSelectedSkinId(profile.selectedSkinId)
+  }, [profile.selectedSkinId])
 
   const selectedSkin = useMemo(
     () => starterSkins.find((skin) => skin.id === selectedSkinId) || null,
     [selectedSkinId, starterSkins],
   )
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!selectedSkinId) {
       return
     }
 
-    setSelectedSkinId(selectedSkinId)
+    await setSelectedSkinId(selectedSkinId)
     navigate('/', { replace: true })
   }
 
@@ -138,7 +142,9 @@ export function SkinSelectionView() {
                     : 'cursor-not-allowed border-[#8b8f95] bg-gradient-to-b from-[#c6c9cf] to-[#949aa5] shadow-[inset_0_2px_0_rgba(255,255,255,0.42),0_8px_0_rgba(95,101,110,0.9)] opacity-75'
                 }`}
                 disabled={!selectedSkinId}
-                onClick={handleContinue}
+                onClick={() => {
+                  void handleContinue()
+                }}
                 type="button"
               >
                 {ui.continue}

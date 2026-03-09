@@ -87,6 +87,7 @@ export const appEnv = {
   lobbySystemAddress: parseAddress(import.meta.env.VITE_LOBBY_SYSTEM_ADDRESS),
   turnSystemAddress: parseAddress(import.meta.env.VITE_TURN_SYSTEM_ADDRESS),
   customizationSystemAddress: parseAddress(import.meta.env.VITE_CUSTOMIZATION_SYSTEM_ADDRESS),
+  profileSystemAddress: parseAddress(import.meta.env.VITE_PROFILE_SYSTEM_ADDRESS),
   adminSystemAddress: parseAddress(import.meta.env.VITE_ADMIN_SYSTEM_ADDRESS),
   egsSystemAddress: parseAddress(import.meta.env.VITE_EGS_SYSTEM_ADDRESS),
   vrfProviderAddress:

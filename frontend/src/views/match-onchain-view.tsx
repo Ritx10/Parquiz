@@ -20,7 +20,7 @@ import { isDojoConfigured } from '../config/dojo'
 import { playSoundEffect } from '../lib/audio'
 import { getBoardThemeDefinition, getBoardThemeSurfacePalette } from '../lib/board-themes'
 import { diceSkinIdFromIndex, getDefaultDiceSkinIdByColor, type DiceSkinId } from '../lib/dice-cosmetics'
-import { calculateMatchRewardSummary, coinsRewardByPlace, type MatchRewardSummary, type PodiumPlace } from '../lib/match-rewards'
+import type { MatchRewardSummary, PodiumPlace } from '../lib/match-rewards'
 import { getPlayerSkinSrc, playerSkinIdFromIndex } from '../lib/player-skins'
 import { getPlayerVisualThemeByColor } from '../lib/player-color-themes'
 import {
@@ -29,7 +29,6 @@ import {
   mapCanonicalOptionToDisplay,
   mapDisplayOptionToCanonical,
 } from '../lib/questions/local-question-bank'
-import { usePlayerProfileActions } from '../lib/use-player-profile'
 import { useControllerUsernames } from '../lib/starknet/use-controller-usernames'
 import { shortenAddress, useControllerWallet } from '../lib/starknet/use-controller-wallet'
 import { useAppSettingsStore } from '../store/app-settings-store'
@@ -40,9 +39,6 @@ const TRACK_SQUARE_UI_OFFSET = 4
 const TRACK_LENGTH = 68
 const BOARD_DEFAULT_SAFE_TRACK_REFS = [8, 13, 25, 30, 42, 47, 59, 64]
 const TOKEN_STEP_ANIMATION_MS = 105
-const XP_REWARD_CORRECT_ANSWER = 10
-const XP_REWARD_EXIT_HOME = 5
-const XP_REWARD_CAPTURE = 15
 
 type DiceFaceValue = 1 | 2 | 3 | 4 | 5 | 6
 
@@ -59,17 +55,6 @@ type FinalPlacement = {
   tag: string
   visualSkinId?: TokenSkinId
 }
-
-type MatchPlayerStats = {
-  captures: number
-  correctAnswers: number
-}
-
-const createInitialPlayerStats = (players: readonly MatchPlayer[]) =>
-  players.reduce<Record<string, MatchPlayerStats>>((acc, player) => {
-    acc[player.id] = { captures: 0, correctAnswers: 0 }
-    return acc
-  }, {})
 
 const seatColorMap: Record<number, PlayerColor> = {
   0: 'blue',
@@ -1281,81 +1266,56 @@ const buildUiMovePath = (params: {
   return path
 }
 
-const computeOnchainProgressScore = (playerId: string, snapshot: DojoGameSnapshot, colorBySeat: Record<number, PlayerColor>) => {
-  return snapshot.tokens
-    .filter((token) => normalizeAddressForCompare(token.player) === normalizeAddressForCompare(playerId))
-    .reduce((sum, token) => {
-      const seat = snapshot.players.find(
-        (player) => normalizeAddressForCompare(player.player) === normalizeAddressForCompare(playerId),
-      )?.seat
-      const color = seat === undefined ? null : colorBySeat[seat]
+const buildAuthoritativePlacements = (players: MatchPlayer[], snapshot: DojoGameSnapshot): FinalPlacement[] => {
+  const playerByAddress = players.reduce<Record<string, MatchPlayer>>((acc, player) => {
+    acc[normalizeAddressForCompare(player.id)] = player
+    return acc
+  }, {})
 
-      if (!color) {
-        return sum
+  const placements = snapshot.final_placements.reduce<FinalPlacement[]>((acc, placement) => {
+      const player = playerByAddress[normalizeAddressForCompare(placement.player)]
+
+      if (!player) {
+        return acc
       }
 
-      if (token.token_state === 3) {
-        return sum + TRACK_LENGTH + finalLaneByColor[color].length
+      const rewardSummary: MatchRewardSummary = {
+        baseCoins: placement.base_coins,
+        baseXp: placement.base_xp,
+        bonusCapturesXp: placement.bonus_captures_xp,
+        bonusKnowledgeXp: placement.bonus_questions_xp,
+        bonusParticipationXp: placement.bonus_participation_xp,
+        captureCount: placement.bonus_captures_xp > 0 ? 1 : 0,
+        correctAnswers: placement.bonus_questions_xp > 0 ? 1 : 0,
+        place: placement.place as PodiumPlace,
+        totalCoins: placement.total_coins,
+        totalXp: placement.total_xp,
       }
 
-      if (token.token_state === 2) {
-        return sum + TRACK_LENGTH + token.home_lane_pos + 1
-      }
-
-      if (token.token_state === 1) {
-        return sum + Math.max(token.steps_total, 1)
-      }
-
-      return sum
-    }, 0)
-}
-
-const buildOnchainPlacements = (
-  players: MatchPlayer[],
-  snapshot: DojoGameSnapshot,
-  colorBySeat: Record<number, PlayerColor>,
-): FinalPlacement[] => {
-  return [...players]
-    .map((player) => ({
-      player,
-      goalCount: snapshot.players.find(
-        (entry) => normalizeAddressForCompare(entry.player) === normalizeAddressForCompare(player.id),
-      )?.tokens_in_goal ?? 0,
-      progressScore: computeOnchainProgressScore(player.id, snapshot, colorBySeat),
-    }))
-    .sort((left, right) => {
-      if (right.goalCount !== left.goalCount) {
-        return right.goalCount - left.goalCount
-      }
-
-      if (right.progressScore !== left.progressScore) {
-        return right.progressScore - left.progressScore
-      }
-
-      return left.player.name.localeCompare(right.player.name)
-    })
-    .map(({ player, goalCount, progressScore }, index) => {
-      const place = Math.min(index + 1, 4) as PodiumPlace
-      return {
+      acc.push({
         id: player.id,
         avatar: player.avatar,
         color: player.color,
-        goalCount,
+        goalCount: placement.goal_count,
         name: player.name,
-        place,
-        progressScore,
-        reward: coinsRewardByPlace[place],
+        place: placement.place as PodiumPlace,
+        progressScore: placement.progress_score,
+        reward: placement.total_coins,
+        rewardSummary,
         tag: player.name,
         visualSkinId: player.visualSkinId,
-      }
-    })
+      })
+
+      return acc
+    }, [])
+
+  return placements.sort((left, right) => left.place - right.place || left.progressScore - right.progressScore)
 }
 
 export function MatchOnchainView() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { account } = useAccount()
   const { address, username } = useControllerWallet()
-  const { awardCoins, awardXp } = usePlayerProfileActions()
   const language = useAppSettingsStore((state) => state.language)
   const selectedBoardThemeId = useAppSettingsStore((state) => state.selectedBoardThemeId)
   const selectedDiceSkinId = useAppSettingsStore((state) => state.selectedDiceSkinId)
@@ -1415,9 +1375,6 @@ export function MatchOnchainView() {
   const winnerAnnouncementTimeoutRef = useRef<null | number>(null)
   const lastAnnouncedWinnerRef = useRef<null | string>(null)
   const onTrackedEventRef = useRef<(event: DojoTrackedEvent) => void>(() => undefined)
-  const rewardsGrantedRef = useRef(false)
-  const rewardedEventKeysRef = useRef<Set<string>>(new Set())
-  const playerStatsRef = useRef<Record<string, MatchPlayerStats>>({})
   const winnerSoundPlayedRef = useRef(false)
   const podiumSoundPlayedRef = useRef(false)
   const latestQuestionDrawRef = useRef<null | PendingQuestionPreview>(null)
@@ -1470,9 +1427,6 @@ export function MatchOnchainView() {
   useEffect(() => {
     lastAnnouncedWinnerRef.current = null
     lastResolvedQuestionRef.current = null
-    rewardsGrantedRef.current = false
-    rewardedEventKeysRef.current.clear()
-    playerStatsRef.current = {}
     winnerSoundPlayedRef.current = false
     podiumSoundPlayedRef.current = false
     setActiveAnnouncementPlacement(null)
@@ -1649,33 +1603,6 @@ export function MatchOnchainView() {
     }, {})
   }, [players])
 
-  const rewardedFinalPlacements = useMemo(() => {
-    const highestCorrectAnswers = finalPlacements.reduce((highest, placement) => {
-      const correctAnswers = playerStatsRef.current[placement.id]?.correctAnswers || 0
-      return correctAnswers > highest ? correctAnswers : highest
-    }, 0)
-    const highestCorrectAnswersCount = finalPlacements.filter(
-      (placement) => (playerStatsRef.current[placement.id]?.correctAnswers || 0) === highestCorrectAnswers,
-    ).length
-
-    return finalPlacements.map((placement) => {
-      const stats = playerStatsRef.current[placement.id] || { captures: 0, correctAnswers: 0 }
-      const rewardSummary = calculateMatchRewardSummary({
-        captureCount: stats.captures,
-        correctAnswers: stats.correctAnswers,
-        highestCorrectAnswers,
-        highestCorrectAnswersCount,
-        place: placement.place,
-      })
-
-      return {
-        ...placement,
-        reward: rewardSummary.totalCoins,
-        rewardSummary,
-      }
-    })
-  }, [finalPlacements])
-
   const activePlayerCard = useMemo(() => {
     if (!activePlayerAddress) {
       return undefined
@@ -1690,19 +1617,6 @@ export function MatchOnchainView() {
       return acc
     }, {})
   }, [playersByAddress])
-
-  useEffect(() => {
-    const currentStats = playerStatsRef.current
-    const nextStats = createInitialPlayerStats(players)
-
-    players.forEach((player) => {
-      if (currentStats[player.id]) {
-        nextStats[player.id] = currentStats[player.id]
-      }
-    })
-
-    playerStatsRef.current = nextStats
-  }, [players])
 
   useEffect(() => {
     activePlayerCardRef.current = activePlayerCard
@@ -1777,13 +1691,13 @@ export function MatchOnchainView() {
       .map((group) => group[0].position)
   }, [uiTokens])
 
-  const rankedPlacements = useMemo(() => {
-    if (!snapshot || players.length === 0) {
+  const authoritativePlacements = useMemo(() => {
+    if (!snapshot || players.length === 0 || snapshot.final_placements.length === 0) {
       return []
     }
 
-    return buildOnchainPlacements(players, snapshot, colorBySeat)
-  }, [colorBySeat, players, snapshot])
+    return buildAuthoritativePlacements(players, snapshot)
+  }, [players, snapshot])
 
   const winnerAddress = useMemo(() => {
     const winner = snapshot?.game?.winner
@@ -1792,8 +1706,8 @@ export function MatchOnchainView() {
   }, [snapshot?.game?.winner])
 
   useEffect(() => {
-    setFinalPlacements(rankedPlacements)
-  }, [rankedPlacements])
+    setFinalPlacements(authoritativePlacements)
+  }, [authoritativePlacements])
 
   useEffect(() => {
     if (winnerAnnouncementTimeoutRef.current !== null) {
@@ -1801,7 +1715,7 @@ export function MatchOnchainView() {
       winnerAnnouncementTimeoutRef.current = null
     }
 
-    if (!winnerAddress || rankedPlacements.length === 0) {
+    if (!winnerAddress || authoritativePlacements.length === 0) {
       if (!snapshot) {
         setActiveAnnouncementPlacement(null)
         setShowFinalClassification(false)
@@ -1811,7 +1725,7 @@ export function MatchOnchainView() {
     }
 
     const winnerKey = normalizeAddressForCompare(winnerAddress)
-    const winnerPlacement = rankedPlacements.find(
+    const winnerPlacement = authoritativePlacements.find(
       (placement) => normalizeAddressForCompare(placement.id) === winnerKey,
     )
 
@@ -1836,25 +1750,7 @@ export function MatchOnchainView() {
       setShowFinalClassification(true)
       winnerAnnouncementTimeoutRef.current = null
     }, 3200)
-  }, [rankedPlacements, snapshot, winnerAddress])
-
-  useEffect(() => {
-    if (!address || rewardsGrantedRef.current || !showFinalClassification || finalPlacements.length === 0) {
-      return
-    }
-
-    const normalizedAddress = normalizeAddressForCompare(address)
-    const localPlacement = rewardedFinalPlacements.find(
-      (placement) => normalizeAddressForCompare(placement.id) === normalizedAddress,
-    )
-
-    if (localPlacement?.rewardSummary) {
-      awardCoins(localPlacement.rewardSummary.totalCoins)
-      awardXp(localPlacement.rewardSummary.totalXp)
-    }
-
-    rewardsGrantedRef.current = true
-  }, [address, awardCoins, awardXp, finalPlacements.length, rewardedFinalPlacements, showFinalClassification])
+  }, [authoritativePlacements, snapshot, winnerAddress])
 
   useEffect(() => {
     if (!showFinalClassification || finalPlacements.length === 0 || podiumSoundPlayedRef.current) {
@@ -2109,29 +2005,7 @@ export function MatchOnchainView() {
       if (normalizedAddress) {
         if (event.type === 'AnswerRevealed' && event.payload.correct) {
           const eventPlayer = normalizeAddressForCompare(event.payload.player)
-          const rewardKey = `answer:${event.payload.question_id.toString()}:${eventPlayer}`
-          const alreadyProcessed = rewardedEventKeysRef.current.has(rewardKey)
-
-          if (eventPlayer && !alreadyProcessed) {
-            const playerId = Object.keys(playersByAddress).find((playerAddress) => playerAddress === eventPlayer)
-            if (playerId) {
-              const currentStats = playerStatsRef.current[playerId] || { captures: 0, correctAnswers: 0 }
-              playerStatsRef.current = {
-                ...playerStatsRef.current,
-                [playerId]: {
-                  ...currentStats,
-                  correctAnswers: currentStats.correctAnswers + 1,
-                },
-              }
-            }
-          }
-
-          if (!alreadyProcessed) {
-            rewardedEventKeysRef.current.add(rewardKey)
-          }
-
-          if (eventPlayer === normalizedAddress && !alreadyProcessed) {
-            awardXp(XP_REWARD_CORRECT_ANSWER)
+          if (eventPlayer === normalizedAddress) {
             playSoundEffect('correct')
           }
         }
@@ -2145,43 +2019,7 @@ export function MatchOnchainView() {
         }
 
         if (event.type === 'TokenCaptured') {
-          const eventPlayer = normalizeAddressForCompare(event.payload.attacker)
-          const rewardKey = `capture:${event.payload.square_ref}:${event.payload.defender_token_id}:${eventPlayer}`
-          const alreadyProcessed = rewardedEventKeysRef.current.has(rewardKey)
-
-          if (eventPlayer && !alreadyProcessed) {
-            const playerId = Object.keys(playersByAddress).find((playerAddress) => playerAddress === eventPlayer)
-            if (playerId) {
-              const currentStats = playerStatsRef.current[playerId] || { captures: 0, correctAnswers: 0 }
-              playerStatsRef.current = {
-                ...playerStatsRef.current,
-                [playerId]: {
-                  ...currentStats,
-                  captures: currentStats.captures + 1,
-                },
-              }
-            }
-          }
-
-          if (!alreadyProcessed) {
-            rewardedEventKeysRef.current.add(rewardKey)
-          }
-
-          if (eventPlayer === normalizedAddress && !alreadyProcessed) {
-            awardXp(XP_REWARD_CAPTURE)
-          }
-
           playSoundEffect('capture')
-        }
-
-        if (event.type === 'TokenMoved' && event.payload.from_square_ref === 0) {
-          const eventPlayer = normalizeAddressForCompare(event.payload.player)
-          const rewardKey = `exit:${event.payload.token_id}:${event.payload.to_square_ref}:${eventPlayer}`
-
-          if (eventPlayer === normalizedAddress && !rewardedEventKeysRef.current.has(rewardKey)) {
-            rewardedEventKeysRef.current.add(rewardKey)
-            awardXp(XP_REWARD_EXIT_HOME)
-          }
         }
       }
 
@@ -2218,7 +2056,7 @@ export function MatchOnchainView() {
 
       setLogEvents((current) => [nextLog, ...current].slice(0, 120))
     },
-    [address, animateTokenPath, awardXp, language, normalizedWalletAddress, playerLabelFromAddress, playersByAddress, scheduleSnapshotRefresh, seatByAddress, selectedAnswerIndex, ui.questionCategory],
+    [address, animateTokenPath, language, normalizedWalletAddress, playerLabelFromAddress, playersByAddress, scheduleSnapshotRefresh, seatByAddress, selectedAnswerIndex, ui.questionCategory],
   )
 
   useEffect(() => {
@@ -3285,8 +3123,8 @@ export function MatchOnchainView() {
           </div>
         ) : null}
 
-        {showFinalClassification && rewardedFinalPlacements.length > 0 ? (
-          <FinalRankingScreen currentPlayerId={address || undefined} placements={rewardedFinalPlacements} />
+        {showFinalClassification && finalPlacements.length > 0 ? (
+          <FinalRankingScreen currentPlayerId={address || undefined} placements={finalPlacements} />
         ) : null}
 
         <style>{`

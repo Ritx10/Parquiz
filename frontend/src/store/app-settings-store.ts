@@ -1,25 +1,8 @@
 import { create } from 'zustand'
-import {
-  normalizeBoardThemeId,
-  normalizeOwnedBoardThemeIds,
-  type BoardThemeId,
-} from '../lib/board-themes'
-import {
-  normalizeDiceSkinId,
-  normalizeOwnedDiceSkinIds,
-  type DiceSkinId,
-} from '../lib/dice-cosmetics'
-import {
-  normalizeOwnedTokenSkinIds,
-  normalizeTokenSkinId,
-  type TokenSkinId,
-} from '../lib/token-cosmetics'
-import {
-  defaultOwnedPlayerSkinIds,
-  normalizeOwnedPlayerSkinIds,
-  normalizePlayerSkinId,
-  type PlayerSkinId,
-} from '../lib/player-skins'
+import { normalizeBoardThemeId, type BoardThemeId } from '../lib/board-themes'
+import { normalizeDiceSkinId, type DiceSkinId } from '../lib/dice-cosmetics'
+import { normalizeTokenSkinId, type TokenSkinId } from '../lib/token-cosmetics'
+import { normalizePlayerSkinId } from '../lib/player-skins'
 
 export type AppLanguage = 'es' | 'en'
 export type AiDifficulty = 'easy' | 'medium' | 'hard'
@@ -37,16 +20,8 @@ type AppSettingsState = {
   selectedBoardThemeId: BoardThemeId
   selectedSkinId: null | string
   selectedDiceSkinId: DiceSkinId
-  ownedPlayerSkinIds: PlayerSkinId[]
-  ownedBoardThemeIds: BoardThemeId[]
   selectedTokenSkinId: TokenSkinId
-  ownedDiceSkinIds: DiceSkinId[]
-  ownedTokenSkinIds: TokenSkinId[]
   hydrateCustomizationState: (customization: {
-    ownedBoardThemeIds: BoardThemeId[]
-    ownedDiceSkinIds: DiceSkinId[]
-    ownedPlayerSkinIds: PlayerSkinId[]
-    ownedTokenSkinIds: TokenSkinId[]
     selectedBoardThemeId: BoardThemeId
     selectedDiceSkinId: DiceSkinId
     selectedSkinId: null | string
@@ -63,11 +38,7 @@ type AppSettingsState = {
   setSelectedBoardThemeId: (themeId: BoardThemeId) => void
   setSelectedSkinId: (skinId: null | string) => void
   setSelectedDiceSkinId: (skinId: DiceSkinId) => void
-  unlockBoardTheme: (themeId: BoardThemeId) => void
-  unlockPlayerSkin: (skinId: PlayerSkinId) => void
   setSelectedTokenSkinId: (skinId: TokenSkinId) => void
-  unlockDiceSkin: (skinId: DiceSkinId) => void
-  unlockTokenSkin: (skinId: TokenSkinId) => void
   toggleSound: () => void
 }
 
@@ -83,12 +54,8 @@ type StoredSettings = {
   selectedBoardThemeId?: BoardThemeId
   selectedSkinId?: null | string
   selectedDiceSkinId?: DiceSkinId
-  ownedPlayerSkinIds?: PlayerSkinId[]
   selectedTokenColor?: TokenSkinId
   selectedTokenSkinId?: TokenSkinId
-  ownedBoardThemeIds?: BoardThemeId[]
-  ownedDiceSkinIds?: DiceSkinId[]
-  ownedTokenSkinIds?: TokenSkinId[]
 }
 
 type PersistedSettings = Pick<
@@ -97,10 +64,6 @@ type PersistedSettings = Pick<
   | 'answerTimeLimitSecs'
   | 'exitHomeRule'
   | 'language'
-  | 'ownedBoardThemeIds'
-  | 'ownedDiceSkinIds'
-  | 'ownedPlayerSkinIds'
-  | 'ownedTokenSkinIds'
   | 'questionDifficulty'
   | 'selectedBoardThemeId'
   | 'selectedConfigId'
@@ -118,10 +81,6 @@ const defaultSettings: PersistedSettings = {
   answerTimeLimitSecs: 20,
   exitHomeRule: 'FIVE',
   language: 'es',
-  ownedBoardThemeIds: normalizeOwnedBoardThemeIds(undefined, 'theme-classic'),
-  ownedDiceSkinIds: normalizeOwnedDiceSkinIds(undefined, 'blue'),
-  ownedPlayerSkinIds: normalizeOwnedPlayerSkinIds(undefined, defaultOwnedPlayerSkinIds[0]),
-  ownedTokenSkinIds: normalizeOwnedTokenSkinIds(undefined, 'blue'),
   questionDifficulty: 'medium',
   selectedBoardThemeId: 'theme-classic',
   selectedDiceSkinId: 'blue',
@@ -181,10 +140,6 @@ const readStoredSettings = (): PersistedSettings => {
       answerTimeLimitSecs: normalizeSeconds(parsed.answerTimeLimitSecs, defaultSettings.answerTimeLimitSecs, 5),
       exitHomeRule: normalizeExitHomeRule(parsed.exitHomeRule),
       language: normalizeLanguage(parsed.language),
-      ownedBoardThemeIds: normalizeOwnedBoardThemeIds(parsed.ownedBoardThemeIds, selectedBoardThemeId),
-      ownedDiceSkinIds: normalizeOwnedDiceSkinIds(parsed.ownedDiceSkinIds, selectedDiceSkinId),
-      ownedPlayerSkinIds: normalizeOwnedPlayerSkinIds(parsed.ownedPlayerSkinIds, selectedSkinId),
-      ownedTokenSkinIds: normalizeOwnedTokenSkinIds(parsed.ownedTokenSkinIds, selectedTokenSkinId),
       questionDifficulty: normalizeAiDifficulty(parsed.questionDifficulty),
       selectedBoardThemeId,
       selectedSkinId,
@@ -204,10 +159,6 @@ const toPersistedSettings = (state: AppSettingsState): PersistedSettings => ({
   answerTimeLimitSecs: state.answerTimeLimitSecs,
   exitHomeRule: state.exitHomeRule,
   language: state.language,
-  ownedBoardThemeIds: state.ownedBoardThemeIds,
-  ownedDiceSkinIds: state.ownedDiceSkinIds,
-  ownedPlayerSkinIds: state.ownedPlayerSkinIds,
-  ownedTokenSkinIds: state.ownedTokenSkinIds,
   questionDifficulty: state.questionDifficulty,
   selectedBoardThemeId: state.selectedBoardThemeId,
   selectedConfigId: state.selectedConfigId,
@@ -240,10 +191,6 @@ export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
   answerTimeLimitSecs: initialSettings.answerTimeLimitSecs,
   exitHomeRule: initialSettings.exitHomeRule,
   language: initialSettings.language,
-  ownedBoardThemeIds: initialSettings.ownedBoardThemeIds,
-  ownedDiceSkinIds: initialSettings.ownedDiceSkinIds,
-  ownedPlayerSkinIds: initialSettings.ownedPlayerSkinIds,
-  ownedTokenSkinIds: initialSettings.ownedTokenSkinIds,
   questionDifficulty: initialSettings.questionDifficulty,
   selectedBoardThemeId: initialSettings.selectedBoardThemeId,
   selectedDiceSkinId: initialSettings.selectedDiceSkinId,
@@ -254,22 +201,6 @@ export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
   turnTimeLimitSecs: initialSettings.turnTimeLimitSecs,
   hydrateCustomizationState: (customization) => {
     set({
-      ownedBoardThemeIds: normalizeOwnedBoardThemeIds(
-        customization.ownedBoardThemeIds,
-        normalizeBoardThemeId(customization.selectedBoardThemeId),
-      ),
-      ownedDiceSkinIds: normalizeOwnedDiceSkinIds(
-        customization.ownedDiceSkinIds,
-        normalizeDiceSkinId(customization.selectedDiceSkinId),
-      ),
-      ownedPlayerSkinIds: normalizeOwnedPlayerSkinIds(
-        customization.ownedPlayerSkinIds,
-        normalizePlayerSkinId(customization.selectedSkinId),
-      ),
-      ownedTokenSkinIds: normalizeOwnedTokenSkinIds(
-        customization.ownedTokenSkinIds,
-        normalizeTokenSkinId(customization.selectedTokenSkinId),
-      ),
       selectedBoardThemeId: normalizeBoardThemeId(customization.selectedBoardThemeId),
       selectedDiceSkinId: normalizeDiceSkinId(customization.selectedDiceSkinId),
       selectedSkinId: normalizePlayerSkinId(customization.selectedSkinId),
@@ -310,8 +241,7 @@ export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
     persistSettings(toPersistedSettings(get()))
   },
   setSelectedBoardThemeId: (selectedBoardThemeId) => {
-    const ownedBoardThemeIds = normalizeOwnedBoardThemeIds(get().ownedBoardThemeIds, selectedBoardThemeId)
-    set({ ownedBoardThemeIds, selectedBoardThemeId })
+    set({ selectedBoardThemeId })
     persistSettings(toPersistedSettings(get()))
   },
   setSelectedSkinId: (selectedSkinId) => {
@@ -319,33 +249,11 @@ export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
     persistSettings(toPersistedSettings(get()))
   },
   setSelectedDiceSkinId: (selectedDiceSkinId) => {
-    const ownedDiceSkinIds = normalizeOwnedDiceSkinIds(get().ownedDiceSkinIds, selectedDiceSkinId)
-    set({ ownedDiceSkinIds, selectedDiceSkinId })
+    set({ selectedDiceSkinId })
     persistSettings(toPersistedSettings(get()))
   },
   setSelectedTokenSkinId: (selectedTokenSkinId) => {
-    const ownedTokenSkinIds = normalizeOwnedTokenSkinIds(get().ownedTokenSkinIds, selectedTokenSkinId)
-    set({ ownedTokenSkinIds, selectedTokenSkinId })
-    persistSettings(toPersistedSettings(get()))
-  },
-  unlockDiceSkin: (skinId) => {
-    const ownedDiceSkinIds = normalizeOwnedDiceSkinIds(get().ownedDiceSkinIds, skinId)
-    set({ ownedDiceSkinIds })
-    persistSettings(toPersistedSettings(get()))
-  },
-  unlockBoardTheme: (themeId) => {
-    const ownedBoardThemeIds = normalizeOwnedBoardThemeIds(get().ownedBoardThemeIds, themeId)
-    set({ ownedBoardThemeIds })
-    persistSettings(toPersistedSettings(get()))
-  },
-  unlockPlayerSkin: (skinId) => {
-    const ownedPlayerSkinIds = normalizeOwnedPlayerSkinIds(get().ownedPlayerSkinIds, skinId)
-    set({ ownedPlayerSkinIds })
-    persistSettings(toPersistedSettings(get()))
-  },
-  unlockTokenSkin: (skinId) => {
-    const ownedTokenSkinIds = normalizeOwnedTokenSkinIds(get().ownedTokenSkinIds, skinId)
-    set({ ownedTokenSkinIds })
+    set({ selectedTokenSkinId })
     persistSettings(toPersistedSettings(get()))
   },
   toggleSound: () => {

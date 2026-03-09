@@ -101,6 +101,24 @@ const customizationEntrypoints = [
     entrypoint: 'set_player_customization',
     description: 'Updates the player cosmetic profile used across lobbies and matches',
   },
+  {
+    label: 'Set Player Loadout',
+    entrypoint: 'set_player_loadout',
+    description: 'Updates the authoritative equipped avatar, dice, token, and board theme',
+  },
+] as const
+
+const profileEntrypoints = [
+  {
+    label: 'Ensure Player Profile',
+    entrypoint: 'ensure_player_profile',
+    description: 'Initializes the on-chain player profile and starter inventory when missing',
+  },
+  {
+    label: 'Purchase Cosmetic',
+    entrypoint: 'purchase_cosmetic',
+    description: 'Purchases an on-chain cosmetic from the catalog using persistent coins',
+  },
 ] as const
 
 const vrfEntrypoints = [
@@ -173,6 +191,13 @@ if (appEnv.customizationSystemAddress) {
   contracts[appEnv.customizationSystemAddress] = {
     description: 'ParQuiz customization system permissions',
     methods: asMethods(customizationEntrypoints),
+  }
+}
+
+if (appEnv.profileSystemAddress) {
+  contracts[appEnv.profileSystemAddress] = {
+    description: 'ParQuiz profile system permissions',
+    methods: asMethods(profileEntrypoints),
   }
 }
 

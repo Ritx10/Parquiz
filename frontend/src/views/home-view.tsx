@@ -1,11 +1,11 @@
-import { useAccount } from '@starknet-react/core'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { setPlayerCustomization } from '../api'
+import { readCosmeticDefinitions } from '../api'
 import { GameAvatar } from '../components/game/game-avatar'
 import { GameDie } from '../components/game/game-die'
 import {
   boardThemeCatalog,
+  boardThemeIndexFromId,
   getBoardThemeName,
   getBoardThemeRarityLabel,
   getBoardThemeSubtitle,
@@ -20,7 +20,6 @@ import {
   getDiceSkinSubtitle,
   type DiceSkinId,
 } from '../lib/dice-cosmetics'
-import { appEnv } from '../config/env'
 import { getPlayerVisualTheme } from '../lib/player-color-themes'
 import {
   getTokenSkinName,
@@ -34,7 +33,6 @@ import {
   getPlayerSkinName,
   getPlayerSkinSrc,
   getPlayerSkinSubtitle,
-  playerSkinIndexFromId,
   playerSkins,
 } from '../lib/player-skins'
 import { useControllerWallet } from '../lib/starknet/use-controller-wallet'
@@ -72,6 +70,8 @@ type ShopRarityLabel = string
 
 type ShopItem = {
   boardThemeId?: BoardThemeId
+  catalogEnabled?: boolean
+  catalogPurchasable?: boolean
   diceSkinId?: DiceSkinId
   id: string
   icon?: string
@@ -311,7 +311,6 @@ const initialLobbies: LobbyEntry[] = [
 ]
 
 export function HomeView() {
-  const { account } = useAccount()
   const navigate = useNavigate()
   const selectedLobby = initialLobbies[0]
   const activePlayers = selectedLobby.seats
@@ -324,33 +323,29 @@ export function HomeView() {
   const setAiDifficulty = useAppSettingsStore((state) => state.setAiDifficulty)
   const setQuestionDifficulty = useAppSettingsStore((state) => state.setQuestionDifficulty)
   const language = useAppSettingsStore((state) => state.language)
-  const ownedBoardThemeIds = useAppSettingsStore((state) => state.ownedBoardThemeIds)
-  const ownedDiceSkinIds = useAppSettingsStore((state) => state.ownedDiceSkinIds)
-  const ownedPlayerSkinIds = useAppSettingsStore((state) => state.ownedPlayerSkinIds)
-  const ownedTokenSkinIds = useAppSettingsStore((state) => state.ownedTokenSkinIds)
-  const selectedBoardThemeId = useAppSettingsStore((state) => state.selectedBoardThemeId)
-  const selectedDiceSkinId = useAppSettingsStore((state) => state.selectedDiceSkinId)
-  const selectedSkinId = useAppSettingsStore((state) => state.selectedSkinId)
-  const selectedTokenSkinId = useAppSettingsStore((state) => state.selectedTokenSkinId)
-  const { isConnected, username } = useControllerWallet()
+  const { username } = useControllerWallet()
   const playerProfile = usePlayerProfile()
   const {
+    purchaseBoardTheme,
+    purchaseDiceSkin,
+    purchasePlayerSkin,
+    purchaseTokenSkin,
     setSelectedBoardThemeId,
     setSelectedDiceSkinId,
     setSelectedSkinId,
     setSelectedTokenSkinId,
-    unlockBoardTheme,
-    unlockDiceSkin,
-    unlockPlayerSkin,
-    unlockTokenSkin,
   } = usePlayerProfileActions()
   const ui = homeCopyByLanguage[language]
+  const ownedBoardThemeSet = new Set(playerProfile.ownedBoardThemeIds)
+  const ownedDiceSkinSet = new Set(playerProfile.ownedDiceSkinIds)
+  const ownedPlayerSkinSet = new Set(playerProfile.ownedPlayerSkinIds)
+  const ownedTokenSkinSet = new Set(playerProfile.ownedTokenSkinIds)
+  const selectedBoardThemeId = playerProfile.selectedBoardThemeId
+  const selectedDiceSkinId = playerProfile.selectedDiceSkinId
+  const selectedSkinId = playerProfile.selectedSkinId
+  const selectedTokenSkinId = playerProfile.selectedTokenSkinId
   const selectedSkinSrc = getPlayerSkinSrc(selectedSkinId)
   const selectedTokenTheme = getPlayerVisualTheme(selectedTokenSkinId)
-  const ownedBoardThemeSet = new Set(ownedBoardThemeIds)
-  const ownedDiceSkinSet = new Set(ownedDiceSkinIds)
-  const ownedPlayerSkinSet = new Set(ownedPlayerSkinIds)
-  const ownedTokenSkinSet = new Set(ownedTokenSkinIds)
   const displayUsername = playerProfile.username || username || 'PARQUIZ_PLAYER_77'
   const levelLabel = `${ui.levelLabel} ${playerProfile.level}`
   const prestigeLabel = `${ui.prestigeLabel} ${playerProfile.prestige}`
@@ -358,68 +353,112 @@ export function HomeView() {
   const previousLevelRef = useRef(playerProfile.level)
   const previousXpRef = useRef(playerProfile.xp)
   const [animatedLevelProgress, setAnimatedLevelProgress] = useState(playerProfile.xpProgressPercent)
+  const [cosmeticDefinitions, setCosmeticDefinitions] = useState<
+    Array<{ enabled: boolean; item_id: number; kind: number; price_coins: number; purchasable: boolean; required_level: number }>
+  >([])
   const shopItemsByTab = useMemo<Record<ShopTab, ShopItem[]>>(
-    () => ({
-      avatars: [
-        ...playerSkins.map((skin, index) => ({
-          id: skin.id,
-          isStarterSkin: skin.tier === 'free',
-          isSkinItem: true,
-          mediaSrc: skin.src,
-          name: getPlayerSkinName(skin.id, language) || '',
-          subtitle: getPlayerSkinSubtitle(skin.id, language) || '',
-            price: skin.price,
-            requiredLevel: skin.requiredLevel,
-            rarityLabel: deriveShopRarityLabel(skin.price, language),
-          toneClass:
-            index % 3 === 0
-              ? 'from-[#ffefdb] to-[#fddcab]'
-              : index % 3 === 1
-                ? 'from-[#eff2ff] to-[#d8dbfb]'
-                : 'from-[#e8fbff] to-[#cbf1ff]',
-        })),
-      ],
-      tokens: [
-        ...tokenSkinShopCatalog.map((skin) => ({
-          id: `token-${skin.id}`,
-          isTokenItem: true,
-          name: getTokenSkinName(skin.id, language),
-          price: skin.price,
-          rarityLabel: getTokenSkinRarityLabel(skin.id, language),
-          subtitle: getTokenSkinSubtitle(skin.id, language),
-          tier: skin.tier,
-          tokenSkinId: skin.id,
-          toneClass: skin.previewToneClass,
-        })),
-      ],
-      dice: [
-        ...diceSkinCatalog.map((skin) => ({
-          id: `dice-${skin.id}`,
-          isDiceItem: true,
-          name: getDiceSkinName(skin.id, language),
-          price: skin.price,
-          rarityLabel: getDiceSkinRarityLabel(skin.id, language),
-          subtitle: getDiceSkinSubtitle(skin.id, language),
-          diceSkinId: skin.id,
-          toneClass: skin.previewToneClass,
-        })),
-      ],
-      themes: [
-        ...boardThemeCatalog.map((theme) => ({
-          id: theme.id,
-          icon: theme.icon,
-          isBoardThemeItem: true,
-          name: getBoardThemeName(theme.id, language),
-          price: theme.price,
-          previewImageSrc: theme.previewImageSrc,
-          rarityLabel: getBoardThemeRarityLabel(theme.id, language),
-          subtitle: getBoardThemeSubtitle(theme.id, language),
-          boardThemeId: theme.id,
-          toneClass: theme.previewToneClass,
-        })),
-      ],
-    }),
-    [language],
+    () => {
+      const definitionByKey = cosmeticDefinitions.reduce<Record<string, (typeof cosmeticDefinitions)[number]>>((acc, definition) => {
+        acc[`${definition.kind}:${definition.item_id}`] = definition
+        return acc
+      }, {})
+      const resolveCatalogDefinition = (kind: number, itemId: number, fallbackPrice: number, fallbackLevel = 1) => {
+        const definition = playerProfile.isOnchainBacked ? definitionByKey[`${kind}:${itemId}`] : undefined
+
+        return {
+          enabled: definition?.enabled ?? true,
+          price: definition?.price_coins ?? fallbackPrice,
+          purchasable: definition?.purchasable ?? fallbackPrice > 0,
+          requiredLevel: definition?.required_level ?? fallbackLevel,
+        }
+      }
+
+      return {
+        avatars: [
+          ...playerSkins.map((skin, index) => {
+            const catalogDefinition = resolveCatalogDefinition(0, skin.index, skin.price, skin.requiredLevel ?? 1)
+
+            return {
+              id: skin.id,
+              catalogEnabled: catalogDefinition.enabled,
+              catalogPurchasable: catalogDefinition.purchasable,
+              isStarterSkin: skin.tier === 'free',
+              isSkinItem: true,
+              mediaSrc: skin.src,
+              name: getPlayerSkinName(skin.id, language) || '',
+              subtitle: getPlayerSkinSubtitle(skin.id, language) || '',
+              price: catalogDefinition.price,
+              requiredLevel: catalogDefinition.requiredLevel,
+              rarityLabel: deriveShopRarityLabel(catalogDefinition.price, language),
+              toneClass:
+                index % 3 === 0
+                  ? 'from-[#ffefdb] to-[#fddcab]'
+                  : index % 3 === 1
+                    ? 'from-[#eff2ff] to-[#d8dbfb]'
+                    : 'from-[#e8fbff] to-[#cbf1ff]',
+            }
+          }),
+        ],
+        tokens: [
+          ...tokenSkinShopCatalog.map((skin) => {
+            const catalogDefinition = resolveCatalogDefinition(2, tokenSkinIndexFromId(skin.id), skin.price)
+
+            return {
+              id: `token-${skin.id}`,
+              catalogEnabled: catalogDefinition.enabled,
+              catalogPurchasable: catalogDefinition.purchasable,
+              isTokenItem: true,
+              name: getTokenSkinName(skin.id, language),
+              price: catalogDefinition.price,
+              rarityLabel: getTokenSkinRarityLabel(skin.id, language),
+              subtitle: getTokenSkinSubtitle(skin.id, language),
+              tier: skin.tier,
+              tokenSkinId: skin.id,
+              toneClass: skin.previewToneClass,
+            }
+          }),
+        ],
+        dice: [
+          ...diceSkinCatalog.map((skin) => {
+            const catalogDefinition = resolveCatalogDefinition(1, diceSkinIndexFromId(skin.id), skin.price)
+
+            return {
+              id: `dice-${skin.id}`,
+              catalogEnabled: catalogDefinition.enabled,
+              catalogPurchasable: catalogDefinition.purchasable,
+              isDiceItem: true,
+              name: getDiceSkinName(skin.id, language),
+              price: catalogDefinition.price,
+              rarityLabel: getDiceSkinRarityLabel(skin.id, language),
+              subtitle: getDiceSkinSubtitle(skin.id, language),
+              diceSkinId: skin.id,
+              toneClass: skin.previewToneClass,
+            }
+          }),
+        ],
+        themes: [
+          ...boardThemeCatalog.map((theme) => {
+            const catalogDefinition = resolveCatalogDefinition(3, boardThemeIndexFromId(theme.id), theme.price)
+
+            return {
+              id: theme.id,
+              catalogEnabled: catalogDefinition.enabled,
+              catalogPurchasable: catalogDefinition.purchasable,
+              icon: theme.icon,
+              isBoardThemeItem: true,
+              name: getBoardThemeName(theme.id, language),
+              price: catalogDefinition.price,
+              previewImageSrc: theme.previewImageSrc,
+              rarityLabel: getBoardThemeRarityLabel(theme.id, language),
+              subtitle: getBoardThemeSubtitle(theme.id, language),
+              boardThemeId: theme.id,
+              toneClass: theme.previewToneClass,
+            }
+          }),
+        ],
+      }
+    },
+    [cosmeticDefinitions, language, playerProfile.isOnchainBacked],
   )
   const shopItems = shopItemsByTab[activeShopTab]
   const coinBalance = playerProfile.coins
@@ -460,32 +499,70 @@ export function HomeView() {
     }
   }, [playerProfile.level, playerProfile.xp, playerProfile.xpProgressPercent])
 
-  const syncCustomization = useCallback(
-    async (nextSkinId: null | string, nextDiceSkinId: DiceSkinId, nextTokenSkinId: TokenSkinId) => {
-      if (!isConnected || !account || !appEnv.customizationSystemAddress) {
-        setCosmeticsSyncMessage(isConnected ? ui.cosmeticsLocalOnly : null)
-        return
+  useEffect(() => {
+    if (!playerProfile.isOnchainBacked) {
+      setCosmeticDefinitions([])
+      return
+    }
+
+    let cancelled = false
+
+    const loadDefinitions = async () => {
+      try {
+        const definitions = await readCosmeticDefinitions()
+
+        if (!cancelled) {
+          setCosmeticDefinitions(definitions)
+        }
+      } catch {
+        if (!cancelled) {
+          setCosmeticDefinitions([])
+        }
+      }
+    }
+
+    void loadDefinitions()
+
+    return () => {
+      cancelled = true
+    }
+  }, [playerProfile.isOnchainBacked])
+
+  const runCosmeticMutation = useCallback(
+    async (mutation: () => Promise<boolean | void>) => {
+      setCosmeticsSyncPending(true)
+
+      if (playerProfile.isOnchainBacked) {
+        setCosmeticsSyncMessage(ui.cosmeticsSyncing)
       }
 
-      setCosmeticsSyncPending(true)
-      setCosmeticsSyncMessage(ui.cosmeticsSyncing)
-
       try {
-        const transactionHash = await setPlayerCustomization(
-          account,
-          playerSkinIndexFromId(nextSkinId),
-          diceSkinIndexFromId(nextDiceSkinId),
-          tokenSkinIndexFromId(nextTokenSkinId),
-        )
-        await account.waitForTransaction(transactionHash)
-        setCosmeticsSyncMessage(ui.cosmeticsSynced)
+        const result = await mutation()
+
+        if (result === false) {
+          if (playerProfile.isOnchainBacked) {
+            setCosmeticsSyncMessage(ui.cosmeticsLocalOnly)
+          }
+          return false
+        }
+
+        if (playerProfile.isOnchainBacked) {
+          setCosmeticsSyncMessage(ui.cosmeticsSynced)
+        } else {
+          setCosmeticsSyncMessage(null)
+        }
+
+        return true
       } catch {
-        setCosmeticsSyncMessage(ui.cosmeticsLocalOnly)
+        if (playerProfile.isOnchainBacked) {
+          setCosmeticsSyncMessage(ui.cosmeticsLocalOnly)
+        }
+        return false
       } finally {
         setCosmeticsSyncPending(false)
       }
     },
-    [account, isConnected, ui.cosmeticsLocalOnly, ui.cosmeticsSynced, ui.cosmeticsSyncing],
+    [playerProfile.isOnchainBacked, ui.cosmeticsLocalOnly, ui.cosmeticsSynced, ui.cosmeticsSyncing],
   )
 
   const onOnlinePlay = () => {
@@ -917,42 +994,64 @@ export function HomeView() {
                         const isEquippedDice = Boolean(item.diceSkinId && item.diceSkinId === selectedDiceSkinId)
                         const isOwnedToken = Boolean(item.tokenSkinId && ownedTokenSkinSet.has(item.tokenSkinId))
                         const isEquippedToken = Boolean(item.tokenSkinId && item.tokenSkinId === selectedTokenSkinId)
-                        const isLevelLocked = Boolean(
-                          item.isSkinItem && item.requiredLevel && !isOwnedSkin && playerProfile.level < item.requiredLevel,
+                        const requiresPurchase = Boolean(
+                          (!item.isSkinItem && item.boardThemeId && !isOwnedBoardTheme) ||
+                            (item.isSkinItem && !isOwnedSkin) ||
+                            (item.diceSkinId && !isOwnedDice) ||
+                            (item.tokenSkinId && !isOwnedToken),
                         )
+                        const isLevelLocked = Boolean(item.requiredLevel && requiresPurchase && playerProfile.level < item.requiredLevel)
+                        const isChainUnavailable = Boolean(item.catalogEnabled === false || item.catalogPurchasable === false)
                         const isEquippedItem = isEquippedBoardTheme || isEquippedSkin || isEquippedDice || isEquippedToken
+                        const cannotAffordItem = requiresPurchase && item.price > coinBalance
 
-                        const handleItemAction = () => {
-                          if (isLevelLocked) {
+                        const handleItemAction = async () => {
+                          if (isLevelLocked || cannotAffordItem || (requiresPurchase && isChainUnavailable)) {
                             return
                           }
 
                           if (item.boardThemeId) {
-                            if (!isOwnedBoardTheme) {
-                              unlockBoardTheme(item.boardThemeId)
-                            }
+                            await runCosmeticMutation(async () => {
+                              if (!isOwnedBoardTheme) {
+                                const purchased = await purchaseBoardTheme(item.boardThemeId!, item.price)
+                                if (!purchased) {
+                                  return false
+                                }
+                              }
 
-                            setSelectedBoardThemeId(item.boardThemeId)
+                              await setSelectedBoardThemeId(item.boardThemeId!)
+                              return true
+                            })
                             return
                           }
 
                           if (item.isSkinItem) {
-                            if (!isOwnedSkin) {
-                              unlockPlayerSkin(item.id)
-                            }
+                            await runCosmeticMutation(async () => {
+                              if (!isOwnedSkin) {
+                                const purchased = await purchasePlayerSkin(item.id, item.price)
+                                if (!purchased) {
+                                  return false
+                                }
+                              }
 
-                            setSelectedSkinId(item.id)
-                            void syncCustomization(item.id, selectedDiceSkinId, selectedTokenSkinId)
+                              await setSelectedSkinId(item.id)
+                              return true
+                            })
                             return
                           }
 
                           if (item.diceSkinId) {
-                            if (!isOwnedDice) {
-                              unlockDiceSkin(item.diceSkinId)
-                            }
+                            await runCosmeticMutation(async () => {
+                              if (!isOwnedDice) {
+                                const purchased = await purchaseDiceSkin(item.diceSkinId!, item.price)
+                                if (!purchased) {
+                                  return false
+                                }
+                              }
 
-                            setSelectedDiceSkinId(item.diceSkinId)
-                            void syncCustomization(selectedSkinId, item.diceSkinId, selectedTokenSkinId)
+                              await setSelectedDiceSkinId(item.diceSkinId!)
+                              return true
+                            })
                             return
                           }
 
@@ -960,39 +1059,52 @@ export function HomeView() {
                             return
                           }
 
-                          if (!isOwnedToken) {
-                            unlockTokenSkin(item.tokenSkinId)
-                          }
+                          await runCosmeticMutation(async () => {
+                            if (!isOwnedToken) {
+                              const purchased = await purchaseTokenSkin(item.tokenSkinId!, item.price)
+                              if (!purchased) {
+                                return false
+                              }
+                            }
 
-                          setSelectedTokenSkinId(item.tokenSkinId)
-                          void syncCustomization(selectedSkinId, selectedDiceSkinId, item.tokenSkinId)
+                            await setSelectedTokenSkinId(item.tokenSkinId!)
+                            return true
+                          })
                         }
 
                         const actionLabel = item.isSkinItem
-                          ? isEquippedSkin
-                            ? ui.equippedItem
-                            : isLevelLocked
-                              ? `${ui.levelRequirement} ${item.requiredLevel}`
-                            : !isOwnedSkin
-                              ? ui.buyItem
-                              : ui.equipItem
+                            ? isEquippedSkin
+                              ? ui.equippedItem
+                              : isLevelLocked
+                                ? `${ui.levelRequirement} ${item.requiredLevel}`
+                              : !isOwnedSkin && isChainUnavailable
+                                ? ui.buyItem
+                              : !isOwnedSkin
+                                ? ui.buyItem
+                                : ui.equipItem
                           : item.boardThemeId
-                            ? !isOwnedBoardTheme
+                            ? !isOwnedBoardTheme && isChainUnavailable
                               ? ui.buyItem
-                              : isEquippedBoardTheme
-                                ? ui.equippedItem
-                                : ui.equipItem
+                              : !isOwnedBoardTheme
+                                ? ui.buyItem
+                                : isEquippedBoardTheme
+                                  ? ui.equippedItem
+                                  : ui.equipItem
                           : item.diceSkinId
-                            ? !isOwnedDice
+                            ? !isOwnedDice && isChainUnavailable
                               ? ui.buyItem
-                              : isEquippedDice
-                                ? ui.equippedItem
-                                : ui.equipItem
+                              : !isOwnedDice
+                                ? ui.buyItem
+                                : isEquippedDice
+                                  ? ui.equippedItem
+                                  : ui.equipItem
                           : !item.tokenSkinId
                             ? null
-                            : !isOwnedToken
+                            : !isOwnedToken && isChainUnavailable
                               ? ui.buyItem
-                              : isEquippedToken
+                              : !isOwnedToken
+                                ? ui.buyItem
+                                : isEquippedToken
                                 ? ui.equippedItem
                                 : ui.equipItem
 
@@ -1096,12 +1208,14 @@ export function HomeView() {
                             className={`mt-2 w-full rounded-full border px-3 py-1.5 font-display text-lg uppercase tracking-wide transition ${
                               isEquippedItem
                                 ? 'border-[#2a6719] bg-gradient-to-b from-[#73df58] to-[#3f9f22] text-white shadow-[inset_0_2px_0_rgba(210,255,195,0.8),0_4px_0_rgba(38,95,22,0.85)]'
-                                : isLevelLocked
+                                : isLevelLocked || cannotAffordItem
                                   ? 'cursor-not-allowed border-[#7e6a56] bg-gradient-to-b from-[#b2a08a] to-[#8f7a63] text-[#f7edd9] shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_4px_0_rgba(110,89,67,0.88)] opacity-85'
                                 : 'border-[#8f562f] bg-gradient-to-b from-[#a46539] to-[#7a4727] text-[#f7ddad] shadow-[inset_0_1px_0_rgba(255,225,189,0.45),0_4px_0_rgba(102,58,29,0.88)] hover:brightness-105'
                             }`}
-                            disabled={cosmeticsSyncPending || isLevelLocked}
-                            onClick={handleItemAction}
+                            disabled={cosmeticsSyncPending || isLevelLocked || cannotAffordItem || (requiresPurchase && isChainUnavailable)}
+                                onClick={() => {
+                                  void handleItemAction()
+                                }}
                             type="button"
                           >
                             {actionLabel}

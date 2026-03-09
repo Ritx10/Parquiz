@@ -529,6 +529,12 @@ export const getBoardThemeDefinition = (themeId: BoardThemeId) =>
 
 export const getBoardThemeSurfacePalette = (themeId: BoardThemeId) => surfacePaletteByThemeId[themeId]
 
+export const boardThemeIndexFromId = (themeId: BoardThemeId): number =>
+  boardThemeCatalog.findIndex((theme) => theme.id === themeId)
+
+export const boardThemeIdFromIndex = (index: number): BoardThemeId =>
+  boardThemeCatalog[index]?.id || 'theme-classic'
+
 export const getBoardThemeName = (themeId: BoardThemeId, language: ShopLanguage) =>
   localizeShopText(boardThemeCopyById[themeId]?.name || boardThemeCopyById['theme-classic'].name, language)
 
