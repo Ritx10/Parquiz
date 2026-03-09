@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, copyFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, extname, join, resolve } from 'node:path'
 
 const SUPPORTED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.avif', '.gif', '.heic'])
@@ -47,13 +47,42 @@ const ensureEmptyDirectory = (directoryPath: string) => {
   mkdirSync(directoryPath, { recursive: true })
 }
 
-const copyOrConvertFile = (sourcePath: string, destinationPath: string) => {
-  if (extname(sourcePath).toLowerCase() === '.heic') {
-    const result = spawnSync('sips', ['-s', 'format', 'png', sourcePath, '--out', destinationPath], {
-      stdio: 'pipe',
-    })
+let heicConvertPromise: Promise<{
+  default?: (options: { buffer: ArrayBufferLike; format: 'PNG' }) => Promise<ArrayBuffer>
+}> | null = null
 
-    if (result.status !== 0) {
+const getHeicConverter = async () => {
+  heicConvertPromise ??= import('heic-convert')
+  const module = await heicConvertPromise
+
+  if (!module.default) {
+    throw new Error('Failed to load the HEIC conversion module.')
+  }
+
+  return module.default
+}
+
+const copyOrConvertFile = async (sourcePath: string, destinationPath: string) => {
+  if (extname(sourcePath).toLowerCase() === '.heic') {
+    if (process.platform === 'darwin') {
+      const result = spawnSync('sips', ['-s', 'format', 'png', sourcePath, '--out', destinationPath], {
+        stdio: 'pipe',
+      })
+
+      if (result.status === 0) {
+        return
+      }
+    }
+
+    try {
+      const convertHeic = await getHeicConverter()
+      const convertedBuffer = await convertHeic({
+        buffer: readFileSync(sourcePath),
+        format: 'PNG',
+      })
+
+      writeFileSync(destinationPath, Buffer.from(convertedBuffer))
+    } catch {
       throw new Error(`Failed to convert HEIC file: ${basename(sourcePath)}`)
     }
 
@@ -63,7 +92,7 @@ const copyOrConvertFile = (sourcePath: string, destinationPath: string) => {
   copyFileSync(sourcePath, destinationPath)
 }
 
-const syncSkinGroup = ({
+const syncSkinGroup = async ({
   destinationDirectory,
   groupName,
   sourceDirectories,
@@ -78,12 +107,12 @@ const syncSkinGroup = ({
   const seenSlugs = new Set<string>()
   let syncedCount = 0
 
-  sourceDirectories.forEach((directoryPath) => {
-    listFilesRecursive(directoryPath).forEach((filePath) => {
+  for (const directoryPath of sourceDirectories) {
+    for (const filePath of listFilesRecursive(directoryPath)) {
       const fileHash = createHash('sha1').update(readFileSync(filePath)).digest('hex')
 
       if (seenHashes.has(fileHash)) {
-        return
+        continue
       }
 
       seenHashes.add(fileHash)
@@ -101,10 +130,10 @@ const syncSkinGroup = ({
 
       const destinationExtension = extname(filePath).toLowerCase() === '.heic' ? '.png' : extname(filePath).toLowerCase()
       const destinationPath = join(destinationDirectory, `${nextSlug}${destinationExtension}`)
-      copyOrConvertFile(filePath, destinationPath)
+      await copyOrConvertFile(filePath, destinationPath)
       syncedCount += 1
-    })
-  })
+    }
+  }
 
   return syncedCount
 }
@@ -129,20 +158,20 @@ if (!premiumSource) {
 
 const premiumSourceDirectories = [premiumSource]
 
-const freeCount = syncSkinGroup({
+const freeCount = await syncSkinGroup({
   destinationDirectory: freeDestination,
   groupName: 'gratis',
   sourceDirectories: [freeSource],
 })
 
-const premiumCount = syncSkinGroup({
+const premiumCount = await syncSkinGroup({
   destinationDirectory: premiumDestination,
   groupName: 'premium',
   sourceDirectories: premiumSourceDirectories,
 })
 
 const rewardCount = specialPremiumSource
-  ? syncSkinGroup({
+  ? await syncSkinGroup({
       destinationDirectory: rewardDestination,
       groupName: 'especial',
       sourceDirectories: [specialPremiumSource],
