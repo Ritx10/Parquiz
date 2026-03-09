@@ -80,14 +80,16 @@ const rewardSkinPresentationBySlug: Record<string, SkinPresentation> = {
   },
 }
 
-const sortEntries = (modules: Record<string, string>) => {
-  return Object.entries(modules).sort(([left], [right]) => left.localeCompare(right, 'en'))
-}
-
 const getPathSlug = (filePath: string) => {
   const normalizedPath = filePath.replace(/\\/g, '/')
   const fileName = normalizedPath.split('/').pop() || ''
   return fileName.replace(/\.[^.]+$/, '')
+}
+
+const getPathFileName = (filePath: string) => filePath.replace(/\\/g, '/').split('/').pop() || ''
+
+const sortEntries = (modules: Record<string, string>) => {
+  return Object.entries(modules).sort(([left], [right]) => getPathFileName(left).localeCompare(getPathFileName(right), 'en'))
 }
 
 const titleCaseSlug = (slug: string) =>
