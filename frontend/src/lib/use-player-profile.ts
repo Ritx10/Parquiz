@@ -268,13 +268,10 @@ export function usePlayerProfileActions() {
         claimRewardEvent(profileKey, rewardKey, reward),
       ensureOnchainProfile,
       purchaseBoardTheme: async (themeId: BoardThemeId, cost: number) => {
-        const optimistic = purchaseBoardThemeLocal(profileKey, themeId, cost)
-        if (!optimistic) {
-          return false
-        }
         if (!account || !address || !canUseOnchainProfile) {
-          return true
+          return purchaseBoardThemeLocal(profileKey, themeId, cost)
         }
+
         try {
           await ensureOnchainProfile()
           const transactionHash = await purchaseCosmetic(account, COSMETIC_KIND_BOARD, boardThemeIndexFromId(themeId))
@@ -287,13 +284,10 @@ export function usePlayerProfileActions() {
         }
       },
       purchaseDiceSkin: async (skinId: DiceSkinId, cost: number) => {
-        const optimistic = purchaseDiceSkinLocal(profileKey, skinId, cost)
-        if (!optimistic) {
-          return false
-        }
         if (!account || !address || !canUseOnchainProfile) {
-          return true
+          return purchaseDiceSkinLocal(profileKey, skinId, cost)
         }
+
         try {
           await ensureOnchainProfile()
           const transactionHash = await purchaseCosmetic(account, COSMETIC_KIND_DICE, diceSkinIndexFromId(skinId))
@@ -311,13 +305,10 @@ export function usePlayerProfileActions() {
           return false
         }
 
-        const optimistic = purchasePlayerSkinLocal(profileKey, normalizedSkinId, cost)
-        if (!optimistic) {
-          return false
-        }
         if (!account || !address || !canUseOnchainProfile) {
-          return true
+          return purchasePlayerSkinLocal(profileKey, normalizedSkinId, cost)
         }
+
         try {
           await ensureOnchainProfile()
           const transactionHash = await purchaseCosmetic(account, COSMETIC_KIND_AVATAR, playerSkinIndexFromId(normalizedSkinId))
@@ -330,13 +321,10 @@ export function usePlayerProfileActions() {
         }
       },
       purchaseTokenSkin: async (skinId: TokenSkinId, cost: number) => {
-        const optimistic = purchaseTokenSkinLocal(profileKey, skinId, cost)
-        if (!optimistic) {
-          return false
-        }
         if (!account || !address || !canUseOnchainProfile) {
-          return true
+          return purchaseTokenSkinLocal(profileKey, skinId, cost)
         }
+
         try {
           await ensureOnchainProfile()
           const transactionHash = await purchaseCosmetic(account, COSMETIC_KIND_TOKEN, tokenSkinIndexFromId(skinId))

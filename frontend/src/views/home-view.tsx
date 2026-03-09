@@ -194,6 +194,7 @@ const homeCopyByLanguage = {
     tokenEquippedBadge: 'EQUIPADA',
     cosmeticsSynced: 'Cosmeticos sincronizados on-chain.',
     cosmeticsSyncing: 'Sincronizando cosmeticos...',
+    cosmeticsConfirmingPurchase: 'Confirmando compra on-chain. Revisa tu wallet y espera la confirmacion.',
     cosmeticsLocalOnly: 'Cosmeticos guardados localmente. Falta sincronizacion on-chain.',
   },
   en: {
@@ -238,6 +239,7 @@ const homeCopyByLanguage = {
     tokenEquippedBadge: 'EQUIPPED',
     cosmeticsSynced: 'Cosmetics synced on-chain.',
     cosmeticsSyncing: 'Syncing cosmetics...',
+    cosmeticsConfirmingPurchase: 'Confirming purchase on-chain. Check your wallet and wait for confirmation.',
     cosmeticsLocalOnly: 'Cosmetics saved locally. On-chain sync is still pending.',
   },
 } as const
@@ -364,11 +366,12 @@ export function HomeView() {
       }, {})
       const resolveCatalogDefinition = (kind: number, itemId: number, fallbackPrice: number, fallbackLevel = 1) => {
         const definition = playerProfile.isOnchainBacked ? definitionByKey[`${kind}:${itemId}`] : undefined
+        const hasChainDefinition = !playerProfile.isOnchainBacked || Boolean(definition)
 
         return {
-          enabled: definition?.enabled ?? true,
+          enabled: hasChainDefinition ? (definition?.enabled ?? true) : false,
           price: definition?.price_coins ?? fallbackPrice,
-          purchasable: definition?.purchasable ?? fallbackPrice > 0,
+          purchasable: hasChainDefinition ? (definition?.purchasable ?? fallbackPrice > 0) : false,
           requiredLevel: definition?.required_level ?? fallbackLevel,
         }
       }
@@ -533,7 +536,7 @@ export function HomeView() {
       setCosmeticsSyncPending(true)
 
       if (playerProfile.isOnchainBacked) {
-        setCosmeticsSyncMessage(ui.cosmeticsSyncing)
+        setCosmeticsSyncMessage(ui.cosmeticsConfirmingPurchase)
       }
 
       try {
@@ -562,7 +565,7 @@ export function HomeView() {
         setCosmeticsSyncPending(false)
       }
     },
-    [playerProfile.isOnchainBacked, ui.cosmeticsLocalOnly, ui.cosmeticsSynced, ui.cosmeticsSyncing],
+    [playerProfile.isOnchainBacked, ui.cosmeticsConfirmingPurchase, ui.cosmeticsLocalOnly, ui.cosmeticsSynced],
   )
 
   const onOnlinePlay = () => {
@@ -976,6 +979,12 @@ export function HomeView() {
                     )
                   })}
                 </div>
+                  {cosmeticsSyncPending ? (
+                    <div className="mt-3 flex items-center gap-2 rounded-[18px] border-2 border-[#8f562f] bg-gradient-to-r from-[#fff1cb] via-[#ffe09e] to-[#ffd27f] px-4 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-[#6a3e14] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)] sm:text-[12px]">
+                      <span className="inline-flex h-3 w-3 rounded-full bg-[#b86a16] animate-pulse" />
+                      <span>{ui.cosmeticsConfirmingPurchase}</span>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div

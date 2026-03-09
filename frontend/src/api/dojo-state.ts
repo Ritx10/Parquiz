@@ -789,11 +789,7 @@ const readBoardSquaresForConfig = async (client: ToriiClient, configId: bigint) 
   const cacheKey = configId.toString()
 
   if (!boardSquareCache.has(cacheKey)) {
-    const pendingSquares = fetchModelsByKeys(
-        client,
-        'BoardSquare',
-        Array.from({ length: MAIN_TRACK_LEN }, (_, squareIndex) => [configId, squareIndex]),
-      )
+    const pendingSquares = fetchModelsByMember(client, 'BoardSquare', 'config_id', configId, MAIN_TRACK_LEN)
       .then((rows) => {
         const normalizedRows = rows.map((row) => normalizeBoardSquareModel(row))
 
@@ -836,21 +832,6 @@ export const readDojoGameSnapshot = async (
   }
 
   const game = normalizeGameModel(gameRaw)
-  const seatRows = await fetchModelsByKeys(
-    client,
-    'GameSeat',
-    Array.from({ length: MAX_SEATS }, (_, seat) => [gameId, seat]),
-  )
-
-  const occupiedPlayers = seatRows
-    .filter((row) => toBoolean(row.occupied))
-    .map((row) => normalizeAddress(row.player))
-    .filter((value, index, collection) => collection.indexOf(value) === index)
-
-  const playerKeys = occupiedPlayers.map((player) => [gameId, player])
-  const tokenKeys = occupiedPlayers.flatMap((player) =>
-    Array.from({ length: TOKENS_PER_PLAYER }, (_, tokenId) => [gameId, player, tokenId]),
-  )
   const includeBoardSquares = options.includeBoardSquares ?? false
   const includePlayerCustomizations = options.includePlayerCustomizations ?? false
 
@@ -870,14 +851,14 @@ export const readDojoGameSnapshot = async (
     withFallback(fetchModelByKeys(client, 'TurnState', [gameId]), null),
     withFallback(fetchModelByKeys(client, 'DiceState', [gameId]), null),
     withFallback(fetchModelByKeys(client, 'GameRuntimeConfig', [gameId]), null),
-    withFallback(fetchModelsByKeys(client, 'GamePlayer', playerKeys), []),
+    withFallback(fetchModelsByMember(client, 'GamePlayer', 'game_id', gameId, MAX_SEATS), []),
     includePlayerCustomizations
-      ? withFallback(fetchModelsByKeys(client, 'GamePlayerCustomization', playerKeys), [])
+      ? withFallback(fetchModelsByMember(client, 'GamePlayerCustomization', 'game_id', gameId, MAX_SEATS), [])
       : Promise.resolve([]),
-    withFallback(fetchModelsByKeys(client, 'GamePlayerStats', playerKeys), []),
-    withFallback(fetchModelsByKeys(client, 'GameFinalPlacement', playerKeys), []),
-    withFallback(fetchModelsByKeys(client, 'Token', tokenKeys), []),
-    withFallback(fetchModelsByKeys(client, 'BonusState', playerKeys), []),
+    withFallback(fetchModelsByMember(client, 'GamePlayerStats', 'game_id', gameId, MAX_SEATS), []),
+    withFallback(fetchModelsByMember(client, 'GameFinalPlacement', 'game_id', gameId, MAX_SEATS), []),
+    withFallback(fetchModelsByMember(client, 'Token', 'game_id', gameId, MAX_SEATS * TOKENS_PER_PLAYER), []),
+    withFallback(fetchModelsByMember(client, 'BonusState', 'game_id', gameId, MAX_SEATS), []),
     includeBoardSquares
       ? withFallback(readBoardSquaresForConfig(client, game.config_id), [])
       : Promise.resolve([]),
