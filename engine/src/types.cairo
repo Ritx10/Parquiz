@@ -94,3 +94,32 @@ pub struct EgsConfigPayload {
     pub objectives_address: ContractAddress,
     pub enabled: bool,
 }
+
+#[derive(Copy, Drop, Serde)]
+pub struct ProgressionConfigPayload {
+    pub base_xp_per_level: u32,
+    pub level_xp_growth: u32,
+    pub level_up_coin_reward: u32,
+    pub correct_answer_xp: u32,
+    pub exit_home_xp: u32,
+    pub capture_xp: u32,
+    pub bonus_questions_xp: u32,
+    pub bonus_captures_xp: u32,
+    pub bonus_participation_xp: u32,
+    pub special_reward_level: u16,
+    pub special_reward_avatar_skin_id: u8,
+}
+
+#[derive(Copy, Drop, Serde)]
+pub struct PlacementRewardPayload {
+    pub base_xp: u32,
+    pub base_coins: u32,
+}
+
+#[derive(Copy, Drop, Serde)]
+pub struct CosmeticDefinitionPayload {
+    pub price_coins: u32,
+    pub required_level: u16,
+    pub enabled: bool,
+    pub purchasable: bool,
+}

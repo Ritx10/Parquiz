@@ -61,15 +61,51 @@ pub mod egs_link_status {
     pub const CANCELLED: u8 = 3;
 }
 
+pub mod cosmetic_kind {
+    pub const AVATAR: u8 = 0;
+    pub const DICE: u8 = 1;
+    pub const TOKEN: u8 = 2;
+    pub const BOARD: u8 = 3;
+}
+
+pub mod inventory_source {
+    pub const STARTER: u8 = 0;
+    pub const PURCHASE: u8 = 1;
+    pub const LEVEL_REWARD: u8 = 2;
+    pub const MIGRATION: u8 = 3;
+}
+
+pub mod claim_type {
+    pub const ANSWER: u8 = 0;
+    pub const EXIT_HOME: u8 = 1;
+    pub const CAPTURE: u8 = 2;
+    pub const FINAL_MATCH: u8 = 3;
+}
+
 pub const TOKENS_PER_PLAYER: u8 = 4;
 pub const MIN_PLAYERS: u8 = 2;
 pub const MAX_SEATS: u8 = 4;
 pub const GLOBAL_STATE_SINGLETON_ID: u8 = 1;
 pub const EGS_CONFIG_SINGLETON_ID: u8 = 2;
 pub const VRF_CONFIG_SINGLETON_ID: u8 = 3;
+pub const PROGRESSION_CONFIG_SINGLETON_ID: u8 = 4;
 pub const DEFAULT_AVATAR_SKIN_ID: u8 = 0;
 pub const DEFAULT_DICE_SKIN_ID: u8 = 0;
 pub const DEFAULT_TOKEN_SKIN_ID: u8 = 2;
+pub const DEFAULT_BOARD_THEME_ID: u8 = 0;
+pub const STARTER_AVATAR_SKIN_ID_0: u8 = 0;
+pub const STARTER_AVATAR_SKIN_ID_1: u8 = 1;
+pub const STARTER_AVATAR_SKIN_ID_2: u8 = 2;
+pub const STARTER_AVATAR_SKIN_ID_3: u8 = 3;
+pub const STARTER_AVATAR_SKIN_ID_4: u8 = 4;
+pub const STARTER_AVATAR_SKIN_ID_5: u8 = 5;
+pub const STARTER_AVATAR_SKIN_ID_6: u8 = 6;
+pub const STARTER_AVATAR_SKIN_ID_7: u8 = 7;
+pub const STARTER_DICE_SKIN_ID: u8 = 0;
+pub const STARTER_TOKEN_SKIN_RED_ID: u8 = 1;
+pub const STARTER_TOKEN_SKIN_BLUE_ID: u8 = 2;
+pub const STARTER_TOKEN_SKIN_GREEN_ID: u8 = 3;
+pub const STARTER_TOKEN_SKIN_YELLOW_ID: u8 = 4;
 pub const MAIN_TRACK_LEN: u16 = 68;
 pub const HOME_LANE_LEN: u8 = 7;
 pub const TRACK_STEPS_TO_HOME_ENTRY: u16 = 63;

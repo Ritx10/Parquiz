@@ -22,21 +22,28 @@ pub mod turn_system {
         DEFAULT_QUESTION_SET_ID, DEFAULT_REQUIRES_EXACT_HOME, DEFAULT_VRF_PROVIDER_ADDRESS,
         CORRECT_ANSWER_REWARD_COINS, HOME_LANE_LEN, MAIN_TRACK_LEN, MAX_SEATS,
         TOKENS_PER_PLAYER, TRACK_STEPS_TO_HOME_ENTRY, VRF_CONFIG_SINGLETON_ID, bonus_type,
-        egs_link_status, game_status, move_type, token_state, turn_phase,
+        claim_type, cosmetic_kind, egs_link_status,
+        game_status, inventory_source, move_type, token_state, turn_phase,
     };
     use crate::events::{
         AnswerResolved, AnswerRevealed, BonusAwarded, BonusConsumed, BlockadeBroken,
-        BlockadeCreated, BridgeBroken, BridgeFormed, DiceRolled, GameWon, QuestionDrawn, TokenCaptured, TokenMoved,
-        TokenReachedHome, TurnEnded, TurnStarted,
+        BlockadeCreated, BridgeBroken, BridgeFormed, DiceRolled, GameFinalPlacementSettled,
+        GameWon, PlayerLevelUp, PlayerProfileRewardApplied, QuestionDrawn, TokenCaptured,
+        TokenMoved, TokenReachedHome, TurnEnded, TurnStarted,
     };
     use crate::models::{
-        BoardSquare, BonusState, DiceState, Game, GamePlayer, GameRuntimeConfig, GameSeat,
-        GameQuestionCycleState, GameQuestionUsageSegment, PendingQuestion, QuestionSet,
-        SquareOccupancy, Token, TurnState, VrfConfig,
+        BoardSquare, BonusState, DiceState, Game, GameFinalPlacement, GamePlayer,
+        GamePlayerStats, GameRuntimeConfig, GameSeat, GameQuestionCycleState,
+        GameQuestionUsageSegment, PendingQuestion, PlacementRewardConfig,
+        PlayerProgressionClaim, QuestionSet, SquareOccupancy, Token, TurnState, VrfConfig,
     };
     use crate::systems::egs_system::egs_system::{
         assert_bound_token_playable, post_bound_token_action, sync_bound_player_state,
         sync_bound_players_terminal,
+    };
+    use crate::systems::profile_system::profile_system::{
+        ensure_player_profile_initialized, grant_inventory_item, load_cosmetic_definition,
+        load_progression_config,
     };
     use crate::types::{AnswerPayload, LegalMove, MoveInput, MovePlan, MoveStep};
     use dojo::event::EventStorage;
@@ -45,6 +52,14 @@ pub mod turn_system {
     use super::ITurnSystem;
 
     const NO_BLOCKADE_OWNER: u8 = 255;
+
+    #[derive(Copy, Drop, Serde)]
+    struct PlacementCandidate {
+        player: ContractAddress,
+        seat: u8,
+        goal_count: u8,
+        progress_score: u16,
+    }
 
     #[abi(embed_v0)]
     impl TurnSystemImpl of ITurnSystem<ContractState> {
@@ -214,6 +229,7 @@ pub mod turn_system {
 
                 world.write_model(@game);
                 world.write_model(@turn);
+                settle_final_placements(ref world, game, winner, now);
                 sync_bound_players_terminal(
                     ref world, game.game_id, winner, egs_link_status::FINISHED,
                 );
@@ -328,6 +344,7 @@ pub mod turn_system {
 
                 world.write_model(@game);
                 world.write_model(@turn);
+                settle_final_placements(ref world, game, winner, now);
                 sync_bound_players_terminal(
                     ref world, game.game_id, winner, egs_link_status::FINISHED,
                 );
@@ -400,6 +417,17 @@ pub mod turn_system {
         if correct {
             player.coins += reward;
             world.write_model(@player);
+            increment_correct_answers(ref world, game.game_id, caller);
+            apply_progression_claim(
+                ref world,
+                caller,
+                build_answer_claim_hash(game.game_id, caller, payload_question_id),
+                claim_type::ANSWER,
+                game.game_id,
+                load_progression_config(ref world).correct_answer_xp,
+                0,
+                get_block_timestamp(),
+            );
         }
 
         turn.question_answered = true;
@@ -463,6 +491,7 @@ pub mod turn_system {
             ref turn,
             move_input.token_id,
             move_input.steps,
+            now,
             ref bonus_state,
         );
 
@@ -953,7 +982,7 @@ pub mod turn_system {
 
     fn apply_move_step(
         ref world: dojo::world::WorldStorage, game: Game, runtime: GameRuntimeConfig,
-        player: ContractAddress, ref turn: TurnState, token_id: u8, die_value: u8,
+        player: ContractAddress, ref turn: TurnState, token_id: u8, die_value: u8, now: u64,
         ref bonus_state: BonusState,
     ) {
         assert(die_value > 0, 'die_zero');
@@ -983,6 +1012,19 @@ pub mod turn_system {
             token.home_lane_pos = 0;
             token.steps_total = 0;
             turn.exited_home_this_turn = true;
+            increment_exit_home_count(ref world, game.game_id, player);
+            apply_progression_claim(
+                ref world,
+                player,
+                build_exit_home_claim_hash(
+                    game.game_id, player, game.turn_index, token_id, move_type::EXIT_HOME,
+                ),
+                claim_type::EXIT_HOME,
+                game.game_id,
+                load_progression_config(ref world).exit_home_xp,
+                0,
+                now,
+            );
         } else if token.token_state == token_state::ON_TRACK {
             assert_path_not_blocked(ref world, game, token, die_value);
             advance_from_track(ref token, die_value, DEFAULT_REQUIRES_EXACT_HOME);
@@ -1121,6 +1163,23 @@ pub mod turn_system {
         world.write_model(@rival_player);
 
         award_capture_bonus(ref attacker_bonus);
+        increment_capture_count(ref world, game.game_id, attacker);
+        apply_progression_claim(
+            ref world,
+            attacker,
+            build_capture_claim_hash(
+                game.game_id,
+                attacker,
+                captured_player,
+                captured_token_id,
+                track_square_ref(track_pos),
+            ),
+            claim_type::CAPTURE,
+            game.game_id,
+            load_progression_config(ref world).capture_xp,
+            0,
+            get_block_timestamp(),
+        );
 
         world.emit_event(@TokenCaptured {
             game_id: game.game_id,
@@ -1504,6 +1563,357 @@ pub mod turn_system {
         }
 
         zero_address()
+    }
+
+    fn increment_correct_answers(
+        ref world: dojo::world::WorldStorage, game_id: u64, player: ContractAddress,
+    ) {
+        let mut stats: GamePlayerStats = world.read_model((game_id, player));
+        stats.game_id = game_id;
+        stats.player = player;
+        stats.correct_answers += 1;
+        world.write_model(@stats);
+    }
+
+    fn increment_exit_home_count(
+        ref world: dojo::world::WorldStorage, game_id: u64, player: ContractAddress,
+    ) {
+        let mut stats: GamePlayerStats = world.read_model((game_id, player));
+        stats.game_id = game_id;
+        stats.player = player;
+        stats.exit_home_count += 1;
+        world.write_model(@stats);
+    }
+
+    fn increment_capture_count(
+        ref world: dojo::world::WorldStorage, game_id: u64, player: ContractAddress,
+    ) {
+        let mut stats: GamePlayerStats = world.read_model((game_id, player));
+        stats.game_id = game_id;
+        stats.player = player;
+        stats.captures += 1;
+        world.write_model(@stats);
+    }
+
+    fn build_answer_claim_hash(game_id: u64, player: ContractAddress, question_id: u64) -> felt252 {
+        poseidon_hash_span(array![game_id.into(), player.into(), question_id.into(), claim_type::ANSWER.into()].span())
+    }
+
+    fn build_exit_home_claim_hash(
+        game_id: u64, player: ContractAddress, turn_index: u32, token_id: u8, move_type_value: u8,
+    ) -> felt252 {
+        poseidon_hash_span(
+            array![
+                game_id.into(), player.into(), turn_index.into(), token_id.into(),
+                move_type_value.into(), claim_type::EXIT_HOME.into(),
+            ]
+                .span(),
+        )
+    }
+
+    fn build_capture_claim_hash(
+        game_id: u64,
+        attacker: ContractAddress,
+        defender: ContractAddress,
+        defender_token_id: u8,
+        square_ref: u32,
+    ) -> felt252 {
+        poseidon_hash_span(
+            array![
+                game_id.into(), attacker.into(), defender.into(), defender_token_id.into(),
+                square_ref.into(), claim_type::CAPTURE.into(),
+            ]
+                .span(),
+        )
+    }
+
+    fn build_final_match_claim_hash(game_id: u64, player: ContractAddress) -> felt252 {
+        poseidon_hash_span(array![game_id.into(), player.into(), claim_type::FINAL_MATCH.into()].span())
+    }
+
+    fn apply_progression_claim(
+        ref world: dojo::world::WorldStorage,
+        player: ContractAddress,
+        claim_hash: felt252,
+        claim_type_value: u8,
+        game_id: u64,
+        xp_reward: u32,
+        coin_reward: u32,
+        now: u64,
+    ) -> bool {
+        let existing_claim: PlayerProgressionClaim = world.read_model((player, claim_hash));
+        if existing_claim.created_at > 0 {
+            return false;
+        }
+
+        let progression = load_progression_config(ref world);
+        let mut profile = ensure_player_profile_initialized(ref world, player, now);
+
+        world.write_model(
+            @PlayerProgressionClaim { player, claim_hash, claim_type: claim_type_value, game_id, created_at: now },
+        );
+
+        let previous_level = profile.level;
+        profile.xp += xp_reward;
+        profile.coins += coin_reward;
+
+        loop {
+            let required_xp = progression.base_xp_per_level + (profile.level.into() * progression.level_xp_growth);
+            if profile.xp < required_xp {
+                break;
+            }
+
+            profile.xp -= required_xp;
+            profile.level += 1;
+            profile.coins += progression.level_up_coin_reward;
+            world.emit_event(@PlayerLevelUp {
+                player,
+                level: profile.level,
+                xp: profile.xp,
+                coins: profile.coins,
+            });
+        }
+
+        profile.updated_at = now;
+        world.write_model(@profile);
+
+        if previous_level < progression.special_reward_level && profile.level >= progression.special_reward_level {
+            let special_reward = load_cosmetic_definition(
+                ref world,
+                cosmetic_kind::AVATAR,
+                progression.special_reward_avatar_skin_id,
+            );
+            assert(special_reward.kind == cosmetic_kind::AVATAR, 'special_cos');
+            grant_inventory_item(
+                ref world,
+                player,
+                cosmetic_kind::AVATAR,
+                progression.special_reward_avatar_skin_id,
+                inventory_source::LEVEL_REWARD,
+                now,
+            );
+        }
+
+        world.emit_event(@PlayerProfileRewardApplied {
+            player,
+            claim_hash,
+            claim_type: claim_type_value,
+            game_id,
+            xp: xp_reward,
+            coins: coin_reward,
+            level: profile.level,
+        });
+        true
+    }
+
+    fn settle_final_placements(
+        ref world: dojo::world::WorldStorage, game: Game, winner: ContractAddress, now: u64,
+    ) {
+        let existing: GameFinalPlacement = world.read_model((game.game_id, winner));
+        if existing.game_id == game.game_id && existing.player == winner && existing.settled_at > 0 {
+            return;
+        }
+
+        let progression = load_progression_config(ref world);
+        let mut placed_0 = false;
+        let mut placed_1 = false;
+        let mut placed_2 = false;
+        let mut placed_3 = false;
+        let mut place: u8 = 1;
+
+        loop {
+            if place > game.player_count {
+                break;
+            }
+
+            let candidate = next_final_placement_candidate(
+                ref world,
+                game.game_id,
+                winner,
+                placed_0,
+                placed_1,
+                placed_2,
+                placed_3,
+            );
+            assert(candidate.player != zero_address(), 'place_none');
+
+            let reward: PlacementRewardConfig = world.read_model(place);
+            assert(reward.place == place, 'place_cfg');
+            let stats: GamePlayerStats = world.read_model((game.game_id, candidate.player));
+
+            let bonus_questions_xp = if stats.correct_answers > 0 {
+                progression.bonus_questions_xp
+            } else {
+                0
+            };
+            let bonus_captures_xp = if stats.captures > 0 {
+                progression.bonus_captures_xp
+            } else {
+                0
+            };
+            let bonus_participation_xp = progression.bonus_participation_xp;
+            let total_xp =
+                reward.base_xp + bonus_questions_xp + bonus_captures_xp + bonus_participation_xp;
+            let total_coins = reward.base_coins;
+
+            world.write_model(
+                @GameFinalPlacement {
+                    game_id: game.game_id,
+                    player: candidate.player,
+                    seat: candidate.seat,
+                    place,
+                    goal_count: candidate.goal_count,
+                    progress_score: candidate.progress_score,
+                    base_xp: reward.base_xp,
+                    base_coins: reward.base_coins,
+                    bonus_questions_xp,
+                    bonus_captures_xp,
+                    bonus_participation_xp,
+                    total_xp,
+                    total_coins,
+                    settled_at: now,
+                },
+            );
+            apply_progression_claim(
+                ref world,
+                candidate.player,
+                build_final_match_claim_hash(game.game_id, candidate.player),
+                claim_type::FINAL_MATCH,
+                game.game_id,
+                total_xp,
+                total_coins,
+                now,
+            );
+            world.emit_event(@GameFinalPlacementSettled {
+                game_id: game.game_id,
+                player: candidate.player,
+                place,
+                total_xp,
+                total_coins,
+            });
+
+            if candidate.seat == 0 {
+                placed_0 = true;
+            } else if candidate.seat == 1 {
+                placed_1 = true;
+            } else if candidate.seat == 2 {
+                placed_2 = true;
+            } else if candidate.seat == 3 {
+                placed_3 = true;
+            }
+
+            place += 1;
+        }
+    }
+
+    fn next_final_placement_candidate(
+        ref world: dojo::world::WorldStorage,
+        game_id: u64,
+        winner: ContractAddress,
+        placed_0: bool,
+        placed_1: bool,
+        placed_2: bool,
+        placed_3: bool,
+    ) -> PlacementCandidate {
+        let mut best = PlacementCandidate {
+            player: zero_address(),
+            seat: 0,
+            goal_count: 0,
+            progress_score: 0,
+        };
+        let mut seat: u8 = 0;
+
+        loop {
+            if seat >= MAX_SEATS {
+                break;
+            }
+
+            let already_placed =
+                (seat == 0 && placed_0) || (seat == 1 && placed_1) || (seat == 2 && placed_2)
+                    || (seat == 3 && placed_3);
+            if already_placed {
+                seat += 1;
+                continue;
+            }
+
+            let game_seat: GameSeat = world.read_model((game_id, seat));
+            if !game_seat.occupied {
+                seat += 1;
+                continue;
+            }
+
+            let player_state: GamePlayer = world.read_model((game_id, game_seat.player));
+            let candidate = PlacementCandidate {
+                player: game_seat.player,
+                seat,
+                goal_count: player_state.tokens_in_goal,
+                progress_score: compute_player_progress_score(ref world, game_id, game_seat.player),
+            };
+            if best.player == zero_address()
+                || placement_candidate_ranks_before(candidate, best, winner)
+            {
+                best = candidate;
+            }
+
+            seat += 1;
+        }
+
+        best
+    }
+
+    fn placement_candidate_ranks_before(
+        left: PlacementCandidate, right: PlacementCandidate, winner: ContractAddress,
+    ) -> bool {
+        let left_is_winner = left.player == winner;
+        let right_is_winner = right.player == winner;
+        if left_is_winner != right_is_winner {
+            return left_is_winner;
+        }
+
+        if left.goal_count != right.goal_count {
+            return left.goal_count > right.goal_count;
+        }
+
+        if left.progress_score != right.progress_score {
+            return left.progress_score > right.progress_score;
+        }
+
+        left.seat < right.seat
+    }
+
+    fn compute_player_progress_score(
+        ref world: dojo::world::WorldStorage, game_id: u64, player: ContractAddress,
+    ) -> u16 {
+        let mut total_score: u16 = 0;
+        let mut token_id: u8 = 0;
+
+        loop {
+            if token_id >= TOKENS_PER_PLAYER {
+                break;
+            }
+
+            let token: Token = world.read_model((game_id, player, token_id));
+            total_score += progress_score_for_token(token);
+            token_id += 1;
+        }
+
+        total_score
+    }
+
+    fn progress_score_for_token(token: Token) -> u16 {
+        if token.token_state == token_state::IN_BASE {
+            return 0;
+        }
+
+        if token.token_state == token_state::ON_TRACK {
+            return if token.steps_total == 0 { 1 } else { token.steps_total };
+        }
+
+        if token.token_state == token_state::IN_HOME_LANE {
+            return MAIN_TRACK_LEN + token.home_lane_pos.into() + 1_u16;
+        }
+
+        MAIN_TRACK_LEN + HOME_LANE_LEN.into() + 1_u16
     }
 
     fn can_exit_home(rule: u8, die_value: u8) -> bool {

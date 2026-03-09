@@ -19,8 +19,8 @@ pub mod lobby_system {
     };
     use crate::models::{
         BonusState, DiceState, Game, GameConfig, GamePlayer, GamePlayerCustomization,
-        GameRuntimeConfig, GameSeat, GlobalState, LobbyCodeIndex, PublicLobbyIndex, Token,
-        TurnState,
+        GamePlayerStats, GameRuntimeConfig, GameSeat, GlobalState, LobbyCodeIndex,
+        PublicLobbyIndex, Token, TurnState,
     };
     use crate::systems::customization_system::customization_system::load_player_customization;
     use crate::systems::egs_system::egs_system::{
@@ -319,6 +319,7 @@ pub mod lobby_system {
 
         initialize_tokens_for_game(ref world, game.game_id);
         initialize_bonus_state_for_game(ref world, game.game_id);
+        initialize_game_player_stats_for_game(ref world, game.game_id);
         snapshot_all_player_customizations(ref world, game.game_id);
 
         let active_player = first_active_player(ref world, game.game_id);
@@ -540,6 +541,29 @@ pub mod lobby_system {
                     bonus_consumed: false,
                 };
                 world.write_model(@bonus);
+            }
+
+            seat += 1;
+        }
+    }
+
+    fn initialize_game_player_stats_for_game(ref world: dojo::world::WorldStorage, game_id: u64) {
+        let mut seat: u8 = 0;
+
+        loop {
+            if seat >= MAX_SEATS {
+                break;
+            }
+
+            let game_seat: GameSeat = world.read_model((game_id, seat));
+            if game_seat.occupied {
+                world.write_model(@GamePlayerStats {
+                    game_id,
+                    player: game_seat.player,
+                    correct_answers: 0,
+                    captures: 0,
+                    exit_home_count: 0,
+                });
             }
 
             seat += 1;

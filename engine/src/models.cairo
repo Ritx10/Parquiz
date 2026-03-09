@@ -62,6 +62,7 @@ pub struct PlayerCustomization {
     pub avatar_skin_id: u8,
     pub dice_skin_id: u8,
     pub token_skin_id: u8,
+    pub board_theme_id: u8,
     pub updated_at: u64,
 }
 
@@ -75,6 +76,117 @@ pub struct GamePlayerCustomization {
     pub avatar_skin_id: u8,
     pub dice_skin_id: u8,
     pub token_skin_id: u8,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct PlayerProfile {
+    #[key]
+    pub player: ContractAddress,
+    pub level: u16,
+    pub xp: u32,
+    pub coins: u32,
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct CosmeticDefinition {
+    #[key]
+    pub kind: u8,
+    #[key]
+    pub item_id: u8,
+    pub price_coins: u32,
+    pub required_level: u16,
+    pub enabled: bool,
+    pub purchasable: bool,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct PlayerInventoryItem {
+    #[key]
+    pub player: ContractAddress,
+    #[key]
+    pub kind: u8,
+    #[key]
+    pub item_id: u8,
+    pub owned: bool,
+    pub source: u8,
+    pub acquired_at: u64,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct ProgressionConfig {
+    #[key]
+    pub singleton_id: u8,
+    pub base_xp_per_level: u32,
+    pub level_xp_growth: u32,
+    pub level_up_coin_reward: u32,
+    pub correct_answer_xp: u32,
+    pub exit_home_xp: u32,
+    pub capture_xp: u32,
+    pub bonus_questions_xp: u32,
+    pub bonus_captures_xp: u32,
+    pub bonus_participation_xp: u32,
+    pub special_reward_level: u16,
+    pub special_reward_avatar_skin_id: u8,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct PlacementRewardConfig {
+    #[key]
+    pub place: u8,
+    pub base_xp: u32,
+    pub base_coins: u32,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct PlayerProgressionClaim {
+    #[key]
+    pub player: ContractAddress,
+    #[key]
+    pub claim_hash: felt252,
+    pub claim_type: u8,
+    pub game_id: u64,
+    pub created_at: u64,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct GamePlayerStats {
+    #[key]
+    pub game_id: u64,
+    #[key]
+    pub player: ContractAddress,
+    pub correct_answers: u16,
+    pub captures: u16,
+    pub exit_home_count: u16,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct GameFinalPlacement {
+    #[key]
+    pub game_id: u64,
+    #[key]
+    pub player: ContractAddress,
+    pub seat: u8,
+    pub place: u8,
+    pub goal_count: u8,
+    pub progress_score: u16,
+    pub base_xp: u32,
+    pub base_coins: u32,
+    pub bonus_questions_xp: u32,
+    pub bonus_captures_xp: u32,
+    pub bonus_participation_xp: u32,
+    pub total_xp: u32,
+    pub total_coins: u32,
+    pub settled_at: u64,
 }
 
 #[derive(Copy, Drop, Serde)]

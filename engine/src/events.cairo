@@ -39,6 +39,72 @@ pub struct PlayerCustomizationUpdated {
     pub avatar_skin_id: u8,
     pub dice_skin_id: u8,
     pub token_skin_id: u8,
+    pub board_theme_id: u8,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::event]
+pub struct PlayerProfileInitialized {
+    #[key]
+    pub player: ContractAddress,
+    pub level: u16,
+    pub xp: u32,
+    pub coins: u32,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::event]
+pub struct PlayerProfileRewardApplied {
+    #[key]
+    pub player: ContractAddress,
+    pub claim_hash: felt252,
+    pub claim_type: u8,
+    pub game_id: u64,
+    pub xp: u32,
+    pub coins: u32,
+    pub level: u16,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::event]
+pub struct PlayerLevelUp {
+    #[key]
+    pub player: ContractAddress,
+    pub level: u16,
+    pub xp: u32,
+    pub coins: u32,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::event]
+pub struct CosmeticPurchased {
+    #[key]
+    pub player: ContractAddress,
+    pub kind: u8,
+    pub item_id: u8,
+    pub price_coins: u32,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::event]
+pub struct InventoryItemGranted {
+    #[key]
+    pub player: ContractAddress,
+    pub kind: u8,
+    pub item_id: u8,
+    pub source: u8,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::event]
+pub struct GameFinalPlacementSettled {
+    #[key]
+    pub game_id: u64,
+    #[key]
+    pub player: ContractAddress,
+    pub place: u8,
+    pub total_xp: u32,
+    pub total_coins: u32,
 }
 
 #[derive(Copy, Drop, Serde)]

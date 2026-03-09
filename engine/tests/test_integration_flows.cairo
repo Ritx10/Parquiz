@@ -10,25 +10,38 @@ use dojo_cairo_test::{
 use parquiz_engine::constants::{game_status, lobby_kind, move_type, token_state, turn_phase};
 use parquiz_engine::events::{
     e_AnswerRevealed, e_BlockadeBroken, e_BlockadeCreated, e_BonusAwarded, e_BridgeBroken,
-    e_BridgeFormed, e_GameStarted, e_GameWon, e_LobbyCreated, e_PlayerJoined,
-    e_PlayerReadyChanged, e_TokenCaptured, e_TokenMoved, e_TokenReachedHome, e_TurnEnded,
-    e_TurnStarted,
+    e_BridgeFormed, e_CosmeticPurchased, e_GameFinalPlacementSettled, e_GameStarted,
+    e_GameWon, e_InventoryItemGranted, e_LobbyCreated, e_PlayerCustomizationUpdated,
+    e_PlayerJoined, e_PlayerLevelUp, e_PlayerProfileInitialized,
+    e_PlayerProfileRewardApplied, e_PlayerReadyChanged, e_TokenCaptured, e_TokenMoved,
+    e_TokenReachedHome, e_TurnEnded, e_TurnStarted,
 };
 use parquiz_engine::models::{
-    BonusState, DiceState, Game, GameConfig, GamePlayer, GlobalState, PublicLobbyIndex, Token,
-    TurnState, m_BonusState, m_BoardSquare, m_DiceState, m_Game, m_GameConfig,
-    m_GamePlayer, m_GamePlayerCustomization, m_GameRuntimeConfig, m_GameSeat, m_GlobalState,
-    m_LobbyCodeIndex, m_PlayerCustomization, m_PublicLobbyIndex, m_SquareOccupancy, m_Token,
-    m_TurnState,
+    BonusState, CosmeticDefinition, DiceState, Game, GameConfig, GameFinalPlacement, GamePlayer, GlobalState, PlacementRewardConfig,
+    PlayerCustomization, PlayerInventoryItem, PlayerProfile, ProgressionConfig,
+    PublicLobbyIndex, Token, TurnState, m_AdminAccount, m_BonusState, m_BoardSquare,
+    m_CosmeticDefinition, m_DiceState, m_Game, m_GameConfig, m_GameFinalPlacement,
+    m_GamePlayer, m_GamePlayerCustomization, m_GamePlayerStats, m_GameRuntimeConfig,
+    m_GameSeat, m_GlobalState, m_LobbyCodeIndex, m_PlacementRewardConfig,
+    m_PlayerCustomization, m_PlayerInventoryItem, m_PlayerProfile,
+    m_PlayerProgressionClaim, m_PublicLobbyIndex, m_ProgressionConfig,
+    m_SquareOccupancy, m_Token, m_TurnState,
 };
 use parquiz_engine::systems::config_system::IConfigSystemDispatcher;
+use parquiz_engine::systems::admin_system::{IAdminSystemDispatcher, IAdminSystemDispatcherTrait};
+use parquiz_engine::systems::customization_system::{
+    ICustomizationSystemDispatcher, ICustomizationSystemDispatcherTrait,
+};
 use parquiz_engine::systems::lobby_system::{
     ILobbySystemDispatcher, ILobbySystemDispatcherTrait, lobby_system,
 };
+use parquiz_engine::systems::profile_system::{IProfileSystemDispatcher, IProfileSystemDispatcherTrait};
 use parquiz_engine::systems::turn_system::{
     ITurnSystemDispatcher, ITurnSystemDispatcherTrait, turn_system,
 };
-use parquiz_engine::types::{LegalMove, MoveInput};
+use parquiz_engine::types::{
+    CosmeticDefinitionPayload, LegalMove, MoveInput, ProgressionConfigPayload,
+};
 use snforge_std::{DeclareResultTrait, declare, start_cheat_caller_address, stop_cheat_caller_address};
 use starknet::{ClassHash, ContractAddress, contract_address_const};
 
@@ -41,12 +54,18 @@ fn guest() -> ContractAddress {
 }
 
 fn namespace_def(
-    config_system_hash: ClassHash, lobby_system_hash: ClassHash, turn_system_hash: ClassHash,
+    admin_system_hash: ClassHash,
+    config_system_hash: ClassHash,
+    customization_system_hash: ClassHash,
+    lobby_system_hash: ClassHash,
+    profile_system_hash: ClassHash,
+    turn_system_hash: ClassHash,
 ) -> NamespaceDef {
     NamespaceDef {
         namespace: "parquiz",
         resources: [
             TestResource::Model(m_GlobalState::TEST_CLASS_HASH),
+            TestResource::Model(m_AdminAccount::TEST_CLASS_HASH),
             TestResource::Model(m_Game::TEST_CLASS_HASH),
             TestResource::Model(m_GameConfig::TEST_CLASS_HASH),
             TestResource::Model(m_LobbyCodeIndex::TEST_CLASS_HASH),
@@ -61,11 +80,25 @@ fn namespace_def(
             TestResource::Model(m_BoardSquare::TEST_CLASS_HASH),
             TestResource::Model(m_SquareOccupancy::TEST_CLASS_HASH),
             TestResource::Model(m_PlayerCustomization::TEST_CLASS_HASH),
+            TestResource::Model(m_PlayerProfile::TEST_CLASS_HASH),
+            TestResource::Model(m_CosmeticDefinition::TEST_CLASS_HASH),
+            TestResource::Model(m_PlayerInventoryItem::TEST_CLASS_HASH),
+            TestResource::Model(m_ProgressionConfig::TEST_CLASS_HASH),
+            TestResource::Model(m_PlacementRewardConfig::TEST_CLASS_HASH),
+            TestResource::Model(m_PlayerProgressionClaim::TEST_CLASS_HASH),
             TestResource::Model(m_GamePlayerCustomization::TEST_CLASS_HASH),
+            TestResource::Model(m_GamePlayerStats::TEST_CLASS_HASH),
+            TestResource::Model(m_GameFinalPlacement::TEST_CLASS_HASH),
             TestResource::Event(e_LobbyCreated::TEST_CLASS_HASH),
             TestResource::Event(e_PlayerJoined::TEST_CLASS_HASH),
             TestResource::Event(e_PlayerReadyChanged::TEST_CLASS_HASH),
             TestResource::Event(e_AnswerRevealed::TEST_CLASS_HASH),
+            TestResource::Event(e_PlayerProfileInitialized::TEST_CLASS_HASH),
+            TestResource::Event(e_PlayerProfileRewardApplied::TEST_CLASS_HASH),
+            TestResource::Event(e_PlayerLevelUp::TEST_CLASS_HASH),
+            TestResource::Event(e_PlayerCustomizationUpdated::TEST_CLASS_HASH),
+            TestResource::Event(e_InventoryItemGranted::TEST_CLASS_HASH),
+            TestResource::Event(e_CosmeticPurchased::TEST_CLASS_HASH),
             TestResource::Event(e_GameStarted::TEST_CLASS_HASH),
             TestResource::Event(e_TurnStarted::TEST_CLASS_HASH),
             TestResource::Event(e_TokenMoved::TEST_CLASS_HASH),
@@ -78,8 +111,12 @@ fn namespace_def(
             TestResource::Event(e_BridgeBroken::TEST_CLASS_HASH),
             TestResource::Event(e_TurnEnded::TEST_CLASS_HASH),
             TestResource::Event(e_GameWon::TEST_CLASS_HASH),
+            TestResource::Event(e_GameFinalPlacementSettled::TEST_CLASS_HASH),
+            TestResource::Contract(admin_system_hash),
             TestResource::Contract(config_system_hash),
+            TestResource::Contract(customization_system_hash),
             TestResource::Contract(lobby_system_hash),
+            TestResource::Contract(profile_system_hash),
             TestResource::Contract(turn_system_hash),
         ]
             .span(),
@@ -89,9 +126,15 @@ fn namespace_def(
 fn contract_defs() -> Span<ContractDef> {
     let namespace_selector = bytearray_hash(@"parquiz");
     [
+        ContractDefTrait::new(@"parquiz", @"admin_system")
+            .with_writer_of([namespace_selector].span()),
         ContractDefTrait::new(@"parquiz", @"config_system")
             .with_writer_of([namespace_selector].span()),
+        ContractDefTrait::new(@"parquiz", @"customization_system")
+            .with_writer_of([namespace_selector].span()),
         ContractDefTrait::new(@"parquiz", @"lobby_system")
+            .with_writer_of([namespace_selector].span()),
+        ContractDefTrait::new(@"parquiz", @"profile_system")
             .with_writer_of([namespace_selector].span()),
         ContractDefTrait::new(@"parquiz", @"turn_system")
             .with_writer_of([namespace_selector].span()),
@@ -101,11 +144,15 @@ fn contract_defs() -> Span<ContractDef> {
 
 fn setup_world() -> (
     dojo::world::WorldStorage,
+    IAdminSystemDispatcher,
     IConfigSystemDispatcher,
+    ICustomizationSystemDispatcher,
     ILobbySystemDispatcher,
+    IProfileSystemDispatcher,
     ITurnSystemDispatcher,
 ) {
     let global_state_model = declare("m_GlobalState").unwrap().contract_class();
+    let admin_account_model = declare("m_AdminAccount").unwrap().contract_class();
     let game_model = declare("m_Game").unwrap().contract_class();
     let game_config_model = declare("m_GameConfig").unwrap().contract_class();
     let lobby_code_index_model = declare("m_LobbyCodeIndex").unwrap().contract_class();
@@ -120,11 +167,25 @@ fn setup_world() -> (
     let board_square_model = declare("m_BoardSquare").unwrap().contract_class();
     let square_occupancy_model = declare("m_SquareOccupancy").unwrap().contract_class();
     let player_customization_model = declare("m_PlayerCustomization").unwrap().contract_class();
+    let player_profile_model = declare("m_PlayerProfile").unwrap().contract_class();
+    let cosmetic_definition_model = declare("m_CosmeticDefinition").unwrap().contract_class();
+    let player_inventory_item_model = declare("m_PlayerInventoryItem").unwrap().contract_class();
+    let progression_config_model = declare("m_ProgressionConfig").unwrap().contract_class();
+    let placement_reward_config_model = declare("m_PlacementRewardConfig").unwrap().contract_class();
+    let player_progression_claim_model = declare("m_PlayerProgressionClaim").unwrap().contract_class();
     let game_player_customization_model = declare("m_GamePlayerCustomization").unwrap().contract_class();
+    let game_player_stats_model = declare("m_GamePlayerStats").unwrap().contract_class();
+    let game_final_placement_model = declare("m_GameFinalPlacement").unwrap().contract_class();
     let lobby_created_event = declare("e_LobbyCreated").unwrap().contract_class();
     let player_joined_event = declare("e_PlayerJoined").unwrap().contract_class();
     let player_ready_changed_event = declare("e_PlayerReadyChanged").unwrap().contract_class();
     let answer_revealed_event = declare("e_AnswerRevealed").unwrap().contract_class();
+    let player_profile_initialized_event = declare("e_PlayerProfileInitialized").unwrap().contract_class();
+    let player_profile_reward_applied_event = declare("e_PlayerProfileRewardApplied").unwrap().contract_class();
+    let player_level_up_event = declare("e_PlayerLevelUp").unwrap().contract_class();
+    let player_customization_updated_event = declare("e_PlayerCustomizationUpdated").unwrap().contract_class();
+    let inventory_item_granted_event = declare("e_InventoryItemGranted").unwrap().contract_class();
+    let cosmetic_purchased_event = declare("e_CosmeticPurchased").unwrap().contract_class();
     let game_started_event = declare("e_GameStarted").unwrap().contract_class();
     let turn_started_event = declare("e_TurnStarted").unwrap().contract_class();
     let token_moved_event = declare("e_TokenMoved").unwrap().contract_class();
@@ -137,15 +198,20 @@ fn setup_world() -> (
     let bridge_broken_event = declare("e_BridgeBroken").unwrap().contract_class();
     let turn_ended_event = declare("e_TurnEnded").unwrap().contract_class();
     let game_won_event = declare("e_GameWon").unwrap().contract_class();
+    let game_final_placement_settled_event = declare("e_GameFinalPlacementSettled").unwrap().contract_class();
     let world_class = declare("world").unwrap().contract_class();
+    let admin_class = declare("admin_system").unwrap().contract_class();
     let config_class = declare("config_system").unwrap().contract_class();
+    let customization_class = declare("customization_system").unwrap().contract_class();
     let lobby_class = declare("lobby_system").unwrap().contract_class();
+    let profile_class = declare("profile_system").unwrap().contract_class();
     let turn_class = declare("turn_system").unwrap().contract_class();
 
     let namespace = NamespaceDef {
         namespace: "parquiz",
         resources: [
             TestResource::Model(*global_state_model.class_hash),
+            TestResource::Model(*admin_account_model.class_hash),
             TestResource::Model(*game_model.class_hash),
             TestResource::Model(*game_config_model.class_hash),
             TestResource::Model(*lobby_code_index_model.class_hash),
@@ -160,11 +226,25 @@ fn setup_world() -> (
             TestResource::Model(*board_square_model.class_hash),
             TestResource::Model(*square_occupancy_model.class_hash),
             TestResource::Model(*player_customization_model.class_hash),
+            TestResource::Model(*player_profile_model.class_hash),
+            TestResource::Model(*cosmetic_definition_model.class_hash),
+            TestResource::Model(*player_inventory_item_model.class_hash),
+            TestResource::Model(*progression_config_model.class_hash),
+            TestResource::Model(*placement_reward_config_model.class_hash),
+            TestResource::Model(*player_progression_claim_model.class_hash),
             TestResource::Model(*game_player_customization_model.class_hash),
+            TestResource::Model(*game_player_stats_model.class_hash),
+            TestResource::Model(*game_final_placement_model.class_hash),
             TestResource::Event(*lobby_created_event.class_hash),
             TestResource::Event(*player_joined_event.class_hash),
             TestResource::Event(*player_ready_changed_event.class_hash),
             TestResource::Event(*answer_revealed_event.class_hash),
+            TestResource::Event(*player_profile_initialized_event.class_hash),
+            TestResource::Event(*player_profile_reward_applied_event.class_hash),
+            TestResource::Event(*player_level_up_event.class_hash),
+            TestResource::Event(*player_customization_updated_event.class_hash),
+            TestResource::Event(*inventory_item_granted_event.class_hash),
+            TestResource::Event(*cosmetic_purchased_event.class_hash),
             TestResource::Event(*game_started_event.class_hash),
             TestResource::Event(*turn_started_event.class_hash),
             TestResource::Event(*token_moved_event.class_hash),
@@ -177,8 +257,12 @@ fn setup_world() -> (
             TestResource::Event(*bridge_broken_event.class_hash),
             TestResource::Event(*turn_ended_event.class_hash),
             TestResource::Event(*game_won_event.class_hash),
+            TestResource::Event(*game_final_placement_settled_event.class_hash),
+            TestResource::Contract(*admin_class.class_hash),
             TestResource::Contract(*config_class.class_hash),
+            TestResource::Contract(*customization_class.class_hash),
             TestResource::Contract(*lobby_class.class_hash),
+            TestResource::Contract(*profile_class.class_hash),
             TestResource::Contract(*turn_class.class_hash),
         ]
             .span(),
@@ -188,17 +272,57 @@ fn setup_world() -> (
         *world_class.class_hash, [namespace].span(),
     );
     world.sync_perms_and_inits(contract_defs());
+    seed_progression_data(ref world);
 
+    let (admin_address, _) = world.dns(@"admin_system").unwrap();
     let (config_address, _) = world.dns(@"config_system").unwrap();
+    let (customization_address, _) = world.dns(@"customization_system").unwrap();
     let (lobby_address, _) = world.dns(@"lobby_system").unwrap();
+    let (profile_address, _) = world.dns(@"profile_system").unwrap();
     let (turn_address, _) = world.dns(@"turn_system").unwrap();
 
     (
         world,
+        IAdminSystemDispatcher { contract_address: admin_address },
         IConfigSystemDispatcher { contract_address: config_address },
+        ICustomizationSystemDispatcher { contract_address: customization_address },
         ILobbySystemDispatcher { contract_address: lobby_address },
+        IProfileSystemDispatcher { contract_address: profile_address },
         ITurnSystemDispatcher { contract_address: turn_address },
     )
+}
+
+fn seed_progression_data(ref world: dojo::world::WorldStorage) {
+    world.write_model_test(
+        @CosmeticDefinition {
+            kind: 0,
+            item_id: 0,
+            price_coins: 0,
+            required_level: 1,
+            enabled: true,
+            purchasable: false,
+        },
+    );
+    world.write_model_test(
+        @ProgressionConfig {
+            singleton_id: 4,
+            base_xp_per_level: 100,
+            level_xp_growth: 50,
+            level_up_coin_reward: 50,
+            correct_answer_xp: 10,
+            exit_home_xp: 5,
+            capture_xp: 15,
+            bonus_questions_xp: 20,
+            bonus_captures_xp: 10,
+            bonus_participation_xp: 10,
+            special_reward_level: 10,
+            special_reward_avatar_skin_id: 0,
+        },
+    );
+    world.write_model_test(@PlacementRewardConfig { place: 1, base_xp: 120, base_coins: 100 });
+    world.write_model_test(@PlacementRewardConfig { place: 2, base_xp: 80, base_coins: 60 });
+    world.write_model_test(@PlacementRewardConfig { place: 3, base_xp: 50, base_coins: 40 });
+    world.write_model_test(@PlacementRewardConfig { place: 4, base_xp: 30, base_coins: 20 });
 }
 
 fn seed_locked_config(ref world: dojo::world::WorldStorage) -> u64 {
@@ -341,7 +465,7 @@ fn has_legal_move(mut moves: Array<LegalMove>, token_id: u8, steps: u8) -> bool 
 
 #[test]
 fn private_lobby_flow_starts_after_ready_and_host_start() {
-    let (mut world, _, lobby_system, _) = setup_world();
+    let (mut world, _, _, _, lobby_system, _, _) = setup_world();
     let config_id = seed_locked_config(ref world);
 
     let game_id = create_private_game(ref world, lobby_system, config_id, 12345);
@@ -359,7 +483,7 @@ fn private_lobby_flow_starts_after_ready_and_host_start() {
 
 #[test]
 fn public_matchmaking_auto_starts_when_everyone_is_ready() {
-    let (mut world, _, lobby_system, _) = setup_world();
+    let (mut world, _, _, _, lobby_system, _, _) = setup_world();
     let config_id = seed_locked_config(ref world);
 
     start_cheat_caller_address(lobby_system.contract_address, host());
@@ -394,7 +518,7 @@ fn public_matchmaking_auto_starts_when_everyone_is_ready() {
 
 #[test]
 fn bridge_blocks_capture_and_home_bonus_flow() {
-    let (mut world, _, lobby_system, turn_system) = setup_world();
+    let (mut world, _, _, _, lobby_system, _, turn_system) = setup_world();
     let config_id = seed_locked_config(ref world);
 
     let game_id = create_private_game(ref world, lobby_system, config_id, 777);
@@ -441,7 +565,7 @@ fn bridge_blocks_capture_and_home_bonus_flow() {
 
 #[test]
 fn doubles_force_player_to_break_their_bridge_first() {
-    let (mut world, _, lobby_system, turn_system) = setup_world();
+    let (mut world, _, _, _, lobby_system, _, turn_system) = setup_world();
     let config_id = seed_locked_config(ref world);
 
     let game_id = create_private_game(ref world, lobby_system, config_id, 888);
@@ -466,7 +590,7 @@ fn doubles_force_player_to_break_their_bridge_first() {
 
 #[test]
 fn bridge_blocks_path_until_broken() {
-    let (mut world, _, lobby_system, turn_system) = setup_world();
+    let (mut world, _, _, _, lobby_system, _, turn_system) = setup_world();
     let config_id = seed_locked_config(ref world);
 
     let game_id = create_private_game(ref world, lobby_system, config_id, 999);
@@ -490,7 +614,7 @@ fn bridge_blocks_path_until_broken() {
 
 #[test]
 fn reaching_the_fourth_goal_token_finishes_the_game() {
-    let (mut world, _, lobby_system, turn_system) = setup_world();
+    let (mut world, _, _, _, lobby_system, _, turn_system) = setup_world();
     let config_id = seed_locked_config(ref world);
 
     let game_id = create_private_game(ref world, lobby_system, config_id, 1111);
@@ -533,5 +657,164 @@ fn reaching_the_fourth_goal_token_finishes_the_game() {
     assert(game.status == game_status::FINISHED, 'game not finished');
     assert(game.winner == host_address, 'winner missing');
     assert(turn.phase == turn_phase::TURN_ENDED, 'turn should be closed');
+}
+
+#[test]
+fn admin_profile_and_loadout_flow_updates_authoritative_models() {
+    let (mut world, admin_system, _, customization_system, _, profile_system, _) = setup_world();
+
+    start_cheat_caller_address(admin_system.contract_address, host());
+    admin_system.set_cosmetic_definition(
+        0,
+        11,
+        CosmeticDefinitionPayload {
+            price_coins: 0,
+            required_level: 1,
+            enabled: true,
+            purchasable: false,
+        },
+    );
+    admin_system.set_progression_config(
+        ProgressionConfigPayload {
+            base_xp_per_level: 100,
+            level_xp_growth: 50,
+            level_up_coin_reward: 50,
+            correct_answer_xp: 10,
+            exit_home_xp: 5,
+            capture_xp: 15,
+            bonus_questions_xp: 20,
+            bonus_captures_xp: 10,
+            bonus_participation_xp: 10,
+            special_reward_level: 10,
+            special_reward_avatar_skin_id: 11,
+        },
+    );
+    admin_system.set_cosmetic_definition(
+        3,
+        6,
+        CosmeticDefinitionPayload {
+            price_coins: 0,
+            required_level: 1,
+            enabled: true,
+            purchasable: false,
+        },
+    );
+    stop_cheat_caller_address(admin_system.contract_address);
+
+    start_cheat_caller_address(profile_system.contract_address, host());
+    profile_system.ensure_player_profile();
+    stop_cheat_caller_address(profile_system.contract_address);
+
+    let profile: PlayerProfile = world.read_model(host());
+    let starter_board: PlayerInventoryItem = world.read_model((host(), 3_u8, 0_u8));
+    let starter_avatar: PlayerInventoryItem = world.read_model((host(), 0_u8, 0_u8));
+    assert(profile.player == host(), 'profile missing');
+    assert(profile.level == 1, 'wrong level');
+    assert(profile.coins == 1000, 'wrong coins');
+    assert(starter_board.owned, 'starter board missing');
+    assert(starter_avatar.owned, 'starter avatar missing');
+
+    world.write_model_test(
+        @parquiz_engine::models::PlayerInventoryItem {
+            player: host(),
+            kind: 3,
+            item_id: 6,
+            owned: true,
+            source: 3,
+            acquired_at: 1,
+        },
+    );
+
+    start_cheat_caller_address(customization_system.contract_address, host());
+    customization_system.set_player_loadout(0, 0, 2, 6);
+    stop_cheat_caller_address(customization_system.contract_address);
+
+    let customization: PlayerCustomization = world.read_model(host());
+    let progression: ProgressionConfig = world.read_model(4_u8);
+    assert(customization.board_theme_id == 6, 'board theme missing');
+    assert(customization.avatar_skin_id == 0, 'avatar changed');
+    assert(progression.special_reward_avatar_skin_id == 11, 'progression not updated');
+}
+
+#[test]
+fn purchasing_a_cosmetic_deducts_coins_and_grants_inventory() {
+    let (mut world, admin_system, _, _, _, profile_system, _) = setup_world();
+
+    start_cheat_caller_address(admin_system.contract_address, host());
+    admin_system.set_cosmetic_definition(
+        3,
+        7,
+        CosmeticDefinitionPayload {
+            price_coins: 250,
+            required_level: 1,
+            enabled: true,
+            purchasable: true,
+        },
+    );
+    stop_cheat_caller_address(admin_system.contract_address);
+
+    start_cheat_caller_address(profile_system.contract_address, host());
+    profile_system.ensure_player_profile();
+    profile_system.purchase_cosmetic(3, 7);
+    stop_cheat_caller_address(profile_system.contract_address);
+
+    let profile: PlayerProfile = world.read_model(host());
+    let board_purchase: PlayerInventoryItem = world.read_model((host(), 3_u8, 7_u8));
+    assert(profile.coins == 750, 'coins not deducted');
+    assert(board_purchase.owned, 'purchase missing');
+    assert(board_purchase.source == 1, 'wrong inventory source');
+}
+
+#[test]
+fn finishing_a_game_settles_placements_and_persistent_rewards() {
+    let (mut world, _, _, _, lobby_system, _, turn_system) = setup_world();
+    let config_id = seed_locked_config(ref world);
+
+    let game_id = create_private_game(ref world, lobby_system, config_id, 1112);
+    join_private_game(lobby_system, 1112);
+    ready_private_players(lobby_system, game_id);
+    start_private_game(lobby_system, game_id);
+
+    let host_address = host();
+    let guest_address = guest();
+    let mut host_state: GamePlayer = world.read_model((game_id, host_address));
+    host_state.tokens_in_base = 0;
+    host_state.tokens_in_goal = 3;
+    world.write_model_test(@host_state);
+
+    let finishing_token = Token {
+        game_id,
+        player: host_address,
+        token_id: 0,
+        token_state: token_state::IN_HOME_LANE,
+        track_pos: 0,
+        home_lane_pos: 6,
+        steps_total: 70,
+    };
+    world.write_model_test(@finishing_token);
+
+    seed_move_phase(ref world, game_id, host_address, 1, 2);
+
+    start_cheat_caller_address(turn_system.contract_address, host_address);
+    turn_system.apply_move(
+        game_id, MoveInput { move_type: move_type::DIE_A, token_id: 0, steps: 1 },
+    );
+    stop_cheat_caller_address(turn_system.contract_address);
+
+    let first_place: GameFinalPlacement = world.read_model((game_id, host_address));
+    let second_place: GameFinalPlacement = world.read_model((game_id, guest_address));
+    let host_profile: PlayerProfile = world.read_model(host_address);
+    let guest_profile: PlayerProfile = world.read_model(guest_address);
+
+    assert(first_place.place == 1, 'winner placement missing');
+    assert(first_place.total_xp == 130, 'winner xp wrong');
+    assert(first_place.total_coins == 100, 'winner coins wrong');
+    assert(second_place.place == 2, 'runner-up placement missing');
+    assert(second_place.total_xp == 90, 'runner-up xp wrong');
+    assert(second_place.total_coins == 60, 'runner-up coins wrong');
+    assert(host_profile.coins > 1000, 'winner profile not rewarded');
+    assert(host_profile.xp == 130, 'winner profile xp wrong');
+    assert(guest_profile.coins > 1000, 'runner-up profile not rewarded');
+    assert(guest_profile.xp == 90, 'runner-up profile xp wrong');
 }
 }
