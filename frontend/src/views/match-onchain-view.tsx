@@ -1,7 +1,7 @@
 import { useAccount } from '@starknet-react/core'
 import { memo, type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { applyMove, computeLegalMoves, endTurn, forceSkipTurn, rollTwoDiceAndDrawQuestion, submitAnswer } from '../api'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { applyMove, computeLegalMoves, endTurn, forfeitGame, forceSkipTurn, rollTwoDiceAndDrawQuestion, submitAnswer } from '../api'
 import {
   readDojoGameSnapshot,
   readEgsTokenGameLink,
@@ -210,6 +210,9 @@ const onchainCopyByLanguage = {
     emptyBoardTitle: 'No hay una partida on-chain activa',
     endingTurn: 'Terminando...',
     endTurn: 'Terminar turno',
+    forfeit: 'Abandonar partida',
+    forfeiting: 'Abandonando...',
+    forfeitConfirm: 'Abandonaras esta partida inmediatamente. Quieres continuar?',
     linkPending: 'Resolviendo partida vinculada del token...',
     loadBoard: 'Cargando estado on-chain del tablero...',
     logLabel: 'Historial',
@@ -256,6 +259,9 @@ const onchainCopyByLanguage = {
     emptyBoardTitle: 'No active on-chain match selected',
     endingTurn: 'Ending...',
     endTurn: 'End turn',
+    forfeit: 'Forfeit game',
+    forfeiting: 'Forfeiting...',
+    forfeitConfirm: 'You will immediately leave this game. Continue?',
     linkPending: 'Resolving linked token match...',
     loadBoard: 'Loading on-chain board state...',
     logLabel: 'History',
@@ -1313,6 +1319,7 @@ const buildAuthoritativePlacements = (players: MatchPlayer[], snapshot: DojoGame
 }
 
 export function MatchOnchainView() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { account } = useAccount()
   const { address, username } = useControllerWallet()
@@ -1542,6 +1549,10 @@ export function MatchOnchainView() {
   const normalizedWalletAddress = normalizeAddressForCompare(address)
   const normalizedActivePlayerAddress = normalizeAddressForCompare(activePlayerAddress)
   const isMyTurn = Boolean(address) && normalizedWalletAddress === normalizedActivePlayerAddress
+  const currentWalletPlayer = useMemo(
+    () => snapshot?.players.find((player) => normalizeAddressForCompare(player.player) === normalizedWalletAddress) ?? null,
+    [normalizedWalletAddress, snapshot?.players],
+  )
 
   const { getUsername } = useControllerUsernames({
     addresses: (snapshot?.players ?? []).map((player) => player.player),
@@ -2588,6 +2599,22 @@ export function MatchOnchainView() {
     })
   }, [account, activeGameId, legalMoves, movementEnabled, runTransaction, snapshot])
 
+  const onForfeit = useCallback(() => {
+    if (!account || !activeGameId || !currentWalletPlayer?.is_active || txPendingLabel) {
+      return
+    }
+
+    if (typeof window !== 'undefined' && !window.confirm(ui.forfeitConfirm)) {
+      return
+    }
+
+    void runTransaction(ui.forfeit, () => forfeitGame(account, activeGameId), {
+      onConfirmed: () => {
+        navigate('/configs')
+      },
+    })
+  }, [account, activeGameId, currentWalletPlayer?.is_active, navigate, runTransaction, txPendingLabel, ui.forfeit, ui.forfeitConfirm])
+
   const canRoll = isMyTurn && snapshot?.turn_state?.phase === 0
   const canRollAction = canRoll && !hudDiceRolling && !txPendingLabel && !isAwaitingOnchainSync
   const pendingStatusMessage = useMemo(() => {
@@ -2800,6 +2827,19 @@ export function MatchOnchainView() {
             {pendingStatusMessage ? (
               <div className="mb-3 rounded-2xl border border-[#4a6f9f] bg-[#ecf5ff] px-4 py-3 text-sm font-bold text-[#19416b] shadow-[0_6px_18px_rgba(30,73,120,0.12)]">
                 {pendingStatusMessage}
+              </div>
+            ) : null}
+
+            {snapshot?.game?.status === 1 && currentWalletPlayer?.is_active ? (
+              <div className="mb-3 flex justify-end">
+                <button
+                  className="rounded-full border border-[#b35d49] bg-gradient-to-b from-[#ffe2db] to-[#e58973] px-4 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-[#6f1f16] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_6px_14px_rgba(86,27,18,0.16)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={Boolean(txPendingLabel) || isAwaitingOnchainSync}
+                  onClick={onForfeit}
+                  type="button"
+                >
+                  {txPendingLabel === ui.forfeit ? ui.forfeiting : ui.forfeit}
+                </button>
               </div>
             ) : null}
 

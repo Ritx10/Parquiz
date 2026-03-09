@@ -84,6 +84,11 @@ const turnEntrypoints = [
     description: 'Ends movement phase and advances to next player',
   },
   {
+    label: 'Forfeit Game',
+    entrypoint: 'forfeit_game',
+    description: 'Lets a player abandon an active game for testing or demos',
+  },
+  {
     label: 'Submit Answer + Moves',
     entrypoint: 'submit_answer_and_moves',
     description: 'Sends answer proof and move plan in one action',

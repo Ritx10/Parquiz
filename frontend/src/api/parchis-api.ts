@@ -368,6 +368,14 @@ export const endTurn = async (account: AccountInterface, gameId: FeltLike) => {
   })
 }
 
+export const forfeitGame = async (account: AccountInterface, gameId: FeltLike) => {
+  return executeCall(account, {
+    contractAddress: turnSystem(),
+    entrypoint: 'forfeit_game',
+    calldata: CallData.compile({ game_id: asBigInt(gameId) }),
+  })
+}
+
 export const forceSkipTurn = async (account: AccountInterface, gameId: FeltLike) => {
   return executeCall(account, {
     contractAddress: turnSystem(),

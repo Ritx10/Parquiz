@@ -1086,8 +1086,22 @@ export const readLatestGameIdByPlayer = async (playerAddress: string): Promise<b
     }
   }
 
-  const rows = await fetchModelsByKeys(client, 'GamePlayer', candidateKeys)
-  const latest = rows.map((row) => normalizeGamePlayerModel(row)).find((row) => row.is_active)
+  const [playerRows, gameRows] = await Promise.all([
+    fetchModelsByKeys(client, 'GamePlayer', candidateKeys),
+    fetchModelsByKeys(client, 'Game', candidateKeys.map(([gameId]) => [gameId])),
+  ])
+
+  const gamesById = new Map(gameRows.map((row) => {
+    const game = normalizeGameModel(row)
+    return [game.game_id.toString(), game] as const
+  }))
+
+  const latest = playerRows
+    .map((row) => normalizeGamePlayerModel(row))
+    .find((row) => row.is_active && (() => {
+      const game = gamesById.get(row.game_id.toString())
+      return game ? game.status === 0 || game.status === 1 : false
+    })())
 
   return latest?.game_id ?? null
 }

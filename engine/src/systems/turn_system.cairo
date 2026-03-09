@@ -6,6 +6,7 @@ pub trait ITurnSystem<T> {
     fn submit_answer(ref self: T, game_id: u64, answer_payload: AnswerPayload);
     fn apply_move(ref self: T, game_id: u64, move_input: MoveInput);
     fn end_turn(ref self: T, game_id: u64);
+    fn forfeit_game(ref self: T, game_id: u64);
     fn compute_legal_moves(self: @T, game_id: u64) -> Array<LegalMove>;
     fn submit_answer_and_moves(
         ref self: T, game_id: u64, answer_payload: AnswerPayload, move_plan: MovePlan,
@@ -254,6 +255,83 @@ pub mod turn_system {
             let runtime: GameRuntimeConfig = world.read_model(game_id);
             end_turn_internal(ref world, ref game, ref turn, runtime, now, true);
             post_bound_token_action(ref world, game_id, caller);
+        }
+
+        fn forfeit_game(ref self: ContractState, game_id: u64) {
+            let mut world = self.world_default();
+            let caller = get_caller_address();
+            let now = get_block_timestamp();
+
+            let mut game: Game = world.read_model(game_id);
+            assert(game.status == game_status::IN_PROGRESS, 'not_live');
+
+            let mut player_state: GamePlayer = world.read_model((game_id, caller));
+            assert(player_state.is_active, 'not_player');
+
+            let forfeiting_seat = player_state.seat;
+            let was_active_player = game.active_player == caller;
+
+            player_state.is_active = false;
+            player_state.is_ready = false;
+            world.write_model(@player_state);
+
+            reset_player_tokens_to_base(ref world, game_id, caller, forfeiting_seat);
+
+            let seat = GameSeat {
+                game_id,
+                seat: forfeiting_seat,
+                player: zero_address(),
+                occupied: false,
+            };
+            world.write_model(@seat);
+
+            if game.player_count > 0 {
+                game.player_count -= 1;
+            }
+            game.updated_at = now;
+
+            sync_bound_player_state(
+                ref world,
+                game_id,
+                caller,
+                true,
+                false,
+                egs_link_status::CANCELLED,
+            );
+
+            let mut turn: TurnState = world.read_model(game_id);
+
+            if game.player_count == 0 {
+                game.status = game_status::CANCELLED;
+                game.winner = zero_address();
+                turn.phase = turn_phase::TURN_ENDED;
+                turn.deadline = 0;
+                world.write_model(@game);
+                world.write_model(@turn);
+                return;
+            }
+
+            if game.player_count == 1 {
+                let winner = first_occupied_player(ref world, game_id);
+                game.status = game_status::FINISHED;
+                game.winner = winner;
+                turn.phase = turn_phase::TURN_ENDED;
+                turn.deadline = 0;
+                world.write_model(@game);
+                world.write_model(@turn);
+                settle_final_placements(ref world, game, winner, now);
+                sync_bound_players_terminal(ref world, game.game_id, winner, egs_link_status::FINISHED);
+                world.emit_event(@GameWon { game_id: game.game_id, winner, turn_index: game.turn_index });
+                return;
+            }
+
+            if was_active_player {
+                let runtime: GameRuntimeConfig = world.read_model(game_id);
+                end_turn_and_advance(ref world, ref game, ref turn, runtime, now);
+                return;
+            }
+
+            world.write_model(@game);
         }
 
         fn compute_legal_moves(self: @ContractState, game_id: u64) -> Array<LegalMove> {
@@ -2060,6 +2138,51 @@ pub mod turn_system {
             }
 
             assert(traversed <= MAX_SEATS, 'no_players');
+        }
+    }
+
+    fn first_occupied_player(ref world: dojo::world::WorldStorage, game_id: u64) -> ContractAddress {
+        let mut seat: u8 = 0;
+
+        loop {
+            if seat >= MAX_SEATS {
+                break;
+            }
+
+            let game_seat: GameSeat = world.read_model((game_id, seat));
+            if game_seat.occupied {
+                return game_seat.player;
+            }
+
+            seat += 1;
+        }
+
+        zero_address()
+    }
+
+    fn reset_player_tokens_to_base(
+        ref world: dojo::world::WorldStorage, game_id: u64, player: ContractAddress, seat: u8,
+    ) {
+        let mut token_id: u8 = 0;
+
+        loop {
+            if token_id >= TOKENS_PER_PLAYER {
+                break;
+            }
+
+            let mut token: Token = world.read_model((game_id, player, token_id));
+            let previous_square_ref = square_ref_for_token(seat, token);
+
+            token.token_state = token_state::IN_BASE;
+            token.track_pos = 0;
+            token.home_lane_pos = 0;
+            world.write_model(@token);
+
+            if previous_square_ref != 0 {
+                recompute_square_occupancy(ref world, game_id, previous_square_ref);
+            }
+
+            token_id += 1;
         }
     }
 

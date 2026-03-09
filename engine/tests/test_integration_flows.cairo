@@ -517,6 +517,31 @@ fn public_matchmaking_auto_starts_when_everyone_is_ready() {
 }
 
 #[test]
+fn forfeiting_an_active_two_player_game_finishes_it_and_clears_the_player() {
+    let (mut world, _, _, _, lobby_system, _, turn_system) = setup_world();
+    let config_id = seed_locked_config(ref world);
+
+    let game_id = create_private_game(ref world, lobby_system, config_id, 888);
+    join_private_game(lobby_system, 888);
+    ready_private_players(lobby_system, game_id);
+    start_private_game(lobby_system, game_id);
+
+    start_cheat_caller_address(turn_system.contract_address, guest());
+    turn_system.forfeit_game(game_id);
+    stop_cheat_caller_address(turn_system.contract_address);
+
+    let game: Game = world.read_model(game_id);
+    let guest_player: GamePlayer = world.read_model((game_id, guest()));
+    let host_player: GamePlayer = world.read_model((game_id, host()));
+
+    assert(game.status == game_status::FINISHED, 'game not finished');
+    assert(game.winner == host(), 'winner not assigned');
+    assert(game.player_count == 1, 'remaining player count mismatch');
+    assert(!guest_player.is_active, 'guest still active');
+    assert(host_player.is_active, 'host should stay active');
+}
+
+#[test]
 fn bridge_blocks_capture_and_home_bonus_flow() {
     let (mut world, _, _, _, lobby_system, _, turn_system) = setup_world();
     let config_id = seed_locked_config(ref world);
