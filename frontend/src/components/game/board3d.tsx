@@ -395,6 +395,9 @@ type Board3DProps = {
   surfacePalette?: Pick<
     BoardThemeSurfacePalette,
     | 'boardGridOverlay'
+    | 'boardGlassGlow'
+    | 'boardGlassOverlay'
+    | 'boardGlassSheen'
     | 'boardInnerBackground'
     | 'boardOuterBackground'
     | 'boardOuterBorder'
@@ -600,24 +603,57 @@ function Board3DComponent({
 
   return (
     <div
-      className="pointer-events-none relative aspect-square w-full overflow-visible rounded-[24px] border-[7px] border-[#b98652] p-1 shadow-board"
+      className="pointer-events-none relative aspect-square w-full overflow-visible rounded-[32px] border border-white/25 p-[10px] shadow-[0_24px_44px_rgba(8,10,24,0.2)]"
       style={{
-        background: resolvedSurfacePalette.boardOuterBackground,
+        backdropFilter: 'blur(24px) saturate(150%)',
+        WebkitBackdropFilter: 'blur(24px) saturate(150%)',
+        background: resolvedSurfacePalette.boardGlassOverlay,
         borderColor: resolvedSurfacePalette.boardOuterBorder,
+        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.34), inset 0 -18px 28px rgba(255,255,255,0.08), 0 18px 36px rgba(7,10,24,0.24), 0 0 30px ${resolvedSurfacePalette.boardGlassGlow}`,
       }}
     >
+      <span
+        className="pointer-events-none absolute inset-[2px] rounded-[28px]"
+        style={{
+          background: resolvedSurfacePalette.boardGlassSheen,
+          opacity: 0.95,
+        }}
+      />
+      <span
+        className="pointer-events-none absolute inset-[8px] rounded-[24px] border border-white/20"
+        style={{
+          boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.06), 0 0 22px ${resolvedSurfacePalette.boardGlassGlow}`,
+        }}
+      />
       <div
-        className="pointer-events-auto relative grid h-full w-full overflow-visible border border-[#1f1309]"
+        className="pointer-events-auto relative grid h-full w-full overflow-visible rounded-[24px] border border-white/30"
         style={{
           gridTemplateColumns: `repeat(${fineGridSize}, minmax(0, 1fr))`,
           gridTemplateRows: `repeat(${fineGridSize}, minmax(0, 1fr))`,
-          background: resolvedSurfacePalette.boardInnerBackground,
-          backgroundImage: resolvedSurfacePalette.boardGridOverlay,
+          background: `linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 100%), ${resolvedSurfacePalette.boardOuterBackground}`,
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.26), inset 0 -14px 22px rgba(255,255,255,0.05), 0 10px 24px rgba(7,10,24,0.18)`,
           backgroundSize:
             `calc(100% / ${fineGridSize}) calc(100% / ${fineGridSize}), calc(100% / ${fineGridSize}) calc(100% / ${fineGridSize}), auto`,
           backgroundPosition: '0 0, 0 0, 0 0',
         }}
       >
+        <span
+          className="pointer-events-none absolute inset-[10px] rounded-[18px] border border-white/18"
+          style={{
+            background: `linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.03) 100%), ${resolvedSurfacePalette.boardInnerBackground}`,
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.18)',
+          }}
+        />
+        <span
+          className="pointer-events-none absolute inset-[10px] rounded-[18px]"
+          style={{
+            backgroundImage: resolvedSurfacePalette.boardGridOverlay,
+            backgroundSize:
+              `calc(100% / ${fineGridSize}) calc(100% / ${fineGridSize}), calc(100% / ${fineGridSize}) calc(100% / ${fineGridSize}), auto`,
+            backgroundPosition: '0 0, 0 0, 0 0',
+            opacity: 0.86,
+          }}
+        />
         {cornerHomes.map((home) => (
           <div className="z-10" key={home.color} style={cellPlacement(home.rowStart, home.colStart, 7, 7)}>
             <CornerBase theme={themesByColor[home.color]} />

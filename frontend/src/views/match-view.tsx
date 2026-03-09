@@ -100,6 +100,17 @@ const buildAnnouncementGlassTint = (baseColor: string) => ({
   tintB: rgbaFromRgb(mixHexColors(baseColor, '#0f172a', 0.12), 0.26),
 })
 
+const buildBoardStageGlassTint = (baseColor: string) => ({
+  border: rgbaFromRgb(mixHexColors(baseColor, '#ffffff', 0.74), 0.26),
+  glow: rgbaFromHex(baseColor, 0.16),
+  highlight: rgbaFromRgb(mixHexColors(baseColor, '#ffffff', 0.9), 0.22),
+  panelTop: rgbaFromRgb(mixHexColors(baseColor, '#ffffff', 0.34), 0.2),
+  panelMid: rgbaFromRgb(mixHexColors(baseColor, '#ffffff', 0.14), 0.12),
+  panelBottom: rgbaFromRgb(mixHexColors(baseColor, '#0f172a', 0.18), 0.08),
+  shadow: 'rgba(0,0,0,0.18)',
+  tint: rgbaFromHex(baseColor, 0.16),
+})
+
 const lanePositionSet = new Set(Object.values(finalLaneByColor).flat())
 const protectedColorTrackSquares = new Set<number>(Object.values(startSquareByColor))
 
@@ -1172,6 +1183,7 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
   const activeTriviaDifficulty: TriviaDifficulty = isAiPracticeMode ? practiceDifficulty : questionDifficulty
   const boardTheme = getBoardThemeDefinition(selectedBoardThemeId)
   const surfacePalette = getBoardThemeSurfacePalette(selectedBoardThemeId)
+  const boardStageGlassTint = useMemo(() => buildBoardStageGlassTint(boardTheme.backgroundColor), [boardTheme.backgroundColor])
 
   const activeSessionState = useMemo(
     () => (isAiPracticeMode ? withAiPracticeState(gameState, practiceDifficulty, humanDisplayName, language) : gameState),
@@ -3083,13 +3095,24 @@ export function MatchView({ showVictoryPreviewControl = false }: MatchViewProps)
       <div className="mx-auto w-full max-w-[1480px]">
         <article
           className="game-panel mx-auto p-3 xl:p-4"
-          style={{ backgroundImage: surfacePalette.mainPanelBackground, borderColor: surfacePalette.mainPanelBorder }}
+          style={{
+            backdropFilter: 'blur(26px) saturate(155%)',
+            WebkitBackdropFilter: 'blur(26px) saturate(155%)',
+            backgroundColor: boardStageGlassTint.tint,
+            backgroundImage: `linear-gradient(180deg, ${boardStageGlassTint.panelTop} 0%, ${boardStageGlassTint.panelMid} 42%, ${boardStageGlassTint.panelBottom} 100%)`,
+            borderColor: boardStageGlassTint.border,
+            boxShadow: `inset 0 1px 0 ${boardStageGlassTint.highlight}, inset 0 -12px 22px rgba(255,255,255,0.04), 0 20px 50px ${boardStageGlassTint.shadow}, 0 0 26px ${boardStageGlassTint.glow}`,
+          }}
         >
           <div
             className="mb-3 flex items-center justify-between rounded-2xl border px-3 py-2 shadow-wood"
             style={{
-              backgroundImage: surfacePalette.headerBackground,
-              borderColor: surfacePalette.headerBorder,
+              backgroundColor: rgbaFromHex(boardTheme.backgroundColor, 0.22),
+              backgroundImage: `linear-gradient(180deg, ${rgbaFromRgb(mixHexColors(boardTheme.backgroundColor, '#ffffff', 0.28), 0.34)} 0%, ${rgbaFromRgb(mixHexColors(boardTheme.backgroundColor, '#ffffff', 0.1), 0.18)} 100%)`,
+              backdropFilter: 'blur(18px) saturate(150%)',
+              WebkitBackdropFilter: 'blur(18px) saturate(150%)',
+              borderColor: rgbaFromRgb(mixHexColors(boardTheme.backgroundColor, '#ffffff', 0.72), 0.26),
+              boxShadow: `inset 0 1px 0 ${rgbaFromRgb(mixHexColors(boardTheme.backgroundColor, '#ffffff', 0.92), 0.2)}, 0 10px 26px rgba(12,16,32,0.14)`,
             }}
           >
             <p className="font-display text-xl uppercase tracking-[0.08em]" style={{ color: surfacePalette.headerText }}>{ui.boardTitle}</p>

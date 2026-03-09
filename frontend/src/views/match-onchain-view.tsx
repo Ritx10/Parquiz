@@ -167,6 +167,48 @@ const announcementGlassTintByThemeId = {
   },
 } as const
 
+const hexToRgb = (hex: string) => {
+  const sanitized = hex.replace('#', '')
+  const normalized = sanitized.length === 3 ? sanitized.split('').map((char) => `${char}${char}`).join('') : sanitized
+  const value = Number.parseInt(normalized, 16)
+
+  return {
+    b: value & 255,
+    g: (value >> 8) & 255,
+    r: (value >> 16) & 255,
+  }
+}
+
+const mixHexColors = (hex: string, targetHex: string, ratio: number) => {
+  const source = hexToRgb(hex)
+  const target = hexToRgb(targetHex)
+  const mix = (from: number, to: number) => Math.round(from + (to - from) * ratio)
+
+  return {
+    r: mix(source.r, target.r),
+    g: mix(source.g, target.g),
+    b: mix(source.b, target.b),
+  }
+}
+
+const rgbaFromHex = (hex: string, alpha: number) => {
+  const { r, g, b } = hexToRgb(hex)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+const rgbaFromRgb = (rgb: { b: number; g: number; r: number }, alpha: number) => `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`
+
+const buildBoardStageGlassTint = (baseColor: string) => ({
+  border: rgbaFromRgb(mixHexColors(baseColor, '#ffffff', 0.74), 0.26),
+  glow: rgbaFromHex(baseColor, 0.16),
+  highlight: rgbaFromRgb(mixHexColors(baseColor, '#ffffff', 0.9), 0.22),
+  panelTop: rgbaFromRgb(mixHexColors(baseColor, '#ffffff', 0.34), 0.2),
+  panelMid: rgbaFromRgb(mixHexColors(baseColor, '#ffffff', 0.14), 0.12),
+  panelBottom: rgbaFromRgb(mixHexColors(baseColor, '#0f172a', 0.18), 0.08),
+  shadow: 'rgba(0,0,0,0.18)',
+  tint: rgbaFromHex(baseColor, 0.16),
+})
+
 const onchainCopyByLanguage = {
   es: {
     awaitingTurn: 'En espera',
@@ -1323,6 +1365,7 @@ export function MatchOnchainView() {
   const ui = onchainCopyByLanguage[language]
   const boardTheme = getBoardThemeDefinition(selectedBoardThemeId)
   const surfacePalette = getBoardThemeSurfacePalette(selectedBoardThemeId)
+  const boardStageGlassTint = useMemo(() => buildBoardStageGlassTint(boardTheme.backgroundColor), [boardTheme.backgroundColor])
 
   const [gameIdInput, setGameIdInput] = useState(searchParams.get('gameId') || '')
   const [tokenIdInput, setTokenIdInput] = useState(searchParams.get('tokenId') || '')
@@ -2829,13 +2872,24 @@ export function MatchOnchainView() {
         ) : activeGameId !== null ? (
           <article
             className="game-panel mx-auto p-3 xl:p-4"
-            style={{ backgroundImage: surfacePalette.mainPanelBackground, borderColor: surfacePalette.mainPanelBorder }}
+            style={{
+              backdropFilter: 'blur(26px) saturate(155%)',
+              WebkitBackdropFilter: 'blur(26px) saturate(155%)',
+              backgroundColor: boardStageGlassTint.tint,
+              backgroundImage: `linear-gradient(180deg, ${boardStageGlassTint.panelTop} 0%, ${boardStageGlassTint.panelMid} 42%, ${boardStageGlassTint.panelBottom} 100%)`,
+              borderColor: boardStageGlassTint.border,
+              boxShadow: `inset 0 1px 0 ${boardStageGlassTint.highlight}, inset 0 -12px 22px rgba(255,255,255,0.04), 0 20px 50px ${boardStageGlassTint.shadow}, 0 0 26px ${boardStageGlassTint.glow}`,
+            }}
           >
             <div
               className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-3 py-2 shadow-wood"
               style={{
-                backgroundImage: surfacePalette.headerBackground,
-                borderColor: surfacePalette.headerBorder,
+                backgroundColor: rgbaFromHex(boardTheme.backgroundColor, 0.22),
+                backgroundImage: `linear-gradient(180deg, ${rgbaFromRgb(mixHexColors(boardTheme.backgroundColor, '#ffffff', 0.28), 0.34)} 0%, ${rgbaFromRgb(mixHexColors(boardTheme.backgroundColor, '#ffffff', 0.1), 0.18)} 100%)`,
+                backdropFilter: 'blur(18px) saturate(150%)',
+                WebkitBackdropFilter: 'blur(18px) saturate(150%)',
+                borderColor: rgbaFromRgb(mixHexColors(boardTheme.backgroundColor, '#ffffff', 0.72), 0.26),
+                boxShadow: `inset 0 1px 0 ${rgbaFromRgb(mixHexColors(boardTheme.backgroundColor, '#ffffff', 0.92), 0.2)}, 0 10px 26px rgba(12,16,32,0.14)`,
               }}
             >
               <p className="font-display text-xl uppercase tracking-[0.08em]" style={{ color: surfacePalette.headerText }}>
