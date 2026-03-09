@@ -17,7 +17,6 @@ interface ImportMetaEnv {
   readonly VITE_VRF_PROVIDER_ADDRESS?: string
   readonly VITE_DOJO_TORII_URL?: string
   readonly VITE_DOJO_RELAY_URL?: string
-  readonly VITE_DOJO_MANIFEST_PATH?: string
 }
 
 interface ImportMeta {

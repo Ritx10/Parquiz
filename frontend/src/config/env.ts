@@ -98,8 +98,6 @@ export const appEnv = {
     '/torii',
   ),
   dojoRelayUrl: import.meta.env.VITE_DOJO_RELAY_URL || '/ip4/127.0.0.1/tcp/9090',
-  dojoManifestPath:
-    import.meta.env.VITE_DOJO_MANIFEST_PATH || '../manifest_dev.json',
   controllerDefaultChainId:
     defaultNetwork === 'mainnet'
       ? constants.StarknetChainId.SN_MAIN

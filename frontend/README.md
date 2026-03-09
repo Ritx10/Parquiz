@@ -44,7 +44,6 @@ Edita `.env`:
 - `VITE_STARKNET_NETWORK` (`mainnet`, `sepolia`, `katana`)
 - `VITE_DOJO_WORLD_ADDRESS`
 - `VITE_DOJO_TORII_URL`
-- `VITE_DOJO_MANIFEST_PATH`
 - `VITE_VRF_PROVIDER_ADDRESS`
 
 ## Scripts
