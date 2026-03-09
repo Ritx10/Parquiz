@@ -14,6 +14,7 @@ const copy = {
     backHome: 'VOLVER AL MENU',
     browseTitle: 'EXPLORADOR DE CONFIGS',
     browseSubtitle: 'Revisa las configuraciones on-chain, sus IDs y entra al lobby con la que quieras usar.',
+    playableHint: 'Solo las configs con estado Bloqueada son validas para jugar partidas.',
     currentSelection: 'CONFIG ACTIVA',
     creator: 'CREADOR',
     status: 'ESTADO',
@@ -42,6 +43,7 @@ const copy = {
     backHome: 'BACK HOME',
     browseTitle: 'CONFIG BROWSER',
     browseSubtitle: 'Inspect the on-chain game configs, their IDs, and jump into the lobby with the one you want to use.',
+    playableHint: 'Only configs marked Locked are valid for starting games.',
     currentSelection: 'ACTIVE CONFIG',
     creator: 'CREATOR',
     status: 'STATUS',
@@ -212,6 +214,10 @@ export function ConfigBrowserView() {
           </div>
         </div>
 
+        <div className="mt-4 rounded-[22px] border border-[#8c6239] bg-[linear-gradient(180deg,rgba(255,240,196,0.96),rgba(236,205,150,0.96))] px-5 py-4 text-sm font-black leading-6 text-[#6a3d16] shadow-[0_14px_28px_rgba(33,15,6,0.18)]">
+          {ui.playableHint}
+        </div>
+
         {isLoading ? (
           <div className="mt-6 rounded-[26px] border border-[#7a4628] bg-[linear-gradient(180deg,rgba(108,62,36,0.95),rgba(72,41,24,0.96))] px-6 py-10 text-center text-base font-black uppercase tracking-[0.12em] text-[#ffebc5] shadow-[0_18px_34px_rgba(33,15,6,0.35)]">
             {ui.loading}
@@ -228,11 +234,14 @@ export function ConfigBrowserView() {
           <div className="mt-6 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
             {configs.map((config) => {
               const isSelected = config.config_id.toString() === selectedConfigId
+              const isPlayable = config.status === 1
               const statusTone = statusToneByValue[config.status as keyof typeof statusToneByValue] || statusToneByValue[1]
 
               return (
                 <article
-                  className="rounded-[28px] border border-[#7f4b2b] bg-gradient-to-b from-[#f6e3bc] via-[#ecd0a3] to-[#ddb17f] p-[3px] shadow-[0_18px_28px_rgba(33,15,6,0.3)]"
+                  className={`rounded-[28px] border border-[#7f4b2b] bg-gradient-to-b from-[#f6e3bc] via-[#ecd0a3] to-[#ddb17f] p-[3px] shadow-[0_18px_28px_rgba(33,15,6,0.3)] ${
+                    isPlayable ? '' : 'opacity-75 saturate-[0.78]'
+                  }`}
                   key={config.config_id.toString()}
                 >
                   <div className="rounded-[24px] border border-[#fff4dc]/60 bg-[linear-gradient(180deg,rgba(88,47,28,0.98),rgba(63,35,21,0.98))] p-4 text-[#ffeecf]">
@@ -278,21 +287,36 @@ export function ConfigBrowserView() {
 
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button
-                        className="rounded-full border border-[#c89f58] bg-gradient-to-b from-[#fff0a6] to-[#d89925] px-4 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-[#5a3110] shadow-[inset_0_2px_0_rgba(255,250,216,0.8),0_8px_16px_rgba(60,31,10,0.25)] transition hover:-translate-y-0.5"
+                        className={`rounded-full border px-4 py-2 text-[11px] font-black uppercase tracking-[0.12em] transition ${
+                          isPlayable
+                            ? 'border-[#c89f58] bg-gradient-to-b from-[#fff0a6] to-[#d89925] text-[#5a3110] shadow-[inset_0_2px_0_rgba(255,250,216,0.8),0_8px_16px_rgba(60,31,10,0.25)] hover:-translate-y-0.5'
+                            : 'cursor-not-allowed border-[#8e7559] bg-[#c5ab88] text-[#6b5744] opacity-80'
+                        }`}
+                        disabled={!isPlayable}
                         onClick={() => chooseConfig(config.config_id)}
                         type="button"
                       >
                         {ui.useConfig}
                       </button>
                       <button
-                        className="rounded-full border border-[#94b56c] bg-gradient-to-b from-[#eef9d5] to-[#8fbe4f] px-4 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-[#294416] shadow-[inset_0_2px_0_rgba(255,255,255,0.6),0_8px_16px_rgba(28,45,15,0.22)] transition hover:-translate-y-0.5"
+                        className={`rounded-full border px-4 py-2 text-[11px] font-black uppercase tracking-[0.12em] transition ${
+                          isPlayable
+                            ? 'border-[#94b56c] bg-gradient-to-b from-[#eef9d5] to-[#8fbe4f] text-[#294416] shadow-[inset_0_2px_0_rgba(255,255,255,0.6),0_8px_16px_rgba(28,45,15,0.22)] hover:-translate-y-0.5'
+                            : 'cursor-not-allowed border-[#7d8f69] bg-[#b8c6a4] text-[#526146] opacity-80'
+                        }`}
+                        disabled={!isPlayable}
                         onClick={() => openLobby('/lobby', config.config_id)}
                         type="button"
                       >
                         {ui.playPublic}
                       </button>
                       <button
-                        className="rounded-full border border-[#86aacd] bg-gradient-to-b from-[#edf6ff] to-[#76a8df] px-4 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-[#173354] shadow-[inset_0_2px_0_rgba(255,255,255,0.68),0_8px_16px_rgba(18,39,67,0.22)] transition hover:-translate-y-0.5"
+                        className={`rounded-full border px-4 py-2 text-[11px] font-black uppercase tracking-[0.12em] transition ${
+                          isPlayable
+                            ? 'border-[#86aacd] bg-gradient-to-b from-[#edf6ff] to-[#76a8df] text-[#173354] shadow-[inset_0_2px_0_rgba(255,255,255,0.68),0_8px_16px_rgba(18,39,67,0.22)] hover:-translate-y-0.5'
+                            : 'cursor-not-allowed border-[#7d93ac] bg-[#b8c7d8] text-[#4f6177] opacity-80'
+                        }`}
+                        disabled={!isPlayable}
                         onClick={() => openLobby('/lobby-friends', config.config_id)}
                         type="button"
                       >
