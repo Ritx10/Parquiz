@@ -86,6 +86,7 @@ bun run dev
 Notes:
 
 - `bun run profile:seed:dev` writes progression config, placement rewards, and the full cosmetic catalog expected by the current shop UI.
+- `bun run profile:seed:dev` is not redundant with `set_question_set`: question seeding enables trivia gameplay, while profile seeding enables progression rewards, store purchases, and cosmetic loadouts.
 - If you migrate a fresh local world, restart Torii after the migrate so it indexes the latest models.
 - If the shop shows missing items or the board view starts spamming Torii 500s, the usual cause is Torii still indexing an older world/schema. Restart Torii after `sozo migrate --profile dev`.
 
@@ -99,6 +100,8 @@ From `frontend/` run:
 DOJO_KEYSTORE_PASSWORD='<your-keystore-password>' bun run questions:seed:release
 DOJO_KEYSTORE_PASSWORD='<your-keystore-password>' bun run profile:seed:release
 ```
+
+These two commands seed different on-chain data and both are required after a fresh deploy.
 
 Then verify the world state:
 

@@ -550,6 +550,7 @@ Notes:
 - Step `4` sets the VRF provider for Katana.
 - Step `5` populates the local question set.
 - Terminal `3` seeds the progression config, placement rewards, and cosmetic definitions used by the current shop/profile system.
+- `bun run profile:seed:dev` is not redundant with question seeding: `set_question_set` writes trivia content, while `profile:seed:dev` writes progression config, placement rewards, and the cosmetic catalog.
 - `./torii_dev.toml` is the project-relative path to the Torii config when you run the command from `engine/`.
 - After any fresh `sozo migrate --profile dev`, restart Torii so it indexes the newest models.
 
@@ -597,9 +598,11 @@ The README reflects the current game as implemented today, with a few important 
 
 - the main multiplayer game loop is on-chain and authoritative
 - `Practice with AI` is currently off-chain
-- configuration is real and on-chain, but the frontend mostly exposes create, lock, browse, and select flows
+- reusable game configuration is on-chain; the frontend currently focuses on create, lock, browse, and select flows
 - sound settings exist already, but final SFX playback is still pending
-- persistent profile progression currently stores coins, level, and prestige locally; full XP progression is not finished yet
-- the main cosmetic shop is a home customization experience, not an in-match purchase system
+- persistent profile progression for connected on-chain users now lives in Dojo, including coins, XP, levels, owned cosmetics, equipped cosmetics, and final placement rewards
+- local/offline play still uses local-only profile behavior and does not mint on-chain progression in v1
+- the main cosmetic shop is a home customization flow backed by on-chain purchases for connected users, not an in-match purchase system
+- local and Sepolia environments both require two seed steps after migrate: question data plus profile/shop data
 
-In short: the core board game, lobbies, configs, customization sync, and EGS bridge are real; some progression and presentation layers are already surfaced in the product but are still being completed.
+In short: the core board game, lobbies, configs, Dojo-backed profile/shop flow, and EGS bridge are real; the biggest remaining gaps are around polish, extra coverage, and rollout hardening rather than the main gameplay loop.
